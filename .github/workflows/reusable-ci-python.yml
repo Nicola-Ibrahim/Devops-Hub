@@ -23,6 +23,12 @@ on:
         required: false
         type: boolean
         default: true
+      environment:
+        description: 'The environment to set (e.g., development, production)'
+        required: false
+        type: string
+        default: 'development'
+
 
 jobs:
   ci:
@@ -30,6 +36,9 @@ jobs:
     defaults:
       run:
         working-directory: ${{ inputs.working-directory }}
+    env:
+      ENV: ${{ inputs.environment }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
