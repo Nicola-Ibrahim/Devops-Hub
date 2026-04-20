@@ -28,6 +28,18 @@ on:
         required: false
         type: boolean
         default: true
+      pnpm-version:
+        description: 'pnpm version (optional, if omitted uses package.json)'
+        required: false
+        type: string
+        default: ''
+      package-json-file:
+        description: 'Path to package.json (optional)'
+        required: false
+        type: string
+        default: 'package.json'
+
+
 
 jobs:
   ci:
@@ -45,7 +57,10 @@ jobs:
         if: ${{ inputs.package-manager == 'pnpm' }}
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: ${{ inputs.pnpm-version }}
+          package_json_file: ${{ inputs.package-json-file }}
+
+
 
       - name: Set up Node.js ${{ inputs.node-version }}
         uses: actions/setup-node@v4
