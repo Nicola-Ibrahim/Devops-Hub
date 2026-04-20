@@ -27,7 +27,7 @@ on:
         description: 'The environment to set (e.g., development, production)'
         required: false
         type: string
-        default: 'development'
+        default: 'production'
 
 
 jobs:
