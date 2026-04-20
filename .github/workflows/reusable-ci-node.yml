@@ -1,0 +1,86 @@
+name: Reusable Node CI
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: 'Node version to use'
+        required: false
+        type: string
+        default: '20'
+      working-directory:
+        description: 'Directory to run commands in'
+        required: false
+        type: string
+        default: '.'
+      package-manager:
+        description: 'Package manager to use (pnpm, npm, yarn)'
+        required: false
+        type: string
+        default: 'pnpm'
+      run-lint:
+        description: 'Whether to run linting'
+        required: false
+        type: boolean
+        default: true
+      run-test:
+        description: 'Whether to run tests'
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        if: ${{ inputs.package-manager == 'pnpm' }}
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Set up Node.js ${{ inputs.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: ${{ inputs.package-manager }}
+
+      - name: Install dependencies
+        run: |
+          if [ "${{ inputs.package-manager }}" = "pnpm" ]; then
+            pnpm install --frozen-lockfile
+          elif [ "${{ inputs.package-manager }}" = "yarn" ]; then
+            yarn install --frozen-lockfile
+          else
+            npm ci
+          fi
+
+      - name: Run Lint
+        if: ${{ inputs.run-lint }}
+        run: |
+          if [ "${{ inputs.package-manager }}" = "pnpm" ]; then
+            pnpm lint
+          elif [ "${{ inputs.package-manager }}" = "yarn" ]; then
+            yarn lint
+          else
+            npm run lint
+          fi
+
+      - name: Run Tests
+        if: ${{ inputs.run-test }}
+        run: |
+          if [ "${{ inputs.package-manager }}" = "pnpm" ]; then
+            pnpm test
+          elif [ "${{ inputs.package-manager }}" = "yarn" ]; then
+            yarn test
+          else
+            npm run test
+          fi

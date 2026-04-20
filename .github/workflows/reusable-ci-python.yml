@@ -1,0 +1,57 @@
+name: Reusable Python CI
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: 'Python version to use'
+        required: false
+        type: string
+        default: '3.12'
+      working-directory:
+        description: 'Directory to run commands in'
+        required: false
+        type: string
+        default: '.'
+      run-lint:
+        description: 'Whether to run linting'
+        required: false
+        type: boolean
+        default: true
+      run-test:
+        description: 'Whether to run tests'
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          version: "latest"
+
+      - name: Set up Python ${{ inputs.python-version }}
+        run: uv python install ${{ inputs.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run Lint (Ruff)
+        if: ${{ inputs.run-lint }}
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Run Tests (Pytest)
+        if: ${{ inputs.run-test }}
+        run: uv run pytest
