@@ -1,0 +1,32 @@
+name: "Package Release"
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Build Package
+        run: uv build
+
+      - name: Publish to GitHub Packages
+        run: |
+          uv publish \
+            --index-url https://pypi.pkg.github.com/${{ github.repository_owner }} \
+            --username ${{ github.actor }} \
+            --password ${{ secrets.GITHUB_TOKEN }}
