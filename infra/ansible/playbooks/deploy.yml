@@ -1,0 +1,18 @@
+---
+- name: App Cloud Server Deployment
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Pull latest Docker images
+      command: doppler run -- docker compose pull
+      args:
+        chdir: "{{ app_root | default('/opt/app') }}"
+      tags: [deploy, pull]
+
+    - name: Restart services
+      command: doppler run -- docker compose up -d --build
+      args:
+        chdir: "{{ app_root | default('/opt/app') }}"
+      tags: [deploy, restart]

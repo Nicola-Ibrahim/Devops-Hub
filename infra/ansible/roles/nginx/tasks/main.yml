@@ -1,0 +1,45 @@
+---
+- name: Install Nginx
+  package:
+    name: nginx
+    state: present
+  become: true
+
+- name: Install Certbot and Nginx plugin
+  package:
+    name:
+      - certbot
+      - python3-certbot-nginx
+    state: present
+  become: true
+
+- name: Ensure Nginx is running
+  service:
+    name: nginx
+    state: started
+    enabled: yes
+  become: true
+
+# Note: SSL certificate generation usually requires a domain and manual intervention or a specific flow.
+# This task sets up the foundation.
+- name: Create basic Nginx configuration for App
+  template:
+    src: app_nginx.conf.j2
+    dest: /etc/nginx/sites-available/app
+  become: true
+  notify: reload nginx
+
+- name: Enable App site
+  file:
+    src: /etc/nginx/sites-available/app
+    dest: /etc/nginx/sites-enabled/app
+    state: link
+  become: true
+  notify: reload nginx
+
+- name: Remove default site
+  file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  become: true
+  notify: reload nginx

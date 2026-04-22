@@ -1,0 +1,7 @@
+[production]
+# production-app-01.tob.internal ansible_host=10.0.2.10
+
+[production:vars]
+ansible_user=ubuntu
+env=production
+doppler_config=prd

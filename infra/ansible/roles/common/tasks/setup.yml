@@ -12,17 +12,71 @@
       - git
       - unzip
       - build-essential
+      - ufw
+      - fail2ban
     state: present
   become: true
-  when: ansible_connection != 'local'
 
-- name: Ensure 'infra' directories exist
+- name: Ensure 'app' directories exist
   file:
     path: "{{ item }}"
     state: directory
     mode: '0755'
   loop:
-    - "/opt/tob"
-    - "/opt/tob/logs"
+    - "{{ app_root | default('/opt/app') }}"
+    - "{{ app_root | default('/opt/app') }}/logs"
   become: true
-  when: ansible_connection != 'local'
+
+# Security Hardening: UFW
+- name: UFW - Allow SSH
+  ufw:
+    rule: allow
+    name: OpenSSH
+  become: true
+
+- name: UFW - Allow HTTP
+  ufw:
+    rule: allow
+    port: '80'
+    proto: tcp
+  become: true
+
+- name: UFW - Allow HTTPS
+  ufw:
+    rule: allow
+    port: '443'
+    proto: tcp
+  become: true
+
+- name: UFW - Enable firewall
+  ufw:
+    state: enabled
+    policy: deny
+  become: true
+
+# Security Hardening: SSH
+- name: SSH - Disable root login
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^PermitRootLogin'
+    line: 'PermitRootLogin no'
+    state: present
+  notify: restart ssh
+  become: true
+
+- name: SSH - Disable password authentication
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^PasswordAuthentication'
+    line: 'PasswordAuthentication no'
+    state: present
+  notify: restart ssh
+  become: true
+
+# Security Hardening: Fail2Ban
+- name: Fail2Ban - Ensure service is running
+  service:
+    name: fail2ban
+    state: started
+    enabled: yes
+  become: true

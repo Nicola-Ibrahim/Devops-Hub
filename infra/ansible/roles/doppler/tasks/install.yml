@@ -20,3 +20,10 @@
   when: 
     - ansible_system == "Linux"
     - doppler_installed.failed
+
+- name: Install Doppler CLI (Windows)
+  win_shell: |
+    powershell -c "iwr -useb https://get.doppler.com/install.ps1 | iex"
+  when: 
+    - ansible_os_family == "Windows"
+    - doppler_installed.failed

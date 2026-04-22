@@ -1,0 +1,73 @@
+---
+# macOS Setup
+- name: "[macOS] Ensure Homebrew is installed"
+  command: brew --version
+  register: brew_check
+  ignore_errors: true
+  changed_when: false
+  when: ansible_os_family == "Darwin"
+
+- name: "[macOS] Install Developer Tools"
+  homebrew:
+    name: ["uv", "pnpm"]
+    state: present
+  when: 
+    - ansible_os_family == "Darwin"
+    - brew_check.rc == 0
+  tags: [setup, tools]
+
+- name: "[macOS] Install Docker Desktop"
+  homebrew_cask:
+    name: docker
+    state: present
+  when: 
+    - ansible_os_family == "Darwin"
+    - brew_check.rc == 0
+  tags: [setup, docker]
+
+# Linux Setup (Local)
+- name: "[Linux] Install uv"
+  shell: curl -LsSf https://astral.sh/uv/install.sh | sh
+  args:
+    creates: ~/.local/bin/uv
+  when: ansible_system == "Linux"
+  tags: [setup, uv]
+
+- name: "[Linux] Install pnpm"
+  shell: curl -fsSL https://get.pnpm.io/install.sh | sh
+  args:
+    creates: ~/.local/share/pnpm/pnpm
+  when: ansible_system == "Linux"
+  tags: [setup, pnpm]
+
+- name: "[Linux] Install Docker (Local Engine)"
+  shell: curl -fsSL https://get.docker.com | sh
+  become: true
+  when: ansible_system == "Linux"
+  tags: [setup, docker]
+
+# Windows Setup
+- name: "[Windows] Install uv"
+  win_shell: |
+    powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+  when: ansible_os_family == "Windows"
+  tags: [setup, uv]
+
+- name: "[Windows] Install pnpm"
+  win_shell: |
+    powershell -c "irm https://get.pnpm.io/install.ps1 | iex"
+  when: ansible_os_family == "Windows"
+  tags: [setup, pnpm]
+
+- name: "[Windows] Install Docker Desktop via Winget"
+  win_shell: winget install -e --id Docker.DockerDesktop
+  when: ansible_os_family == "Windows"
+  tags: [setup, docker]
+
+# Shared Setup
+- name: Install git pre-commit hook
+  template:
+    src: pre-commit.sh.j2
+    dest: "{{ playbook_dir }}/../../.git/hooks/pre-commit"
+    mode: '0755'
+  tags: [setup, hooks]

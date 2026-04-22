@@ -1,0 +1,114 @@
+<svg width="100%" viewBox="0 0 680 520" role="img" xmlns="http://www.w3.org/2000/svg">
+<title>How Ansible fits into CI/CD pipelines</title>
+<desc>Two parallel flows showing one-time server setup via Ansible and the ongoing CD pipeline where Ansible runs deploy.yml on every git tag.</desc>
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+  <style>
+    text { font-family: sans-serif; }
+    .h  { font-size: 13px; font-weight: 600; }
+    .sm { font-size: 11px; }
+    .xs { font-size: 10px; fill: #666; }
+    .arr { stroke: #888; stroke-width: 1.2; fill: none; marker-end: url(#arrow); }
+  </style>
+</defs>
+
+<!-- ── Column headers ──────────────────────────────────────────── -->
+<text class="h" x="170" y="28" text-anchor="middle" fill="#3c3489">One-time setup</text>
+<text class="xs" x="170" y="44" text-anchor="middle">Platform engineer runs manually</text>
+
+<text class="h" x="510" y="28" text-anchor="middle" fill="#085041">Every deployment</text>
+<text class="xs" x="510" y="44" text-anchor="middle">GitHub Actions triggers automatically</text>
+
+<!-- divider -->
+<line x1="340" y1="18" x2="340" y2="500" stroke="#d3d1c7" stroke-width="0.8" stroke-dasharray="4 3"/>
+
+<!-- ══ LEFT COLUMN — one-time setup ══════════════════════════════ -->
+
+<!-- Step 1: New server -->
+<rect x="70" y="60" width="200" height="46" rx="8" fill="#eeedfe" stroke="#7f77dd" stroke-width="0.7"/>
+<text class="h" x="170" y="78" text-anchor="middle" fill="#26215c">Spin up EC2 / VPS</text>
+<text class="sm" x="170" y="95" text-anchor="middle" fill="#534ab7">Terraform provisions it</text>
+
+<line x1="170" y1="106" x2="170" y2="128" class="arr"/>
+
+<!-- Step 2: Run setup.yml -->
+<rect x="70" y="130" width="200" height="60" rx="8" fill="#eeedfe" stroke="#7f77dd" stroke-width="0.7"/>
+<text class="h" x="170" y="150" text-anchor="middle" fill="#26215c">ansible-playbook setup.yml</text>
+<text class="sm" x="170" y="167" text-anchor="middle" fill="#534ab7">Calls roles in sequence</text>
+<text class="xs" x="170" y="182" text-anchor="middle">common → docker → nginx → doppler</text>
+
+<line x1="170" y1="190" x2="170" y2="212" class="arr"/>
+
+<!-- Roles box -->
+<rect x="50" y="214" width="240" height="150" rx="8" fill="none" stroke="#b4b2a9" stroke-width="0.7" stroke-dasharray="5 3"/>
+<text class="xs" x="170" y="232" text-anchor="middle" fill="#5f5e5a">Roles called by setup.yml</text>
+
+<rect x="68" y="242" width="200" height="34" rx="6" fill="#f1efe8" stroke="#b4b2a9" stroke-width="0.5"/>
+<text class="sm" x="168" y="256" text-anchor="middle" fill="#2c2c2a">common/</text>
+<text class="xs" x="168" y="269" text-anchor="middle">UFW, Fail2Ban, SSH hardening</text>
+
+<rect x="68" y="284" width="200" height="34" rx="6" fill="#f1efe8" stroke="#b4b2a9" stroke-width="0.5"/>
+<text class="sm" x="168" y="298" text-anchor="middle" fill="#2c2c2a">docker/</text>
+<text class="xs" x="168" y="311" text-anchor="middle">installs Docker engine</text>
+
+<rect x="68" y="326" width="96" height="30" rx="6" fill="#f1efe8" stroke="#b4b2a9" stroke-width="0.5"/>
+<text class="sm" x="116" y="340" text-anchor="middle" fill="#2c2c2a">nginx/</text>
+<text class="xs" x="116" y="353" text-anchor="middle">Nginx + SSL</text>
+
+<rect x="172" y="326" width="96" height="30" rx="6" fill="#f1efe8" stroke="#b4b2a9" stroke-width="0.5"/>
+<text class="sm" x="220" y="340" text-anchor="middle" fill="#2c2c2a">doppler/</text>
+<text class="xs" x="220" y="353" text-anchor="middle">CLI + auth</text>
+
+<line x1="170" y1="364" x2="170" y2="386" class="arr"/>
+
+<!-- Result -->
+<rect x="70" y="388" width="200" height="46" rx="8" fill="#eaf3de" stroke="#3b6d11" stroke-width="0.7"/>
+<text class="h" x="170" y="406" text-anchor="middle" fill="#173404">Server ready</text>
+<text class="sm" x="170" y="423" text-anchor="middle" fill="#3b6d11">Never SSH in again for setup</text>
+
+<!-- ══ RIGHT COLUMN — every deployment ═══════════════════════════ -->
+
+<!-- git tag -->
+<rect x="410" y="60" width="200" height="46" rx="8" fill="#e1f5ee" stroke="#0f6e56" stroke-width="0.7"/>
+<text class="h" x="510" y="78" text-anchor="middle" fill="#04342c">git tag v1.2.0</text>
+<text class="sm" x="510" y="95" text-anchor="middle" fill="#0f6e56">Developer creates a release</text>
+
+<line x1="510" y1="106" x2="510" y2="128" class="arr"/>
+
+<!-- GitHub Actions -->
+<rect x="410" y="130" width="200" height="46" rx="8" fill="#e1f5ee" stroke="#0f6e56" stroke-width="0.7"/>
+<text class="h" x="510" y="148" text-anchor="middle" fill="#04342c">GitHub Actions triggers</text>
+<text class="sm" x="510" y="165" text-anchor="middle" fill="#0f6e56">CD workflow fires on v*</text>
+
+<line x1="510" y1="176" x2="510" y2="198" class="arr"/>
+
+<!-- Build + push -->
+<rect x="410" y="200" width="200" height="46" rx="8" fill="#e1f5ee" stroke="#0f6e56" stroke-width="0.7"/>
+<text class="h" x="510" y="218" text-anchor="middle" fill="#04342c">Build Docker image</text>
+<text class="sm" x="510" y="235" text-anchor="middle" fill="#0f6e56">Push to GHCR with SHA tag</text>
+
+<line x1="510" y1="246" x2="510" y2="268" class="arr"/>
+
+<!-- Ansible deploy.yml -->
+<rect x="410" y="270" width="200" height="60" rx="8" fill="#e1f5ee" stroke="#0f6e56" stroke-width="0.7"/>
+<text class="h" x="510" y="290" text-anchor="middle" fill="#04342c">ansible-playbook deploy.yml</text>
+<text class="sm" x="510" y="308" text-anchor="middle" fill="#0f6e56">3 tasks only</text>
+<text class="xs" x="510" y="323" text-anchor="middle">pull image → restart → health check</text>
+
+<line x1="510" y1="330" x2="510" y2="352" class="arr"/>
+
+<!-- Verify -->
+<rect x="410" y="354" width="200" height="46" rx="8" fill="#e1f5ee" stroke="#0f6e56" stroke-width="0.7"/>
+<text class="h" x="510" y="372" text-anchor="middle" fill="#04342c">Health check passes</text>
+<text class="sm" x="510" y="389" text-anchor="middle" fill="#0f6e56">Pipeline reports success</text>
+
+<line x1="510" y1="400" x2="510" y2="422" class="arr"/>
+
+<!-- Live -->
+<rect x="410" y="424" width="200" height="46" rx="8" fill="#eaf3de" stroke="#3b6d11" stroke-width="0.7"/>
+<text class="h" x="510" y="442" text-anchor="middle" fill="#173404">New version live</text>
+<text class="sm" x="510" y="459" text-anchor="middle" fill="#3b6d11">30-60 seconds total</text>
+
+</svg>

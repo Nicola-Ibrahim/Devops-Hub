@@ -42,7 +42,9 @@ def run_bootstrap() -> None:
             group.logger.error("Stop: Workspace synchronization failed.")
             sys.exit(1)
 
-        group.logger.success("Bootstrap complete! Your environment is ready via Ansible.")
+        group.logger.success(
+            "Bootstrap complete! Your environment is ready via Ansible."
+        )
 
 
 if __name__ == "__main__":

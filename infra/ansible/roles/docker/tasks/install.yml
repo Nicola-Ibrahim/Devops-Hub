@@ -5,15 +5,6 @@
   ignore_errors: true
   changed_when: false
 
-- name: "[macOS] Ensure Docker is installed via Homebrew"
-  homebrew:
-    name: docker
-    state: present
-  when: 
-    - ansible_os_family == "Darwin"
-    - docker_check.rc != 0
-  tags: [setup, local]
-
 - name: "[Linux] Install Docker Engine"
   block:
     - name: "Install base prerequisites"
@@ -28,4 +19,4 @@
   when: 
     - ansible_system == "Linux"
     - docker_check.rc != 0
-  tags: [setup, cloud, local]
+  tags: [setup, cloud]

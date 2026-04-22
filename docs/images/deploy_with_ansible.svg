@@ -1,0 +1,104 @@
+<svg width="100%" viewBox="0 0 680 460" role="img" xmlns="http://www.w3.org/2000/svg">
+<title>Raw SSH deployment vs Ansible-managed deployment</title>
+<desc>Side by side comparison of deploying with raw SSH commands versus using Ansible deploy playbook, showing same outcome with different levels of safety and auditability.</desc>
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+  <style>
+    text { font-family: sans-serif; }
+    .h  { font-size: 13px; font-weight: 600; }
+    .sm { font-size: 11px; }
+    .xs { font-size: 10px; }
+    .arr { stroke: #888; stroke-width: 1.2; fill: none; marker-end: url(#arrow); }
+    .mono { font-family: monospace; font-size: 10px; }
+  </style>
+</defs>
+
+<!-- column headers -->
+<rect x="20" y="14" width="300" height="30" rx="6" fill="#faece7" stroke="#993c1d" stroke-width="0.7"/>
+<text class="h" x="170" y="34" text-anchor="middle" fill="#4a1b0c">What you do now — raw SSH</text>
+
+<rect x="360" y="14" width="300" height="30" rx="6" fill="#e1f5ee" stroke="#0f6e56" stroke-width="0.7"/>
+<text class="h" x="510" y="34" text-anchor="middle" fill="#04342c">With Ansible — deploy.yml</text>
+
+<!-- divider -->
+<line x1="340" y1="10" x2="340" y2="450" stroke="#d3d1c7" stroke-width="0.8" stroke-dasharray="4 3"/>
+
+<!-- ── LEFT: raw SSH ───────────────────────────────────── -->
+
+<!-- Step 1 -->
+<rect x="30" y="62" width="280" height="44" rx="7" fill="#f1efe8" stroke="#b4b2a9" stroke-width="0.6"/>
+<text class="sm" x="170" y="78" text-anchor="middle" fill="#2c2c2a">GitHub Actions: build + push image</text>
+<text class="xs" x="170" y="94" text-anchor="middle" fill="#5f5e5a">ghcr.io/org/backend:v1.2.0</text>
+
+<line x1="170" y1="106" x2="170" y2="124" class="arr"/>
+
+<!-- Step 2 -->
+<rect x="30" y="126" width="280" height="56" rx="7" fill="#f1efe8" stroke="#b4b2a9" stroke-width="0.6"/>
+<text class="sm" x="170" y="143" text-anchor="middle" fill="#2c2c2a">appleboy/ssh-action</text>
+<text class="mono" x="170" y="160" text-anchor="middle" fill="#444">docker pull image:v1.2.0</text>
+<text class="mono" x="170" y="174" text-anchor="middle" fill="#444">systemctl restart backend</text>
+
+<line x1="170" y1="182" x2="170" y2="200" class="arr"/>
+
+<!-- Step 3 -->
+<rect x="30" y="202" width="280" height="44" rx="7" fill="#f1efe8" stroke="#b4b2a9" stroke-width="0.6"/>
+<text class="sm" x="170" y="219" text-anchor="middle" fill="#2c2c2a">No health check</text>
+<text class="xs" x="170" y="235" text-anchor="middle" fill="#5f5e5a">Pipeline reports done — may have crashed</text>
+
+<line x1="170" y1="246" x2="170" y2="264" class="arr"/>
+
+<!-- Result box -->
+<rect x="30" y="266" width="280" height="44" rx="7" fill="#faece7" stroke="#993c1d" stroke-width="0.7"/>
+<text class="sm" x="170" y="283" text-anchor="middle" fill="#4a1b0c">Works — but fragile</text>
+<text class="xs" x="170" y="299" text-anchor="middle" fill="#713030">No retry, no verify, no audit trail</text>
+
+<!-- tradeoffs left -->
+<rect x="30" y="330" width="280" height="110" rx="7" fill="none" stroke="#d3d1c7" stroke-width="0.6" stroke-dasharray="4 3"/>
+<text class="xs" x="40" y="350" fill="#5f5e5a" font-weight="600">Tradeoffs</text>
+<text class="xs" x="40" y="368" fill="#2c2c2a">✓  Simple — easy to understand</text>
+<text class="xs" x="40" y="385" fill="#2c2c2a">✓  No extra tooling needed</text>
+<text class="xs" x="40" y="402" fill="#a32d2d">✗  No health check — silent failures</text>
+<text class="xs" x="40" y="419" fill="#a32d2d">✗  No retry on transient errors</text>
+<text class="xs" x="40" y="436" fill="#a32d2d">✗  Shell scripts drift over time</text>
+
+<!-- ── RIGHT: Ansible ──────────────────────────────────── -->
+
+<!-- Step 1 -->
+<rect x="370" y="62" width="280" height="44" rx="7" fill="#e1f5ee" stroke="#1d9e75" stroke-width="0.6"/>
+<text class="sm" x="510" y="78" text-anchor="middle" fill="#04342c">GitHub Actions: build + push image</text>
+<text class="xs" x="510" y="94" text-anchor="middle" fill="#085041">ghcr.io/org/backend:v1.2.0</text>
+
+<line x1="510" y1="106" x2="510" y2="124" class="arr"/>
+
+<!-- Step 2 -->
+<rect x="370" y="126" width="280" height="56" rx="7" fill="#e1f5ee" stroke="#1d9e75" stroke-width="0.6"/>
+<text class="sm" x="510" y="143" text-anchor="middle" fill="#04342c">ansible-playbook deploy.yml</text>
+<text class="xs" x="510" y="160" text-anchor="middle" fill="#085041">Task 1: docker pull new image</text>
+<text class="xs" x="510" y="174" text-anchor="middle" fill="#085041">Task 2: systemctl restart backend</text>
+
+<line x1="510" y1="182" x2="510" y2="200" class="arr"/>
+
+<!-- Step 3 -->
+<rect x="370" y="202" width="280" height="44" rx="7" fill="#e1f5ee" stroke="#1d9e75" stroke-width="0.6"/>
+<text class="sm" x="510" y="219" text-anchor="middle" fill="#04342c">Task 3: health check with retries</text>
+<text class="xs" x="510" y="235" text-anchor="middle" fill="#085041">Fails pipeline if app did not start</text>
+
+<line x1="510" y1="246" x2="510" y2="264" class="arr"/>
+
+<!-- Result box -->
+<rect x="370" y="266" width="280" height="44" rx="7" fill="#eaf3de" stroke="#3b6d11" stroke-width="0.7"/>
+<text class="sm" x="510" y="283" text-anchor="middle" fill="#173404">Works — and verified</text>
+<text class="xs" x="510" y="299" text-anchor="middle" fill="#3b6d11">Retries, health check, audit log</text>
+
+<!-- tradeoffs right -->
+<rect x="370" y="330" width="280" height="110" rx="7" fill="none" stroke="#d3d1c7" stroke-width="0.6" stroke-dasharray="4 3"/>
+<text class="xs" x="380" y="350" fill="#5f5e5a" font-weight="600">Tradeoffs</text>
+<text class="xs" x="380" y="368" fill="#2c2c2a">✓  Health check — knows if it failed</text>
+<text class="xs" x="380" y="385" fill="#2c2c2a">✓  Retries on transient SSH errors</text>
+<text class="xs" x="380" y="402" fill="#2c2c2a">✓  Same tool for setup + deploy</text>
+<text class="xs" x="380" y="419" fill="#444">~  Requires ansible on CI runner</text>
+<text class="xs" x="380" y="436" fill="#444">~  pip install ansible (30 sec)</text>
+
+</svg>

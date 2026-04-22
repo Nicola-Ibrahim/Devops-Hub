@@ -90,3 +90,8 @@ The source of truth for everything from incident response to system scaling.
 ---
 
 *Internal / Proprietary - Nicola Ibrahim Ecosystem*
+
+
+
+![Ansible Diagram](./docs/images/ansible.svg)
+![Deployment Diagram](./docs/images/deploy_with_ansible.svg)

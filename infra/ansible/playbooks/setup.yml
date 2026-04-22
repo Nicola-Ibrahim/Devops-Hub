@@ -1,5 +1,5 @@
 ---
-- name: TOB Cloud Server Bootstrap
+- name: App Cloud Server Bootstrap
   hosts: all
   become: true
   gather_facts: true
@@ -8,3 +8,4 @@
     - common
     - docker
     - doppler
+    - nginx
