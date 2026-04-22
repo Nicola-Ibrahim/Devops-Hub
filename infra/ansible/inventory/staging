@@ -1,0 +1,7 @@
+[staging]
+# staging-app-01.tob.internal ansible_host=10.0.1.10
+
+[staging:vars]
+ansible_user=ubuntu
+env=staging
+doppler_config=stg

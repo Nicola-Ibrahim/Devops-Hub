@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "Tracing Objectives Backwards - Platform Development Toolbox"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "ansible-core>=2.16.0",
+]
 
 [project.scripts]
 tob-bootstrap = "platform_dev.bootstrap:run_bootstrap"

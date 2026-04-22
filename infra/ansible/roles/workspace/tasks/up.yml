@@ -1,0 +1,14 @@
+---
+- name: Infrastructure Lifecycle (Docker Compose - UP)
+  shell: doppler run -- docker compose up -d --build
+  args:
+    chdir: "{{ playbook_dir }}/../.."
+  changed_when: true
+  tags: [infrastructure]
+
+- name: Backend Dependency Sync
+  command: uv sync
+  args:
+    chdir: "{{ playbook_dir }}/../.."
+  changed_when: true
+  tags: [workspace]

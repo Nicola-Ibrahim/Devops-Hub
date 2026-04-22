@@ -1,0 +1,6 @@
+---
+- name: Sync Doppler Secrets
+  shell: doppler secrets download --format env --no-file > .env
+  args:
+    chdir: "{{ playbook_dir }}/../.."
+  changed_when: true

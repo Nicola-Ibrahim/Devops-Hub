@@ -16,21 +16,23 @@ The following diagram illustrates how this Hub empowers our service repositories
 
 ```mermaid
 graph TD
-    subgraph "DevOps Hub (This Repo)"
-        A[Reusable Workflows] -->|Import| D(GitHub Actions)
-        B[Platform-Dev CLI] -->|Install| E(Local Environment)
-        C[Operational Docs] -->|Reference| F(Runbooks & Guide)
+    subgraph "Infrastructure Hub (infra/)"
+        A[Reusable Roles] -->|Compose| D(Playbooks)
+        D -->|STG/PRD| J[Cloud Servers]
+        D -->|Local| E[Developer CLI]
+    end
+
+    subgraph "DevOps Hub (Scripts)"
+        E -->|Executes| K[Local Environment]
+        L[Reusable Workflows] -->|Import| M[GitHub Actions]
     end
 
     subgraph "Service Repositories"
         G[Backend Service]
         H[Frontend App]
-        I[AI Data Service]
     end
 
-    D --> G & H & I
-    E --> G & H & I
-    F --> G & H & I
+    K & M & G & H
 ```
 
 ---

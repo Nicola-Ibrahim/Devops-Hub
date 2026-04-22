@@ -1,43 +1,34 @@
 import argparse
+import sys
 
 from platform_dev.engine.ui import Logger
-from platform_dev.tasks.env_secrets import sync_secrets
+from platform_dev.tasks.env_secrets import sync_platform_secrets
 from platform_dev.tasks.infrastructure import (
-    boot_infrastructure,
-    reset_infrastructure,
-    shutdown_services,
+    boot_platform_infrastructure,
+    shutdown_platform_services,
 )
 from platform_dev.tasks.workspace import (
-    audit_storage,
-    cleanup_caches,
-    cleanup_storage,
-    summarize_work,
-    sync_dependencies,
+    cleanup_platform_workspace,
+    sync_platform_workspace,
 )
 
 
 def handle_up(skip_confirm: bool = False) -> bool:
-    """Full environment synchronization and startup."""
+    """Full environment synchronization and startup via Ansible."""
     logger = Logger()
-    logger.header("Development Workspace: UP")
+    logger.header("Development Workspace: UP (Ansible)")
 
     # 1. Sync Secrets
-    if not sync_secrets(skip_confirm=skip_confirm):
+    if not sync_platform_secrets():
         return False
 
-    # 2. Sync Dependencies
-    if not sync_dependencies(skip_confirm=skip_confirm):
+    # 2. Sync Workspace (Dependencies + Pre-flight)
+    if not sync_platform_workspace():
         return False
 
     # 3. Boot Infrastructure
-    if not boot_infrastructure(skip_confirm=skip_confirm):
+    if not boot_platform_infrastructure():
         return False
-
-    # 4. Infrastructure Reset (Flush Redis)
-    reset_infrastructure(skip_confirm=skip_confirm)
-
-    # 5. Storage Cleanup
-    cleanup_storage(skip_confirm=skip_confirm)
 
     logger.header("Workspace Ready")
     logger.success("All containers are running and environment is clean.")
@@ -46,37 +37,30 @@ def handle_up(skip_confirm: bool = False) -> bool:
 
 
 def handle_down(skip_confirm: bool = False) -> bool:
-    """Graceful shutdown and session cleanup."""
+    """Graceful shutdown and session cleanup via Ansible."""
     logger = Logger()
-    logger.header("Development Workspace: DOWN")
+    logger.header("Development Workspace: DOWN (Ansible)")
 
-    # 1. Shutdown Services (Confirm if not -y)
-    shutdown_services(skip_confirm=skip_confirm)
+    # 1. Shutdown Services
+    shutdown_platform_services(skip_confirm=skip_confirm)
 
-    # 2. Cleanup Caches
-    cleanup_caches(skip_confirm=skip_confirm)
-
-    # 3. Audit Storage
-    audit_storage(skip_confirm=skip_confirm)
-
-    # 4. Summarize Work
-    summarize_work(skip_confirm=skip_confirm)
+    # 2. Cleanup Workspace
+    cleanup_platform_workspace(skip_confirm=skip_confirm)
 
     logger.header("Shutdown Complete")
-    logger.success("All background services have been terminated (where possible).")
+    logger.success("All background services have been terminated via Ansible.")
     logger.info("\nSee you tomorrow! 🌙\n")
     return True
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Unified Development Environment Manager",
+        description="Unified Platform Manager (Ansible-Driven)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   tob-dev up      # Start the environment
   tob-dev down    # Stop and clean up
-  tob-dev up -y   # Start without confirmation prompts
         """,
     )
 
@@ -92,10 +76,16 @@ Examples:
 
     args = parser.parse_args()
 
-    if args.action == "up":
-        handle_up(skip_confirm=args.yes)
-    elif args.action == "down":
-        handle_down(skip_confirm=args.yes)
+    try:
+        if args.action == "up":
+            handle_up(skip_confirm=args.yes)
+        elif args.action == "down":
+            handle_down(skip_confirm=args.yes)
+    except KeyboardInterrupt:
+        sys.exit(0)
+    except Exception as e:
+        Logger().error(f"Execution failed: {str(e)}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

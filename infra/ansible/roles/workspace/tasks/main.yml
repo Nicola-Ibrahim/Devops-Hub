@@ -1,0 +1,8 @@
+---
+- name: Execute Workspace UP Configuration
+  import_tasks: up.yml
+  when: "'up' in ansible_run_tags"
+
+- name: Execute Workspace DOWN Configuration
+  import_tasks: down.yml
+  when: "'down' in ansible_run_tags"

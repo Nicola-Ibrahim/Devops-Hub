@@ -1,0 +1,16 @@
+---
+- name: Infrastructure Lifecycle (Docker Compose - DOWN)
+  shell: docker compose down
+  args:
+    chdir: "{{ playbook_dir }}/../.."
+  changed_when: true
+  tags: [infrastructure]
+
+- name: Cleanup Temporary Files
+  shell: |
+    find . -type d \( -name "__pycache__" -o -name ".pytest_cache" -o -name ".ruff_cache" \) -exec rm -rf {} +
+  args:
+    chdir: "{{ playbook_dir }}/../.."
+  ignore_errors: true
+  changed_when: true
+  tags: [workspace]

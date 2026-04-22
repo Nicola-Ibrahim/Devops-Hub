@@ -1,0 +1,10 @@
+---
+- name: TOB Cloud Server Bootstrap
+  hosts: all
+  become: true
+  gather_facts: true
+
+  roles:
+    - common
+    - docker
+    - doppler

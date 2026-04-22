@@ -1,0 +1,22 @@
+---
+- name: Check if Doppler is installed
+  command: doppler --version
+  register: doppler_installed
+  ignore_errors: true
+  changed_when: false
+
+- name: Install Doppler CLI (macOS)
+  homebrew:
+    name: dopplerhq/cli/doppler
+    state: present
+  when: 
+    - ansible_os_family == "Darwin"
+    - doppler_installed.failed
+
+- name: Install Doppler CLI (Linux)
+  shell: |
+    (curl -Ls --retry 5 https://cli.doppler.com/install.sh || wget -qO- https://cli.doppler.com/install.sh) | sh
+  become: true
+  when: 
+    - ansible_system == "Linux"
+    - doppler_installed.failed
