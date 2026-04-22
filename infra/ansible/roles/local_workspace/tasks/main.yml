@@ -9,7 +9,7 @@
 
 - name: "[macOS] Install Developer Tools"
   homebrew:
-    name: ["uv", "pnpm"]
+    name: ["uv"]
     state: present
   when: 
     - ansible_os_family == "Darwin"
@@ -33,13 +33,6 @@
   when: ansible_system == "Linux"
   tags: [setup, uv]
 
-- name: "[Linux] Install pnpm"
-  shell: curl -fsSL https://get.pnpm.io/install.sh | sh
-  args:
-    creates: ~/.local/share/pnpm/pnpm
-  when: ansible_system == "Linux"
-  tags: [setup, pnpm]
-
 - name: "[Linux] Install Docker (Local Engine)"
   shell: curl -fsSL https://get.docker.com | sh
   become: true
@@ -52,12 +45,6 @@
     powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
   when: ansible_os_family == "Windows"
   tags: [setup, uv]
-
-- name: "[Windows] Install pnpm"
-  win_shell: |
-    powershell -c "irm https://get.pnpm.io/install.ps1 | iex"
-  when: ansible_os_family == "Windows"
-  tags: [setup, pnpm]
 
 - name: "[Windows] Install Docker Desktop via Winget"
   win_shell: winget install -e --id Docker.DockerDesktop

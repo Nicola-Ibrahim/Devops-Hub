@@ -2,11 +2,11 @@ import argparse
 import sys
 
 from platform_dev.engine.ui import Logger
-from platform_dev.tasks.env_secrets import sync_platform_secrets
 from platform_dev.tasks.infrastructure import (
     boot_platform_infrastructure,
     shutdown_platform_services,
 )
+from platform_dev.tasks.setup import run_platform_setup
 from platform_dev.tasks.workspace import (
     cleanup_platform_workspace,
     sync_platform_workspace,
@@ -18,8 +18,8 @@ def handle_up(skip_confirm: bool = False) -> bool:
     logger = Logger()
     logger.header("Development Workspace: UP (Ansible)")
 
-    # 1. Sync Secrets
-    if not sync_platform_secrets():
+    # 1. Sync Everything (Optional: Ensures secrets/tools are fresh)
+    if not run_platform_setup():
         return False
 
     # 2. Sync Workspace (Dependencies + Pre-flight)

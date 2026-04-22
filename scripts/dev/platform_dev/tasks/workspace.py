@@ -1,28 +1,25 @@
-from platform_dev.engine.system import get_ansible_cmd
-from platform_dev.engine.task_group import Task, TaskGroup
+from platform_dev.engine.core import Task, TaskGroup
 
 
 def sync_platform_workspace() -> bool:
-    """Synchronize dependencies and clean workspace via Ansible."""
+    """Synchronize dependencies directly."""
     with TaskGroup("Workspace Synchronization"):
-        task = Task(
-            cmd=get_ansible_cmd(tags=["up", "workspace"]),
-            description="Syncing dependencies and prepping workspace",
+        # Python dependencies
+        uv_task = Task(
+            cmd="uv sync",
+            description="Syncing Python dependencies (uv)",
             stream=True,
-            required_tools=["ansible-playbook"],
         )
-        return task.success
+        return uv_task.success
 
 
 def cleanup_platform_workspace(skip_confirm: bool = False) -> bool:
-    """Clean caches and temporary files via Ansible."""
+    """Clean caches and temporary files."""
     with TaskGroup("Workspace Cleanup"):
         task = Task(
-            cmd=get_ansible_cmd(tags=["down", "workspace"]),
-            description="Executing cache cleanup (Ansible)",
-            stream=True,
+            cmd="rm -rf .pytest_cache .ruff_cache __pycache__",
+            description="Cleaning Python caches",
             confirm=True,
             skip_confirm=skip_confirm,
-            required_tools=["ansible-playbook"],
         )
         return task.success

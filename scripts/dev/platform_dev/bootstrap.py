@@ -1,8 +1,8 @@
 import sys
 
-from platform_dev.engine.task_group import TaskGroup
+from platform_dev.engine.core import TaskGroup
 from platform_dev.engine.ui import Logger
-from platform_dev.tasks.env_secrets import setup_identity, sync_platform_secrets
+from platform_dev.tasks.env_secrets import setup_identity
 from platform_dev.tasks.infrastructure import boot_platform_infrastructure
 from platform_dev.tasks.setup import run_platform_setup
 from platform_dev.tasks.workspace import sync_platform_workspace
@@ -27,12 +27,7 @@ def run_bootstrap() -> None:
             group.logger.error("Stop: Identity authentication failed.")
             sys.exit(1)
 
-        # 3. Sync Secrets
-        if not sync_platform_secrets():
-            group.logger.error("Stop: Secret synchronization failed.")
-            sys.exit(1)
-
-        # 4. Boot Infrastructure
+        # 3. Boot Infrastructure
         if not boot_platform_infrastructure():
             group.logger.error("Stop: Infrastructure failed to boot.")
             sys.exit(1)

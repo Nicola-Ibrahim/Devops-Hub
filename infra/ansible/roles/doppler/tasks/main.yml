@@ -1,7 +1,7 @@
 ---
 - name: Execute Doppler Installation
   import_tasks: install.yml
-  when: "'setup' in ansible_run_tags"
+  tags: [setup, tools]
 
 - name: Configure Doppler Service Token (Servers)
   shell: "doppler configure set token {{ doppler_token }}"
@@ -9,8 +9,8 @@
   when: 
     - ansible_system == "Linux"
     - doppler_token is defined
-    - "'setup' in ansible_run_tags"
+  tags: [setup, auth]
 
 - name: Execute Doppler Secret Sync
   import_tasks: sync.yml
-  when: "'up' in ansible_run_tags or 'secrets' in ansible_run_tags"
+  tags: [setup, secrets]
