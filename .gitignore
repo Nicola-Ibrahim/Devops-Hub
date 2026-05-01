@@ -1,0 +1,87 @@
+# ==========================================
+# Tracing Objectives Backwards - Global Git Ignore
+# ==========================================
+
+# --- System & IDE ---
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# --- Python: Byte-compiled / optimized / DLL files ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# --- Python: Environments ---
+.env
+.venv/
+venv/
+env/
+.python-version
+
+# --- Python: Build & Distribution ---
+build/
+dist/
+*.egg-info/
+.eggs/
+lib/
+lib64/
+sdist/
+wheels/
+*.egg
+MANIFEST
+
+# --- Tools & Caches ---
+.cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.hypothesis/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+coverage/
+htmlcov/
+
+# --- Runtime & Data ---
+*.log
+*.pem
+db.sqlite3
+db.sqlite3-journal
+instance/
+celerybeat-schedule
+celerybeat.pid
+*.manifest
+*.spec
+
+# --- Translations ---
+*.mo
+*.pot
+
+# ==========================================
+# Tracing Objectives Backwards - Project Specific
+# (Anchored to Root)
+# ==========================================
+
+# Data & Storage (DOCKER VOLUMES)
+/storage/
+/data/
+/models/
+/contexts/
+/diagnostics/
+/reports/
+/node_modules/
+
+# Agent Tools
+/.agent/
+/.specify/
+/.devops/

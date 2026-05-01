@@ -1,0 +1,17 @@
+galaxy_info:
+  author: Nicola Ibrahim
+  description: Doppler secrets synchronization and CLI installation.
+  company: none
+  license: MIT
+  min_ansible_version: 2.1
+  platforms:
+    - name: MacOSX
+      versions:
+        - all
+    - name: Ubuntu
+      versions:
+        - all
+  galaxy_tags:
+    - security
+    - secrets
+dependencies: []

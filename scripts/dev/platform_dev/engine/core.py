@@ -21,19 +21,21 @@ class Task:
     ):
         self.cmd = cmd
         self.description = description
-        self.cwd = cwd or self.get_root_dir()
+        self.cwd = cwd or self.get_project_root()
         self.logger = Logger()
         self.success = False
 
         if description:
-            if confirm and not skip_confirm:
-                if not self.logger.confirm(f"Run step: {description}?"):
-                    self.logger.info_step("Skipped by user.")
-                    return
-            self.logger.step(description)
+            self.logger.info_step(description)
+
+        if confirm and not skip_confirm:
+            if not self.logger.confirm(f"Proceed with: {description or cmd}?"):
+                self.logger.warning("Task skipped by user.")
+                return
 
         try:
             if interactive:
+                # Use subprocess.run for interactive commands to connect to tty
                 res = subprocess.run(cmd, shell=True, cwd=self.cwd)
                 self.success = res.returncode == 0
             elif stream:
@@ -70,13 +72,27 @@ class Task:
             self.logger.error(f"Exception: {e}")
 
     @staticmethod
-    def get_root_dir() -> Path:
-        """Finds project root by searching for .git."""
+    def get_project_root() -> Path:
+        """
+        Finds the project root.
+        If in a git repo, returns the root.
+        Otherwise returns current working directory.
+        """
         path = Path(os.getcwd()).absolute()
         for p in [path] + list(path.parents):
-            if (p / ".git").exists():
+            if (p / ".git").exists() or (p / "pyproject.toml").exists():
                 return p
         return path
+
+    @staticmethod
+    def get_devops_root() -> Path:
+        """
+        Returns the absolute path to the DevOps repository structure.
+        This is used to find internal Ansible roles/playbooks if local ones aren't found.
+        """
+        # This file is in platform_dev/engine/core.py
+        # Root is 4 levels up from platform_dev/engine/core.py
+        return Path(__file__).absolute().parents[4]
 
 
 class TaskGroup:

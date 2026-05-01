@@ -1,0 +1,14 @@
+galaxy_info:
+  author: Nicola Ibrahim
+  description: Common server utilities and security hardening.
+  company: none
+  license: MIT
+  min_ansible_version: 2.1
+  platforms:
+    - name: Ubuntu
+      versions:
+        - all
+  galaxy_tags:
+    - security
+    - provisioning
+dependencies: []

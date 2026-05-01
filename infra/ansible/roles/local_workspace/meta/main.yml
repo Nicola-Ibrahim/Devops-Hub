@@ -1,0 +1,17 @@
+galaxy_info:
+  author: Nicola Ibrahim
+  description: Local workspace provisioning for DevOps platform.
+  company: none
+  license: MIT
+  min_ansible_version: 2.1
+  platforms:
+    - name: MacOSX
+      versions:
+        - all
+    - name: Ubuntu
+      versions:
+        - all
+  galaxy_tags:
+    - development
+    - setup
+dependencies: []
