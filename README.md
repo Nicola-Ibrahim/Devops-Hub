@@ -2,6 +2,11 @@
 
 > Standardizing the developer experience through automated orchestration and operational intelligence.
 
+The [Python API foundation](./backend/README.md) now provides health/readiness,
+project-bound token authentication, lifecycle rules and control-plane migrations.
+Resource provisioning and the Next.js dashboard are planned subsequent phases;
+see the [backend workflow record](./.codex/workflow/tasks/backend-workflows.md).
+
 ---
 
 ## 💎 The Vision

@@ -1,0 +1,61 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main]
+    paths: ["backend/**", ".github/workflows/backend-ci.yml"]
+  pull_request:
+    paths: ["backend/**", ".github/workflows/backend-ci.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: devops_hub_test
+          POSTGRES_USER: postgres
+          # Disposable hosted-runner service only; no shared server credentials.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d devops_hub_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PLATFORM_TEST_DATABASE_URL: postgresql+psycopg://postgres@127.0.0.1:5432/devops_hub_test
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.8.6"
+          enable-cache: true
+          working-directory: backend
+          cache-dependency-glob: backend/uv.lock
+      - name: Install locked environment
+        run: uv sync --frozen --python 3.12
+      - name: Lint and format
+        run: |
+          uv run --frozen ruff check src migrations tests
+          uv run --frozen ruff format --check src migrations tests
+      - name: Type check
+        run: uv run --frozen mypy src
+      - name: Unit, migration and authentication checks
+        run: uv run --frozen pytest -q
+      - name: Verify package build
+        run: uv build

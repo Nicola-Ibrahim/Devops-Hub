@@ -1,0 +1,50 @@
+[project]
+name = "devops-hub-backend"
+version = "0.1.0"
+description = "Developer platform API and resource lifecycle foundation"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.16,<2",
+    "fastapi>=0.115,<1",
+    "psycopg[binary]>=3.2,<4",
+    "pydantic-settings>=2.8,<3",
+    "sqlalchemy>=2.0,<2.1",
+    "uvicorn>=0.34,<1",
+]
+
+[project.scripts]
+platform-admin = "bootstrap.cli:main"
+
+[dependency-groups]
+dev = ["httpx>=0.28,<1", "mypy>=1.15,<2", "pytest>=8.3,<10", "ruff>=0.11,<1"]
+
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = [
+    "src/api",
+    "src/identity",
+    "src/developer_platform",
+    "src/shared",
+    "src/bootstrap",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["postgres: requires an explicitly configured disposable PostgreSQL test database"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src"]
+strict = true
+

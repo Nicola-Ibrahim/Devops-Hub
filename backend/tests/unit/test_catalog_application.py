@@ -1,0 +1,61 @@
+"""Unit tests for the provisioning catalog use case."""
+
+import unittest
+from uuid import UUID
+
+from developer_platform.application.catalog import ReadCatalog
+from developer_platform.application.dto import AccessContext
+from developer_platform.application.errors import CatalogForbidden
+from developer_platform.application.permissions import ALL_SCOPES
+
+
+class ReadCatalogTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.project_id = UUID("11111111-1111-4111-8111-111111111111")
+        self.access = AccessContext(
+            user_id=UUID("22222222-2222-4222-8222-222222222222"),
+            project_id=self.project_id,
+            role="developer",
+            scopes=frozenset({"catalog:read"}),
+        )
+
+    def test_returns_empty_catalog_for_authorized_project(self) -> None:
+        result = ReadCatalog().execute(self.access)
+
+        self.assertEqual(result.project_id, self.project_id)
+        self.assertEqual(result.templates, ())
+        self.assertEqual(
+            result.message,
+            "No provisioning providers are enabled in this foundation release",
+        )
+
+    def test_denies_missing_scope_even_for_admin(self) -> None:
+        admin = AccessContext(
+            user_id=self.access.user_id,
+            project_id=self.project_id,
+            role="admin",
+            scopes=frozenset(),
+        )
+
+        with self.assertRaises(CatalogForbidden) as caught:
+            ReadCatalog().execute(admin)
+
+        self.assertEqual(caught.exception.code, "forbidden")
+        self.assertEqual(caught.exception.message, "The token does not permit this action")
+
+    def test_permission_vocabulary_is_preserved(self) -> None:
+        self.assertEqual(
+            ALL_SCOPES,
+            ("catalog:read", "resources:read", "resources:write", "connections:read"),
+        )
+
+    def test_preserves_project_context(self) -> None:
+        other_project = UUID("33333333-3333-4333-8333-333333333333")
+        access = AccessContext(
+            user_id=self.access.user_id,
+            project_id=other_project,
+            role="developer",
+            scopes=frozenset({"catalog:read"}),
+        )
+
+        self.assertEqual(ReadCatalog().execute(access).project_id, other_project)
