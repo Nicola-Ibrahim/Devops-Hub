@@ -1,11 +1,9 @@
-from collections.abc import Callable
 from datetime import datetime
-from types import TracebackType
 from typing import Protocol
 from uuid import UUID
 
-from identity.domain.credentials import CredentialSnapshot
-from identity.domain.records import AuditRecord, IdentitySnapshot, TokenSnapshot
+from identity.domain.credentials import ApiTokenAuthenticationDetails
+from identity.domain.records import ApiTokenAuditEvent, ApiTokenStatus, ProjectMembershipStatus
 
 
 class TokenHasher(Protocol):
@@ -16,10 +14,6 @@ class TokenGenerator(Protocol):
     def generate(self) -> str: ...
 
 
-class AuthenticationReader(Protocol):
-    def find_by_digest(self, digest: str) -> CredentialSnapshot | None: ...
-
-
 class CredentialReceipt(Protocol):
     def remove_owned(self) -> None: ...
 
@@ -28,25 +22,16 @@ class CredentialDelivery(Protocol):
     def write_new(self, secret: str) -> CredentialReceipt: ...
 
 
-class IdentityTransaction(Protocol):
-    def __enter__(self) -> "IdentityTransaction": ...
+class ApiTokenRepository(Protocol):
+    """Identity-owned token queries/writes; transaction completion is external."""
 
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> bool | None: ...
+    async def find_token_credential(self, digest: str) -> ApiTokenAuthenticationDetails | None: ...
 
-    def ensure_identity(
-        self,
-        *,
-        user_name: str,
-        project_name: str,
-        new_role: str,
-    ) -> IdentitySnapshot: ...
+    async def ensure_developer_membership(
+        self, *, user_name: str, project_name: str, new_role: str
+    ) -> ProjectMembershipStatus: ...
 
-    def add_token(
+    async def insert_api_token(
         self,
         *,
         user_id: UUID,
@@ -57,11 +42,8 @@ class IdentityTransaction(Protocol):
         created_at: datetime,
     ) -> UUID: ...
 
-    def append_audit(self, event: AuditRecord) -> None: ...
+    async def record_token_audit(self, event: ApiTokenAuditEvent) -> None: ...
 
-    def find_token(self, token_id: UUID) -> TokenSnapshot | None: ...
+    async def find_api_token(self, token_id: UUID) -> ApiTokenStatus | None: ...
 
-    def set_revoked(self, token_id: UUID, revoked_at: datetime) -> None: ...
-
-
-TransactionFactory = Callable[[], IdentityTransaction]
+    async def revoke_api_token(self, token_id: UUID, revoked_at: datetime) -> None: ...

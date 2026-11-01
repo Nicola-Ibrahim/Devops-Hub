@@ -1,4 +1,6 @@
+import asyncio
 import stat
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -10,17 +12,24 @@ from conftest import migration_config
 from fastapi.testclient import TestClient
 from sqlalchemy import event, func, inspect, select, text
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.orm import Session
+from sqlalchemy.pool import NullPool
 
-from bootstrap.composition import build_services
-from bootstrap.http import create_app
-from bootstrap.schema import registered_metadata
-from bootstrap.settings import SCHEMA_REVISION, Settings
+from containers.factory import create_container
+from containers.operations import IssueApiTokenToFile, RevokeApiTokenCommand
 from developer_platform.infra.persistence.models import Resource
+from entrypoints.http import create_app
+from entrypoints.schema import registered_metadata
+from entrypoints.settings import SCHEMA_REVISION, Settings
 from identity.application.dto import IssueTokenCommand
 from identity.application.errors import CredentialDeliveryError
 from identity.infra.credential_file import PrivateCredentialFile
-from identity.infra.persistence.models import ApiToken, Membership, User
+from identity.infra.persistence.models import (
+    ApiAccessTokenRow,
+    InternalUserRow,
+    ProjectMembershipRow,
+)
 from shared.infra.persistence.audit import AuditEvent
 
 pytestmark = pytest.mark.postgres
@@ -33,16 +42,70 @@ def settings():
     )
 
 
-def client_for(engine):
-    return TestClient(create_app(settings(), engine=engine))
-
-
-def issue(engine, path, user="developer", project="project", **kwargs):
-    token_id = build_services(settings(), engine).issue_token.execute(
-        IssueTokenCommand(user_name=user, project_name=project, **kwargs),
-        PrivateCredentialFile(path),
+def async_engine_for(sync_engine) -> AsyncEngine:
+    """Use this fixture's unique schema and avoid pools crossing asyncio loops."""
+    with sync_engine.connect() as connection:
+        schema = connection.scalar(text("SELECT current_schema()"))
+    assert isinstance(schema, str) and schema.startswith("test_")
+    return create_async_engine(
+        sync_engine.url,
+        connect_args={"options": f"-csearch_path={schema}"},
+        poolclass=NullPool,
+        hide_parameters=True,
+        echo=False,
     )
+
+
+@contextmanager
+def client_for(sync_engine, config=None):
+    database = async_engine_for(sync_engine)
+    try:
+        with TestClient(create_app(config or settings(), engine=database)) as client:
+            yield client
+    finally:
+        asyncio.run(database.dispose())
+
+
+async def issue_with_container(database: AsyncEngine, path, config, user, project, **kwargs):
+    container = create_container(config, engine=database)
+    try:
+        async with container() as scope:
+            service = await scope.get(IssueApiTokenToFile)
+            return await service.execute(
+                IssueTokenCommand(user_name=user, project_name=project, **kwargs),
+                PrivateCredentialFile(path),
+            )
+    finally:
+        await container.close()
+
+
+def issue(sync_engine, path, user="developer", project="project", **kwargs):
+    database = async_engine_for(sync_engine)
+    try:
+        token_id = asyncio.run(
+            issue_with_container(database, path, settings(), user, project, **kwargs)
+        )
+    finally:
+        asyncio.run(database.dispose())
     return token_id, path.read_text().strip()
+
+
+async def revoke_with_container(database: AsyncEngine, token_id, config):
+    container = create_container(config, engine=database)
+    try:
+        async with container() as scope:
+            service = await scope.get(RevokeApiTokenCommand)
+            return await service.execute(token_id)
+    finally:
+        await container.close()
+
+
+def revoke(sync_engine, token_id, config=None):
+    database = async_engine_for(sync_engine)
+    try:
+        return asyncio.run(revoke_with_container(database, token_id, config or settings()))
+    finally:
+        asyncio.run(database.dispose())
 
 
 def test_migrations_roundtrip_and_metadata_match(postgres_engine):
@@ -59,7 +122,7 @@ def test_issue_authenticate_and_revoke(postgres_engine, tmp_path, capsys):
     token_id, token = issue(postgres_engine, tmp_path / "credential")
     assert stat.S_IMODE((tmp_path / "credential").stat().st_mode) == 0o600
     with Session(postgres_engine) as session:
-        record = session.get(ApiToken, token_id)
+        record = session.get(ApiAccessTokenRow, token_id)
         assert record.digest != token
         assert token not in record.digest
         assert session.scalar(select(func.count()).select_from(AuditEvent)) == 1
@@ -71,7 +134,7 @@ def test_issue_authenticate_and_revoke(postgres_engine, tmp_path, capsys):
         catalog = client.get("/api/v1/catalog", headers=headers)
         assert catalog.json()["templates"] == []
         assert token not in me.text + catalog.text
-        assert build_services(settings(), postgres_engine).revoke_token.execute(token_id)
+        assert revoke(postgres_engine, token_id)
         assert client.get("/api/v1/me", headers=headers).status_code == 401
     assert token not in capsys.readouterr().out
 
@@ -80,13 +143,13 @@ def test_issue_authenticate_and_revoke(postgres_engine, tmp_path, capsys):
 def test_invalid_identity_and_membership_are_denied(postgres_engine, tmp_path, change):
     token_id, token = issue(postgres_engine, tmp_path / "credential")
     with Session(postgres_engine) as session, session.begin():
-        record = session.get(ApiToken, token_id)
+        record = session.get(ApiAccessTokenRow, token_id)
         if change == "expired":
             record.expires_at = datetime.now(UTC) - timedelta(seconds=1)
         elif change == "disabled":
-            session.get(User, record.user_id).active = False
+            session.get(InternalUserRow, record.user_id).active = False
         elif change == "membership_removed":
-            session.delete(session.get(Membership, (record.user_id, record.project_id)))
+            session.delete(session.get(ProjectMembershipRow, (record.user_id, record.project_id)))
         else:
             token = "wrong-" + token
     with client_for(postgres_engine) as client:
@@ -118,8 +181,8 @@ def test_existing_output_does_not_get_overwritten_or_commit_identity(postgres_en
         issue(postgres_engine, output, user="new", project="new")
     assert output.read_text() == "original"
     with Session(postgres_engine) as session:
-        assert session.scalar(select(func.count()).select_from(User)) == 0
-        assert session.scalar(select(func.count()).select_from(ApiToken)) == 0
+        assert session.scalar(select(func.count()).select_from(InternalUserRow)) == 0
+        assert session.scalar(select(func.count()).select_from(ApiAccessTokenRow)) == 0
 
 
 def test_failed_commit_removes_new_token_file(postgres_engine, tmp_path):
@@ -127,15 +190,17 @@ def test_failed_commit_removes_new_token_file(postgres_engine, tmp_path):
         raise RuntimeError("simulated commit failure")
 
     output = tmp_path / "credential"
-    event.listen(postgres_engine, "commit", fail_commit)
+    database = async_engine_for(postgres_engine)
+    event.listen(database.sync_engine, "commit", fail_commit)
     try:
         with pytest.raises(RuntimeError):
-            issue(postgres_engine, output, user="new", project="new")
+            asyncio.run(issue_with_container(database, output, settings(), "new", "new"))
     finally:
-        event.remove(postgres_engine, "commit", fail_commit)
+        event.remove(database.sync_engine, "commit", fail_commit)
+        asyncio.run(database.dispose())
     assert not output.exists()
     with Session(postgres_engine) as session:
-        assert session.scalar(select(func.count()).select_from(ApiToken)) == 0
+        assert session.scalar(select(func.count()).select_from(ApiAccessTokenRow)) == 0
 
 
 def test_readiness_requires_expected_migration(postgres_engine):
@@ -150,7 +215,7 @@ def test_readiness_requires_expected_migration(postgres_engine):
 def test_database_enforces_resource_state_and_lease(postgres_engine, tmp_path):
     token_id, _ = issue(postgres_engine, tmp_path / "credential")
     with Session(postgres_engine) as session:
-        token = session.get(ApiToken, token_id)
+        token = session.get(ApiAccessTokenRow, token_id)
         user_id, project_id = token.user_id, token.project_id
     with Session(postgres_engine) as session, pytest.raises(IntegrityError), session.begin():
         session.add(
@@ -176,11 +241,11 @@ def test_pre_refactor_token_digest_still_authenticates(postgres_engine, tmp_path
     legacy_pepper = "synthetic-fixed-pepper-32-characters"
     legacy_digest = "c61fc8cd60f22172e5a3dacc20bb3c56c23ce79b1b6cf8fc8f7f20a99e582d66"
     with Session(postgres_engine) as session, session.begin():
-        session.get(ApiToken, token_id).digest = legacy_digest
+        session.get(ApiAccessTokenRow, token_id).digest = legacy_digest
     config = Settings(
         database_url="postgresql+psycopg://localhost/devops_hub_test", token_pepper=legacy_pepper
     )
-    with TestClient(create_app(config, engine=postgres_engine)) as client:
+    with client_for(postgres_engine, config) as client:
         assert (
             client.get(
                 "/api/v1/me", headers={"Authorization": "Bearer " + legacy_token}
@@ -192,24 +257,25 @@ def test_pre_refactor_token_digest_still_authenticates(postgres_engine, tmp_path
 def test_disabled_issuance_rolls_back_new_membership_and_project(postgres_engine, tmp_path):
     token_id, _ = issue(postgres_engine, tmp_path / "credential")
     from identity.domain.errors import IdentityValidationError
-    from identity.infra.persistence.models import Project
+    from identity.infra.persistence.models import ProjectRow
 
     with Session(postgres_engine) as session, session.begin():
-        session.get(User, session.get(ApiToken, token_id).user_id).active = False
+        session.get(
+            InternalUserRow, session.get(ApiAccessTokenRow, token_id).user_id
+        ).active = False
     with pytest.raises(IdentityValidationError):
         issue(postgres_engine, tmp_path / "second", project="second")
     with Session(postgres_engine) as session:
-        assert session.scalar(select(func.count()).select_from(Project)) == 1
-        assert session.scalar(select(func.count()).select_from(Membership)) == 1
+        assert session.scalar(select(func.count()).select_from(ProjectRow)) == 1
+        assert session.scalar(select(func.count()).select_from(ProjectMembershipRow)) == 1
         assert session.scalar(select(func.count()).select_from(AuditEvent)) == 1
     assert not (tmp_path / "second").exists()
 
 
 def test_revoke_is_idempotent_and_does_not_duplicate_audit(postgres_engine, tmp_path):
     token_id, _ = issue(postgres_engine, tmp_path / "credential")
-    services = build_services(settings(), postgres_engine)
-    assert services.revoke_token.execute(token_id)
-    assert services.revoke_token.execute(token_id)
-    assert not services.revoke_token.execute(uuid4())
+    assert revoke(postgres_engine, token_id)
+    assert revoke(postgres_engine, token_id)
+    assert not revoke(postgres_engine, uuid4())
     with Session(postgres_engine) as session:
         assert session.scalar(select(func.count()).select_from(AuditEvent)) == 2

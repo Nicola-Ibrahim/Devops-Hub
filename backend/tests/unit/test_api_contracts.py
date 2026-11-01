@@ -1,19 +1,22 @@
+import asyncio
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
+from dishka import Provider, Scope, make_async_container, provide
+from dishka.integrations.fastapi import FastapiProvider
 from fastapi import Query
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from api.app import create_api
-from api.dependencies import ApiServices
+from api.dependencies import ReadCurrentIdentity, ReadinessProbe
+from api.identity.schemas import PrincipalView
 from api.platform.schemas import RenewRequest, ResourceRequest, ResourceView
-from bootstrap.http import create_app
-from bootstrap.settings import Settings
 from developer_platform.application.catalog import ReadCatalog
-from identity.application.authenticate import Authenticate
-from identity.domain.credentials import CredentialSnapshot
+from entrypoints.http import create_app
+from entrypoints.settings import Settings
+from identity.application.authenticate import AuthenticateApiToken
+from identity.domain.credentials import ApiTokenAuthenticationDetails
 from identity.infra.tokens import token_digest
 
 
@@ -129,8 +132,8 @@ def test_http_transport_works_with_fake_application_ports():
     user, project, token_id = uuid4(), uuid4(), uuid4()
 
     class Reader:
-        def find_by_digest(self, digest):
-            return CredentialSnapshot(
+        async def find_token_credential(self, digest):
+            return ApiTokenAuthenticationDetails(
                 token_id,
                 user,
                 project,
@@ -145,10 +148,35 @@ def test_http_transport_works_with_fake_application_ports():
         def digest(self, token):
             return "synthetic-digest"
 
-    services = ApiServices(
-        Authenticate(Reader(), Hasher(), lambda: now), ReadCatalog(), lambda: "ready"
-    )
-    with TestClient(create_api(services)) as client:
+    class Ready:
+        async def inspect(self):
+            return "ready"
+
+    class FakeIdentityQuery:
+        async def execute(self, token):
+            principal = await AuthenticateApiToken(Reader(), Hasher(), lambda: now).execute(token)
+            return PrincipalView(
+                user_id=principal.user_id,
+                project_id=principal.project_id,
+                role=principal.role,
+                scopes=sorted(principal.scopes),
+            )
+
+    class FakeCapabilities(Provider):
+        @provide(scope=Scope.REQUEST)
+        def authenticate(self) -> ReadCurrentIdentity:
+            return FakeIdentityQuery()
+
+        @provide(scope=Scope.REQUEST)
+        def catalog(self) -> ReadCatalog:
+            return ReadCatalog()
+
+        @provide(scope=Scope.APP)
+        def readiness(self) -> ReadinessProbe:
+            return Ready()
+
+    container = make_async_container(FakeCapabilities(), FastapiProvider())
+    with TestClient(create_app(container=container)) as client:
         headers = {"Authorization": "Bearer " + "x" * 43}
         me = client.get("/api/v1/me", headers=headers)
         assert me.status_code == 200
@@ -162,3 +190,5 @@ def test_http_transport_works_with_fake_application_ports():
         }
         assert client.get("/health/ready").status_code == 200
         assert client.get("/api/v1/resources", headers=headers).status_code == 404
+
+    asyncio.run(container.close())

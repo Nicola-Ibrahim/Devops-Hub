@@ -1,7 +1,7 @@
 """Technical engine construction; receives values rather than runtime settings."""
 
 from sqlalchemy import Engine, create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 
 def create_database_engine(database_url: str, connect_timeout: int = 3) -> Engine:
@@ -14,5 +14,12 @@ def create_database_engine(database_url: str, connect_timeout: int = 3) -> Engin
     )
 
 
-def create_session_factory(engine: Engine) -> sessionmaker[Session]:
-    return sessionmaker(engine, expire_on_commit=False)
+# Runtime applications use async sessions; Alembic intentionally retains the sync factory.
+def create_async_database_engine(database_url: str, connect_timeout: int = 3) -> AsyncEngine:
+    return create_async_engine(
+        database_url,
+        connect_args={"connect_timeout": connect_timeout},
+        pool_pre_ping=True,
+        hide_parameters=True,
+        echo=False,
+    )

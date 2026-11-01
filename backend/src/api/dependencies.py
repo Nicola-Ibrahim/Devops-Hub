@@ -1,44 +1,39 @@
-"""HTTP-only dependency access. Sessions and concrete adapters never enter here."""
+"""HTTP authentication/access mapping; DI supplies ready application capabilities."""
 
-from collections.abc import Callable
-from dataclasses import dataclass
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Protocol
 
-from fastapi import Depends, Request
+from dishka.integrations.fastapi import FromDishka, inject
+from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from developer_platform.application.catalog import ReadCatalog
+from api.identity.schemas import PrincipalView
 from developer_platform.application.dto import AccessContext
-from identity.application.authenticate import Authenticate
-from identity.contracts import AuthenticatedPrincipal
 
 ReadinessStatus = Literal["ready", "schema_not_ready", "database_unavailable"]
 
 
-@dataclass(frozen=True)
-class ApiServices:
-    authenticate: Authenticate
-    catalog: ReadCatalog
-    readiness: Callable[[], ReadinessStatus]
+class ReadinessProbe(Protocol):
+    async def inspect(self) -> ReadinessStatus: ...
 
 
-def get_services(request: Request) -> ApiServices:
-    services: ApiServices = request.app.state.services
-    return services
+class ReadCurrentIdentity(Protocol):
+    async def execute(self, token: str | None) -> PrincipalView: ...
 
 
 bearer = HTTPBearer(auto_error=False)
 
 
-def current_principal(
+@inject
+async def current_principal(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
-    services: Annotated[ApiServices, Depends(get_services)],
-) -> AuthenticatedPrincipal:
-    return services.authenticate.execute(credentials.credentials if credentials else None)
+    authenticate: FromDishka[ReadCurrentIdentity],
+) -> PrincipalView:
+    return await authenticate.execute(credentials.credentials if credentials else None)
 
 
-def platform_access(
-    principal: Annotated[AuthenticatedPrincipal, Depends(current_principal)],
+async def platform_access(
+    principal: Annotated[PrincipalView, Depends(current_principal)],
 ) -> AccessContext:
-    # Map only the trusted authentication result, never request-body owner values.
-    return AccessContext(principal.user_id, principal.project_id, principal.role, principal.scopes)
+    return AccessContext(
+        principal.user_id, principal.project_id, principal.role, frozenset(principal.scopes)
+    )

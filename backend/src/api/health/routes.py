@@ -1,8 +1,7 @@
-from typing import Annotated
+from dishka.integrations.fastapi import FromDishka, inject
+from fastapi import APIRouter
 
-from fastapi import APIRouter, Depends
-
-from api.dependencies import ApiServices, get_services
+from api.dependencies import ReadinessProbe
 from api.errors import APIError
 
 router = APIRouter()
@@ -14,8 +13,9 @@ def live() -> dict[str, str]:
 
 
 @router.get("/health/ready", tags=["health"])
-def ready(services: Annotated[ApiServices, Depends(get_services)]) -> dict[str, str]:
-    outcome = services.readiness()
+@inject
+async def ready(probe: FromDishka[ReadinessProbe]) -> dict[str, str]:
+    outcome = await probe.inspect()
     if outcome == "database_unavailable":
         raise APIError(503, "database_unavailable", "Database unavailable")
     if outcome != "ready":

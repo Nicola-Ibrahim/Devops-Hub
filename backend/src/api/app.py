@@ -6,7 +6,6 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 from starlette.types import Lifespan
 
-from api.dependencies import ApiServices
 from api.errors import APIError, error_response, handle_api_error, handle_validation_error
 from api.health.routes import router as health_router
 from api.identity.routes import router as identity_router
@@ -19,7 +18,7 @@ from identity.application.errors import CredentialDeliveryError, IdentityUnavail
 from identity.domain.errors import AuthenticationRejected, IdentityValidationError
 
 
-def create_api(services: ApiServices, *, lifespan: Lifespan[FastAPI] | None = None) -> FastAPI:
+def create_api(*, lifespan: Lifespan[FastAPI] | None = None) -> FastAPI:
     app = FastAPI(
         title="DevOps Hub API",
         version="0.1.0",
@@ -32,7 +31,6 @@ def create_api(services: ApiServices, *, lifespan: Lifespan[FastAPI] | None = No
             503: {"model": ErrorResponse},
         },
     )
-    app.state.services = services
     app.middleware("http")(request_boundary)
     app.add_exception_handler(APIError, handle_api_error)  # type: ignore[arg-type]
     app.add_exception_handler(RequestValidationError, handle_validation_error)  # type: ignore[arg-type]

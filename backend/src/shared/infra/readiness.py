@@ -1,24 +1,23 @@
-"""Database availability/schema inspection without HTTP or domain dependencies."""
+"""Database readiness without transport or business dependencies."""
 
 from typing import Literal
 
-from sqlalchemy import Engine, text
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 ReadinessStatus = Literal["ready", "schema_not_ready", "database_unavailable"]
 
 
-class SQLReadinessProbe:
-    def __init__(self, engine: Engine, revision: str) -> None:
-        self._engine = engine
-        self._revision = revision
+class SqlAlchemyReadinessProbe:
+    def __init__(self, engine: AsyncEngine, revision: str) -> None:
+        self.engine = engine
+        self.revision = revision
 
-    def inspect(self) -> ReadinessStatus:
+    async def inspect(self) -> ReadinessStatus:
         try:
-            with self._engine.connect() as connection:
-                revision = connection.execute(
-                    text("SELECT version_num FROM alembic_version")
-                ).scalar()
+            async with self.engine.connect() as connection:
+                revision = await connection.scalar(text("SELECT version_num FROM alembic_version"))
         except SQLAlchemyError:
             return "database_unavailable"
-        return "ready" if revision == self._revision else "schema_not_ready"
+        return "ready" if revision == self.revision else "schema_not_ready"

@@ -3,8 +3,8 @@
 from alembic import context
 from sqlalchemy import Connection
 
-from bootstrap.schema import registered_metadata
-from bootstrap.settings import DatabaseSettings
+from entrypoints.schema import registered_metadata
+from entrypoints.settings import DatabaseSettings
 from shared.infra.persistence.database import create_database_engine
 
 config = context.config

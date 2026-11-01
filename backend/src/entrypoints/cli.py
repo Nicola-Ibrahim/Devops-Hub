@@ -1,18 +1,19 @@
 """Administrative host: arguments and presentation, with explicitly wired use cases."""
 
 import argparse
+import asyncio
 import sys
 from pathlib import Path
 from uuid import UUID
 
-from bootstrap.composition import build_services
-from bootstrap.settings import Settings
+from containers.factory import create_container
+from containers.operations import IssueApiTokenToFile, RevokeApiTokenCommand
 from developer_platform.application.permissions import ALL_SCOPES
+from entrypoints.settings import Settings
 from identity.application.dto import IssueTokenCommand
 from identity.application.errors import CredentialDeliveryError, IdentityUnavailable
 from identity.domain.errors import IdentityValidationError
 from identity.infra.credential_file import PrivateCredentialFile
-from shared.infra.persistence.database import create_database_engine
 
 
 def main() -> None:
@@ -29,28 +30,7 @@ def main() -> None:
     args = parser.parse_args()
     try:
         config = Settings()  # type: ignore[call-arg]
-        engine = create_database_engine(
-            config.database_url.get_secret_value(), config.database_connect_timeout
-        )
-        try:
-            services = build_services(config, engine)
-            if args.command == "issue-token":
-                token_id = services.issue_token.execute(
-                    IssueTokenCommand(
-                        args.user,
-                        args.project,
-                        args.hours,
-                        tuple(args.scope) if args.scope else None,
-                    ),
-                    PrivateCredentialFile(args.output),
-                )
-                print(f"Token issued: {token_id}. Credential written to the requested file.")
-            elif not services.revoke_token.execute(args.token_id):
-                raise IdentityValidationError("Unknown token ID")
-            else:
-                print("Token revoked.")
-        finally:
-            engine.dispose()
+        asyncio.run(run_command(config, args))
     except (
         ValueError,
         OSError,
@@ -63,3 +43,28 @@ def main() -> None:
             file=sys.stderr,
         )
         raise SystemExit(1) from None
+
+
+async def run_command(config: Settings, args: argparse.Namespace) -> None:
+    container = create_container(config)
+    try:
+        async with container() as command_scope:
+            if args.command == "issue-token":
+                service = await command_scope.get(IssueApiTokenToFile)
+                token_id = await service.execute(
+                    IssueTokenCommand(
+                        args.user,
+                        args.project,
+                        args.hours,
+                        tuple(args.scope) if args.scope else None,
+                    ),
+                    PrivateCredentialFile(args.output),
+                )
+                print(f"Token issued: {token_id}. Credential written to the requested file.")
+            else:
+                revoke = await command_scope.get(RevokeApiTokenCommand)
+                if not await revoke.execute(args.token_id):
+                    raise IdentityValidationError("Unknown token ID")
+                print("Token revoked.")
+    finally:
+        await container.close()

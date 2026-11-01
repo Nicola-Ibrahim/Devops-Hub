@@ -10,19 +10,20 @@ from pathlib import Path
 
 import pytest
 
-from bootstrap.http import create_app
-from bootstrap.settings import Settings
+from entrypoints.http import create_app
+from entrypoints.settings import Settings
 
 BACKEND = Path(__file__).parents[2]
 SRC = BACKEND / "src"
-ROOTS = {"api", "identity", "developer_platform", "shared", "bootstrap"}
+ROOTS = {"api", "identity", "developer_platform", "shared", "containers", "entrypoints"}
 CONTEXTS = {"identity", "developer_platform"}
-RETIRED_ROOTS = {"provisioning", "platform_runtime", "platform_infrastructure"}
+RETIRED_ROOTS = {"bootstrap", "provisioning", "platform_runtime", "platform_infrastructure"}
 IO_LIBRARIES = {
     "fastapi",
     "starlette",
     "pydantic",
     "pydantic_settings",
+    "dishka",
     "sqlalchemy",
     "psycopg",
     "docker",
@@ -58,7 +59,7 @@ def violation(module, target):
     if other in RETIRED_ROOTS:
         return True
     if root in CONTEXTS:
-        if other in CONTEXTS - {root} or other in {"api", "bootstrap"}:
+        if other in CONTEXTS - {root} or other in {"api", "containers", "entrypoints"}:
             return True
         if module_parts[1:2] in (["domain"], ["application"]) or module == "identity.contracts":
             if other == "shared" or "infra" in target_parts[1:]:
@@ -66,17 +67,17 @@ def violation(module, target):
             if other in IO_LIBRARIES:
                 return True
         if module_parts[1:2] == ["infra"]:
-            if other in CONTEXTS - {root} or other in {"api", "bootstrap"}:
+            if other in CONTEXTS - {root} or other in {"api", "containers", "entrypoints"}:
                 return True
             if other == "shared":
                 return len(target_parts) > 1 and target_parts[1] != "infra"
             return False
         return False
     if root == "shared":
-        return other in CONTEXTS | {"api", "bootstrap"}
+        return other in CONTEXTS | {"api", "containers", "entrypoints"}
     if root == "api":
         return (
-            other in {"shared", "bootstrap", "sqlalchemy", "psycopg", "docker"}
+            other in {"shared", "containers", "entrypoints", "sqlalchemy", "psycopg", "docker"}
             or "infra" in target_parts[1:]
         )
     return False
@@ -147,11 +148,11 @@ def test_indirect_package_reexport_cannot_smuggle_infrastructure_into_core():
         ("identity.application.flow", "from ..domain import credentials", False),
         ("developer_platform.application.flow", "from identity import contracts", True),
         ("api.platform.routes", "from developer_platform.infra import persistence", True),
-        ("shared.infra.database", "import bootstrap.settings", True),
+        ("shared.infra.database", "import entrypoints.settings", True),
         ("identity.contracts", "from .infra import tokens", True),
         ("identity.infra.tokens", "from shared.infra import database", False),
         ("developer_platform.infra.persistence", "from identity.domain import records", True),
-        ("identity.infra.persistence", "from .models import User", False),
+        ("identity.infra.persistence", "from .models import InternalUserRow", False),
         ("identity.infra.persistence", "import sqlalchemy", False),
         ("identity.infra.persistence", "from datetime import datetime", False),
         ("identity.infra.persistence", "import shared", False),

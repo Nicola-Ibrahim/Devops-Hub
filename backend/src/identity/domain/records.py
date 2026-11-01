@@ -6,14 +6,14 @@ from uuid import UUID
 
 
 @dataclass(frozen=True)
-class IdentitySnapshot:
+class ProjectMembershipStatus:
     user_id: UUID
     project_id: UUID
     user_active: bool
 
 
 @dataclass(frozen=True)
-class TokenSnapshot:
+class ApiTokenStatus:
     token_id: UUID
     user_id: UUID
     project_id: UUID
@@ -21,7 +21,7 @@ class TokenSnapshot:
 
 
 @dataclass(frozen=True)
-class AuditRecord:
+class ApiTokenAuditEvent:
     actor_id: UUID | None
     project_id: UUID
     action: str

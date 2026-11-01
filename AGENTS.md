@@ -20,7 +20,7 @@ The [platform requirements](docs/platform-requirements.md) define the intended c
 - `infra/ansible/` contains local bootstrap and server setup/deployment playbooks.
 - `scripts/dev/platform_dev/` contains the Python local development CLI.
 - `backend/` contains the API foundation, pure lifecycle rules, control-plane schema/migrations, local token administration and focused tests. See `backend/README.md` for setup and verification.
-- Backend business contexts are `src/identity/` and `src/developer_platform/`, each containing `application/`, `domain/` and `infra/`. `src/api/` owns HTTP, `src/bootstrap/` wires dependencies and executable hosts, and `src/shared/infra/` contains only neutral database/audit/readiness infrastructure. Do not create a top-level Python package named `platform`, which would shadow the standard library.
+- Backend business contexts are `src/identity/` and `src/developer_platform/`, each containing `application/`, `domain/` and `infra/`. `src/api/` owns HTTP, `src/containers/` declares DI providers and outer operation completion, `src/entrypoints/` owns minimal executable hosts, and `src/shared/infra/` contains technical database/UoW/readiness infrastructure (plus the documented legacy audit adapter). Do not create a top-level Python package named `platform`, which would shadow the standard library.
 - `docs/` contains onboarding and operations guides.
 - There is no frontend, resource lifecycle API or provisioner yet. The backend currently exposes health, identity and an empty catalog; do not claim it provisions resources.
 
@@ -29,7 +29,7 @@ The [platform requirements](docs/platform-requirements.md) define the intended c
 - Inspect the working tree before edits and preserve unrelated changes. Do not stage, commit, reset, or switch branches unless requested.
 - Inspect existing code before changing it. State assumptions where the implementation does not yet exist.
 - Keep frontend, backend, and platform responsibilities separate. Agree on API contracts and resource states before implementing cross-cutting flows.
-- Keep identity and developer_platform independent. Application code imports its own domain/ports, never concrete infra or frameworks. Context infra implements those ports; API handlers delegate to applications and never query ORM sessions. Cross-context actor mapping and concrete wiring belong at the host/composition boundary. Shared infra must not contain either context's business rules.
+- Keep identity and developer_platform independent. Application code imports its own domain/ports, never concrete infra or frameworks. Context infra implements those ports; API handlers delegate to applications and never query ORM sessions. Cross-context actor mapping and concrete wiring belong at the host/composition boundary. Shared infra must not contain either context's business rules. Each context owns its tables, ORM mappings and SQL repositories in `infra/persistence/`; pure domain/application code remains ORM-free. Application services receive repositories/interfaces, never units of work. Name classes/functions after specific business concepts/actions.
 - Every temporary resource must have an owner, creation time, expiry, status, and cleanup path. Provisioning and deletion must be safe to retry.
 - Never commit credentials or return a database password in logs, CI output, or ordinary API list responses.
 - Use focused tests for lifecycle and failure behavior. Run relevant checks and report what was verified.

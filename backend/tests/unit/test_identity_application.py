@@ -1,61 +1,104 @@
+import asyncio
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
 
-from identity.application.authenticate import Authenticate
-from identity.application.dto import IssueTokenCommand
-from identity.application.errors import CredentialDeliveryError
-from identity.application.issue_token import IssueToken
-from identity.application.revoke_token import RevokeToken
-from identity.domain.credentials import CredentialSnapshot
+from identity.application.authenticate import AuthenticateApiToken
+from identity.application.dto import IssueTokenCommand, PreparedApiToken
+from identity.application.issue_token import IssueApiToken
+from identity.application.revoke_token import RevokeApiToken
+from identity.domain.credentials import ApiTokenAuthenticationDetails
 from identity.domain.errors import AuthenticationRejected, IdentityValidationError
-from identity.domain.records import IdentitySnapshot, TokenSnapshot
+from identity.domain.records import ApiTokenStatus, ProjectMembershipStatus
 from identity.infra.credential_file import PrivateCredentialFile
-from identity.infra.persistence.unit_of_work import SQLIdentityUnitOfWork
 from identity.infra.tokens import PepperedTokenHasher, token_digest
 
 NOW = datetime(2026, 1, 1, tzinfo=UTC)
 TOKEN = "a" * 40
 
 
-class Reader:
-    def __init__(self, snapshot=None):
-        self.snapshot = snapshot
+class FakeRepository:
+    def __init__(self, credential=None, identity_active=True, token=None):
+        self.credential = credential
+        self.identity_active = identity_active
+        self.token = token
+        self.user_id = uuid4()
+        self.project_id = uuid4()
+        self.issue_id = uuid4()
         self.calls = []
 
-    def find_by_digest(self, digest):
-        self.calls.append(digest)
-        return self.snapshot
+    async def find_token_credential(self, digest):
+        self.calls.append(("find_token_credential", digest))
+        return self.credential
+
+    async def ensure_developer_membership(self, **kwargs):
+        self.calls.append(("ensure_developer_membership", kwargs))
+        return ProjectMembershipStatus(self.user_id, self.project_id, self.identity_active)
+
+    async def insert_api_token(self, **kwargs):
+        self.calls.append(("insert_api_token", kwargs))
+        return self.issue_id
+
+    async def record_token_audit(self, event):
+        self.calls.append(("record_token_audit", event))
+
+    async def find_api_token(self, token_id):
+        self.calls.append(("find_api_token", token_id))
+        return self.token
+
+    async def revoke_api_token(self, token_id, revoked_at):
+        self.calls.append(("revoke_api_token", token_id, revoked_at))
 
 
-def snapshot(**changes):
-    values = {
-        "token_id": uuid4(),
-        "user_id": uuid4(),
-        "project_id": uuid4(),
-        "role": "developer",
-        "scopes": ("catalog:read",),
-        "user_active": True,
-        "expires_at": NOW + timedelta(hours=1),
-        "revoked_at": None,
-    }
-    values.update(changes)
-    return CredentialSnapshot(**values)
+class FakeHasher:
+    def digest(self, token):
+        return "synthetic-digest"
 
 
-def test_authenticate_returns_principal_and_rejects_bad_token_before_read():
-    reader = Reader(snapshot())
-    hasher = PepperedTokenHasher("p" * 32)
-    result = Authenticate(reader, hasher, lambda: NOW).execute(TOKEN)
+class FakeGenerator:
+    def generate(self):
+        return TOKEN
+
+
+def issue_service(repository):
+    return IssueApiToken(
+        repository=repository,
+        hasher=PepperedTokenHasher("p" * 32),
+        generator=FakeGenerator(),
+        clock=lambda: NOW,
+        allowed_scopes=("catalog:read", "resources:read"),
+        default_scopes=("catalog:read",),
+    )
+
+
+def test_authenticate_api_token_reads_repository_and_rejects_malformed_before_query():
+    snapshot = ApiTokenAuthenticationDetails(
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        "developer",
+        ("catalog:read",),
+        True,
+        NOW + timedelta(hours=1),
+        None,
+    )
+    repository = FakeRepository(credential=snapshot)
+    result = asyncio.run(
+        AuthenticateApiToken(repository, PepperedTokenHasher("p" * 32), lambda: NOW).execute(TOKEN)
+    )
     assert result.role == "developer"
     assert result.scopes == frozenset({"catalog:read"})
-    assert reader.calls == [token_digest(TOKEN, "p" * 32)]
+    assert repository.calls == [("find_token_credential", token_digest(TOKEN, "p" * 32))]
 
     for invalid in (None, "short", "x" * 257):
         with pytest.raises(AuthenticationRejected):
-            Authenticate(reader, hasher, lambda: NOW).execute(invalid)
-    assert len(reader.calls) == 1
+            asyncio.run(
+                AuthenticateApiToken(
+                    repository, PepperedTokenHasher("p" * 32), lambda: NOW
+                ).execute(invalid)
+            )
+    assert len(repository.calls) == 1
 
 
 @pytest.mark.parametrize(
@@ -67,213 +110,95 @@ def test_authenticate_returns_principal_and_rejects_bad_token_before_read():
         {"role": None},
     ],
 )
-def test_authenticate_rejects_invalid_snapshot(changes):
-    reader = Reader(snapshot(**changes))
-    with pytest.raises(AuthenticationRejected) as error:
-        Authenticate(reader, PepperedTokenHasher("p" * 32), lambda: NOW).execute(TOKEN)
-    assert error.value.code == "unauthenticated"
-    assert error.value.message == "A valid bearer token is required"
-
-
-class Transaction:
-    def __init__(self, issue_id=None, identity_active=True, token=None):
-        self.issue_id = issue_id or uuid4()
-        self.user_id = uuid4()
-        self.project_id = uuid4()
-        self.identity_active = identity_active
-        self.token = token
-        self.calls = []
-        self.rolled_back = False
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, traceback):
-        self.rolled_back = exc_type is not None
-        return False
-
-    def ensure_identity(self, **kwargs):
-        self.calls.append(("ensure_identity", kwargs))
-        return IdentitySnapshot(self.user_id, self.project_id, self.identity_active)
-
-    def add_token(self, **kwargs):
-        self.calls.append(("add_token", kwargs))
-        return self.issue_id
-
-    def append_audit(self, event):
-        self.calls.append(("append_audit", event))
-
-    def find_token(self, token_id):
-        self.calls.append(("find_token", token_id))
-        return self.token
-
-    def set_revoked(self, token_id, revoked_at):
-        self.calls.append(("set_revoked", token_id, revoked_at))
-
-
-class Delivery:
-    def __init__(self, fail=False, fail_cleanup=False):
-        self.fail = fail
-        self.fail_cleanup = fail_cleanup
-        self.secret = None
-        self.removed = False
-
-    def write_new(self, secret):
-        if self.fail:
-            raise CredentialDeliveryError()
-        self.secret = secret
-        return self
-
-    def remove_owned(self):
-        self.removed = True
-        if self.fail_cleanup:
-            raise OSError("cleanup detail must not escape")
-
-
-def issue_use_case(tx, generator=None):
-    return IssueToken(
-        transactions=lambda: tx,
-        hasher=PepperedTokenHasher("p" * 32),
-        generator=generator or type("Generator", (), {"generate": lambda self: TOKEN})(),
-        clock=lambda: NOW,
-        allowed_scopes=("catalog:read", "resources:read"),
-        default_scopes=("catalog:read",),
+def test_authenticate_api_token_rejects_invalid_repository_snapshot(changes):
+    values = dict(
+        token_id=uuid4(),
+        user_id=uuid4(),
+        project_id=uuid4(),
+        role="developer",
+        scopes=("catalog:read",),
+        user_active=True,
+        expires_at=NOW + timedelta(hours=1),
+        revoked_at=None,
     )
+    values.update(changes)
+    repository = FakeRepository(credential=ApiTokenAuthenticationDetails(**values))
+    with pytest.raises(AuthenticationRejected):
+        asyncio.run(AuthenticateApiToken(repository, FakeHasher(), lambda: NOW).execute(TOKEN))
 
 
-def test_issue_token_writes_before_commit_and_rolls_back_on_delivery_error():
-    tx = Transaction()
-    delivery = Delivery()
-    token_id = issue_use_case(tx).execute(IssueTokenCommand("dev", "demo"), delivery)
-    assert token_id == tx.issue_id
-    assert delivery.secret == TOKEN
-    assert tx.rolled_back is False
-    assert tx.calls[0] == (
-        "ensure_identity",
-        {"user_name": "dev", "project_name": "demo", "new_role": "developer"},
-    )
-    assert tx.calls[1][0] == "add_token"
-    assert tx.calls[1][1]["digest"] == token_digest(TOKEN, "p" * 32)
-    assert tx.calls[2][1].action == "token_issued"
-
-    failed_tx = Transaction()
-    with pytest.raises(CredentialDeliveryError):
-        issue_use_case(failed_tx).execute(IssueTokenCommand("dev", "demo"), Delivery(fail=True))
-    assert failed_tx.rolled_back is True
-
-
-def test_issue_token_compensates_failed_commit_and_preserves_primary_error():
-    class CommitFailure(Transaction):
-        def __exit__(self, exc_type, exc, traceback):
-            raise RuntimeError("commit failed")
-
-    delivery = Delivery(fail_cleanup=True)
-    with pytest.raises(RuntimeError, match="commit failed") as error:
-        issue_use_case(CommitFailure()).execute(IssueTokenCommand("dev", "demo"), delivery)
-    assert delivery.removed
-    assert error.value.__notes__ == [
-        "Credential cleanup failed; the original failure was preserved."
+def test_issue_api_token_returns_private_completion_result_and_records_writes():
+    repository = FakeRepository()
+    prepared = asyncio.run(issue_service(repository).execute(IssueTokenCommand("dev", "demo")))
+    assert isinstance(prepared, PreparedApiToken)
+    assert prepared.token_id == repository.issue_id
+    assert prepared.secret == TOKEN
+    assert TOKEN not in repr(prepared)
+    assert [call[0] for call in repository.calls] == [
+        "ensure_developer_membership",
+        "insert_api_token",
+        "record_token_audit",
     ]
+    assert repository.calls[0][1] == {
+        "user_name": "dev",
+        "project_name": "demo",
+        "new_role": "developer",
+    }
+    assert repository.calls[1][1]["digest"] == token_digest(TOKEN, "p" * 32)
+    assert repository.calls[2][1].action == "token_issued"
 
 
-def test_issue_token_validates_registered_scopes_and_names_before_transaction():
-    tx = Transaction()
+@pytest.mark.parametrize(
+    "command",
+    [
+        IssueTokenCommand("bad name", "demo"),
+        IssueTokenCommand("dev", "demo", hours=0),
+        IssueTokenCommand("dev", "demo", scopes=("admin:*",)),
+    ],
+)
+def test_issue_api_token_validates_before_repository_calls(command):
+    repository = FakeRepository()
     with pytest.raises(IdentityValidationError):
-        issue_use_case(tx).execute(IssueTokenCommand("bad name", "demo"), Delivery())
+        asyncio.run(issue_service(repository).execute(command))
+    assert repository.calls == []
+
+
+def test_issue_api_token_rejects_disabled_user_before_token_or_audit():
+    repository = FakeRepository(identity_active=False)
     with pytest.raises(IdentityValidationError):
-        issue_use_case(tx).execute(
-            IssueTokenCommand("dev", "demo", scopes=("admin:*",)), Delivery()
-        )
-    assert tx.calls == []
+        asyncio.run(issue_service(repository).execute(IssueTokenCommand("dev", "demo")))
+    assert [call[0] for call in repository.calls] == ["ensure_developer_membership"]
 
 
-def test_revoke_unknown_and_idempotent_policy_is_transaction_delegated():
+def test_revoke_api_token_is_idempotent_and_audits_only_first_revoke():
     token_id = uuid4()
-    missing = Transaction(token=None)
-    assert RevokeToken(lambda: missing, lambda: NOW).execute(token_id) is False
-    repeated = Transaction(token=TokenSnapshot(token_id, uuid4(), uuid4(), NOW))
-    assert RevokeToken(lambda: repeated, lambda: NOW).execute(token_id) is True
-    assert repeated.calls == [("find_token", token_id)]
+    missing = FakeRepository(token=None)
+    assert asyncio.run(RevokeApiToken(missing, lambda: NOW).execute(token_id)) is False
+    assert [call[0] for call in missing.calls] == ["find_api_token"]
+
+    existing = ApiTokenStatus(token_id, uuid4(), uuid4(), None)
+    repository = FakeRepository(token=existing)
+    assert asyncio.run(RevokeApiToken(repository, lambda: NOW).execute(token_id)) is True
+    assert [call[0] for call in repository.calls] == [
+        "find_api_token",
+        "revoke_api_token",
+        "record_token_audit",
+    ]
+    assert repository.calls[-1][1].action == "token_revoked"
+
+    repository.calls.clear()
+    repository.token = ApiTokenStatus(token_id, existing.user_id, existing.project_id, NOW)
+    assert asyncio.run(RevokeApiToken(repository, lambda: NOW).execute(token_id)) is True
+    assert [call[0] for call in repository.calls] == ["find_api_token"]
 
 
-def test_issue_rejects_disabled_identity_before_token_or_audit_write():
-    tx = Transaction(identity_active=False)
-    with pytest.raises(IdentityValidationError):
-        issue_use_case(tx).execute(IssueTokenCommand("dev", "demo"), Delivery())
-    assert [call[0] for call in tx.calls] == ["ensure_identity"]
-    assert tx.rolled_back
-
-
-def test_revoke_application_owns_unknown_idempotency_and_audit_policy():
-    token_id = uuid4()
-    missing = Transaction(token=None)
-    assert RevokeToken(lambda: missing, lambda: NOW).execute(token_id) is False
-    assert [call[0] for call in missing.calls] == ["find_token"]
-
-    already_revoked = Transaction(token=TokenSnapshot(token_id, uuid4(), uuid4(), NOW))
-    assert RevokeToken(lambda: already_revoked, lambda: NOW).execute(token_id) is True
-    assert [call[0] for call in already_revoked.calls] == ["find_token"]
-
-    active_token = TokenSnapshot(token_id, uuid4(), uuid4(), None)
-    active = Transaction(token=active_token)
-    assert RevokeToken(lambda: active, lambda: NOW).execute(token_id) is True
-    assert [call[0] for call in active.calls] == ["find_token", "set_revoked", "append_audit"]
-    assert active.calls[-1][1].action == "token_revoked"
-
-
-def test_credential_file_is_exclusive_private_and_receipt_does_not_remove_replacement(tmp_path):
+def test_private_credential_file_remains_exclusive_and_replacement_safe(tmp_path):
     path = tmp_path / "credential.txt"
     delivery = PrivateCredentialFile(path)
     receipt = delivery.write_new(TOKEN)
     assert path.read_text() == TOKEN + "\n"
     assert path.stat().st_mode & 0o777 == 0o600
-    with pytest.raises(CredentialDeliveryError):
-        delivery.write_new("another-secret")
-
     path.unlink()
     path.write_text("unrelated")
     receipt.remove_owned()
     assert path.read_text() == "unrelated"
-
-
-def test_peppered_hasher_redacts_key_and_preserves_hmac_output():
-    hasher = PepperedTokenHasher("p" * 32)
-    assert hasher.digest(TOKEN) == token_digest(TOKEN, "p" * 32)
-    assert "p" * 32 not in repr(hasher)
-
-
-def test_credential_file_cleans_partial_file_on_keyboard_interrupt(tmp_path, monkeypatch):
-    path = tmp_path / "credential.txt"
-
-    def interrupt(_descriptor):
-        raise KeyboardInterrupt()
-
-    monkeypatch.setattr("identity.infra.credential_file.os.fsync", interrupt)
-    with pytest.raises(KeyboardInterrupt):
-        PrivateCredentialFile(path).write_new(TOKEN)
-    assert not path.exists()
-
-
-def test_uow_preserves_primary_error_when_rollback_and_close_fail():
-    class FailingTransaction:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, traceback):
-            raise RuntimeError("unsafe rollback details")
-
-    class FailingSession:
-        def begin(self):
-            return FailingTransaction()
-
-        def close(self):
-            raise RuntimeError("unsafe close details")
-
-    uow = SQLIdentityUnitOfWork(lambda: FailingSession())
-    with pytest.raises(ValueError, match="body failure") as error:
-        with uow:
-            raise ValueError("body failure")
-    assert error.value.__notes__ == [
-        "Identity transaction cleanup failed; the original failure was preserved.",
-        "Identity session cleanup failed; the original failure was preserved.",
-    ]

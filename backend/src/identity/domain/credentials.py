@@ -4,11 +4,11 @@ from uuid import UUID
 
 from identity.contracts import AuthenticatedPrincipal
 from identity.domain.errors import AuthenticationRejected, IdentityValidationError
-from identity.domain.records import IdentitySnapshot
+from identity.domain.records import ProjectMembershipStatus
 
 
 @dataclass(frozen=True)
-class CredentialSnapshot:
+class ApiTokenAuthenticationDetails:
     token_id: UUID
     user_id: UUID
     project_id: UUID
@@ -19,8 +19,8 @@ class CredentialSnapshot:
     revoked_at: datetime | None
 
 
-def authenticate_snapshot(
-    snapshot: CredentialSnapshot | None, now: datetime
+def authenticate_api_token_credentials(
+    snapshot: ApiTokenAuthenticationDetails | None, now: datetime
 ) -> AuthenticatedPrincipal:
     if (
         snapshot is None
@@ -39,6 +39,6 @@ def authenticate_snapshot(
     )
 
 
-def require_active_identity(snapshot: IdentitySnapshot) -> None:
+def require_active_project_member(snapshot: ProjectMembershipStatus) -> None:
     if not snapshot.user_active:
         raise IdentityValidationError("Cannot issue a token for a disabled user")

@@ -9,41 +9,71 @@ planned in later phases and are not implemented yet.
 
 ```text
 src/
-  api/                       HTTP routers, schemas, dependencies and error mapping
-  identity/                  Users, memberships and token authentication/administration
-    domain/                  Pure identity rules and snapshots
-    application/             Authenticate, IssueToken, RevokeToken and owned ports
-    infra/                   Identity SQL, hashing, randomness and private file delivery
-  developer_platform/        Platform resource management context
+  api/                       HTTP routes, schemas, injected query ports and errors
+  identity/
+    domain/                  Pure token and project-membership policies/status values
+    application/             AuthenticateApiToken, IssueApiToken, RevokeApiToken + ports
+    infra/persistence/       Identity-owned ORM rows and async token repository
+    infra/                   Hashing, randomness and private file delivery
+  developer_platform/
     domain/                  Resource states, lease and deletion rules
     application/             Catalog and resource permission contracts
-    infra/                   Resource persistence records and future provider adapters
-  shared/infra/              Neutral SQL metadata, engine, audit records and readiness
-  bootstrap/                 Settings, composition, schema registration and CLI/HTTP hosts
+    infra/persistence/       Platform-owned ORM rows; future provider adapters in infra/
+  shared/infra/              Technical engine/session/UoW, metadata and readiness
+  containers/                Declarative Dishka providers and typed completion adapters
+  entrypoints/               Settings, schema registration and minimal HTTP/CLI hosts
 ```
 
-Each application's workflows depend on their own domain and ports; infrastructure
-implements those ports. Identity and developer_platform do not import one another.
-The API maps a verified principal into the platform's access context and does not
-receive ORM sessions. `bootstrap` wires concrete adapters and owns their
-lifetimes. A caller supplying an engine to `create_app(..., engine=...)` retains
-ownership of it; the normal factory disposes the engine it creates on shutdown.
+Application services receive repositories, clocks and domain-facing interfaces.
+They never receive a unit of work, SQLAlchemy session, DI container or HTTP request.
+`ApiTokenRepository` supplies both token queries and writes through the same
+operation-scoped adapter. `SqlAlchemyUnitOfWork` owns begin/commit/rollback/close
+outside application code. The API receives ready query capabilities from Dishka;
+there is no manually constructed global service bundle.
 
-Both contexts still share one control-plane database. Shared metadata registers
-all 11 tables explicitly and retains the existing foreign keys and frozen initial
-migration. Audit writes use the same transaction as their owning identity workflow.
-Architecture tests enforce import boundaries and test applications with fake ports.
+Dishka application scope owns the async engine/session factory and stateless
+collaborators. Request/CLI scope supplies the repository, async session and use
+cases. Each UoW executes once; repeated/concurrent use is rejected before work.
+Enter a fresh scope for another operation. Independent requests never share
+sessions. `CurrentIdentityQuery` materializes the public identity view before
+commit; commit and close finish before the API returns a successful response.
+Cancellation/errors roll back when possible and close the session; cleanup is
+bounded and preserves the primary error. Connection loss during commit can leave
+an uncertain outcome; a rollback attempt does not prove that commit never occurred.
+The current HTTP routes perform no business writes. Future external workflows need
+short explicit operation scopes around database phases, outside Docker/AWS waits.
 
-The platform context uses `developer_platform` to avoid shadowing Python's
-standard-library `platform` module. Its catalog, resource rules and persistence
-live together; shared technical infrastructure and cross-context composition are
-kept outside the business context.
+`entrypoints.http:create_app` owns its normally created container/engine. A supplied
+`AsyncEngine` remains caller-owned. A supplied container is also caller-owned and
+must be closed explicitly on its owning event loop before that loop shuts down.
+SQLAlchemy runtime persistence is async; Alembic uses
+the sync engine separately. Startup never opens database connections or applies
+migrations. Container/engine resources are created lazily and owned pools close at
+shutdown. DI integration is pinned through the lockfile; tests can supply provider
+overrides without real services.
 
-Previous internal `platform_api.*`, `provisioning.*`, `platform_runtime.*` and
-`platform_infrastructure.*` Python paths have been retired. Use
-`bootstrap.http:create_app` to launch; public HTTP contracts, the
-`platform-admin` command/options, environment variables and database schema are
-preserved. See the [boundary refactor record](../.codex/workflow/tasks/backend-boundaries.md).
+Each context owns its mappings, repository implementations and schema changes in
+its infrastructure; domain/application packages contain no SQLAlchemy. Both
+contexts share a control-plane database and the central Alembic revision sequence.
+All 11 tables, existing FKs and the frozen foundation migration are preserved.
+Shared `audit_events` remains a documented compatibility exception; identity
+repositories write its legacy adapter in the same transaction as token changes.
+A future context-owned audit-storage transition needs forward migrations, backfill
+and retention policy; this refactor does not move or split those tables.
+
+Business names distinguish `ProjectMembershipStatus`, `ApiTokenStatus`,
+`ApiTokenAuthenticationDetails` and `ApiTokenAuditEvent` from ORM rows such as
+`InternalUserRow` and `ProjectMembershipRow`. No speculative entity/value-object
+wrappers were added. Public API/CLI fields and database table names are unchanged.
+The platform package remains `developer_platform` to avoid shadowing Python's
+standard-library `platform` module. Cross-context actor mapping stays in the API;
+neither context imports the other's internals.
+
+Previous `bootstrap.*`, `platform_api.*`, `provisioning.*`, `platform_runtime.*` and
+`platform_infrastructure.*` paths are retired. Use the new launch path below.
+The `platform-admin` command/options, environment variables and HTTP contracts are
+preserved. Internal account login/session management, local Docker provisioning
+and the Next.js dashboard remain later work. External Google login is not planned.
 
 ## Install and configure
 
@@ -71,7 +101,7 @@ uv run alembic upgrade head
 Startup never creates tables or runs migrations. Start the API on loopback:
 
 ```bash
-uv run uvicorn bootstrap.http:create_app --factory --host 127.0.0.1 --port 8000
+uv run uvicorn entrypoints.http:create_app --factory --host 127.0.0.1 --port 8000
 ```
 
 `GET /health/live` checks the process; `GET /health/ready` checks database access
@@ -106,11 +136,15 @@ databases can be requested or provisioned. Resource request/view/renewal schemas
 are defined for the next phase; their routes are not registered yet.
 
 Token policy, hashing, persistence and private file delivery are separate
-collaborators. Delivery failure rolls back identity/token/audit writes; a failed
+collaborators. The outer `IssueApiTokenToFile` coordinator delivers the private
+application result before committing; application services never manage delivery
+or transaction completion. Delivery failure rolls back identity/token/audit writes; a failed
 commit removes only the newly created credential file. Compensation does not
 delete a replacement file owned by another write. Abrupt termination and ambiguous
 database commits still require administrative reconciliation; this is not an atomic
-transaction across the database and filesystem.
+transaction across the database and filesystem. If commit succeeded but session
+cleanup failed, the private credential file is retained; treat the failed command
+as requiring administrative reconciliation rather than overwriting that file.
 
 ```bash
 uv run platform-admin revoke-token <token-id>
@@ -126,7 +160,7 @@ uv run --frozen ruff check src migrations tests
 uv run --frozen ruff format --check src migrations tests
 uv run --frozen mypy src
 uv run --frozen pytest -q -m 'not postgres'
-uv build
+uv build --out-dir /tmp/devops-hub-build
 ```
 
 To run PostgreSQL integration checks, set `PLATFORM_TEST_DATABASE_URL` to a

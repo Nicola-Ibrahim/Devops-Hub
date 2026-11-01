@@ -6,15 +6,16 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.16,<2",
+    "dishka>=1.6,<2",
     "fastapi>=0.115,<1",
     "psycopg[binary]>=3.2,<4",
     "pydantic-settings>=2.8,<3",
-    "sqlalchemy>=2.0,<2.1",
+    "sqlalchemy[asyncio]>=2.0,<2.1",
     "uvicorn>=0.34,<1",
 ]
 
 [project.scripts]
-platform-admin = "bootstrap.cli:main"
+platform-admin = "entrypoints.cli:main"
 
 [dependency-groups]
 dev = ["httpx>=0.28,<1", "mypy>=1.15,<2", "pytest>=8.3,<10", "ruff>=0.11,<1"]
@@ -29,7 +30,8 @@ packages = [
     "src/identity",
     "src/developer_platform",
     "src/shared",
-    "src/bootstrap",
+    "src/containers",
+    "src/entrypoints",
 ]
 
 [tool.pytest.ini_options]
