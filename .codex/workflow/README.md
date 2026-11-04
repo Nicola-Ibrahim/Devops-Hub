@@ -4,7 +4,27 @@
 
 Start with the [prompt library](prompts/README.md). The reusable procedure lives in the [platform-change skill](../../.agents/skills/platform-change/SKILL.md). Create task records only when the user requests them; otherwise keep scope, decisions and progress in the conversation. This folder does not run automatically.
 
+## Where guidance lives
+
+| Location | Responsibility |
+| --- | --- |
+| `AGENTS.md` | Product goal, durable boundaries and skill routing |
+| `.agents/skills/` | Focused reusable procedures, loaded only as needed |
+| `.codex/agents/` | Investigator, coder and reviewer role definitions |
+| `.codex/workflow/prompts/` | Human-directed plan, implement and resume prompts |
+| `.codex/workflow/tasks/` | User-requested requirements, decisions and evidence |
+
+Platform-change owns phase, scope, delegation and handoff. Architecture-review
+owns boundary tracing and design alternatives. Resource-lifecycle owns lifecycle,
+persistence and provider recovery invariants. Platform-verification owns check
+selection and isolated execution. See the skill links in [AGENTS.md](../../AGENTS.md).
+No skill automatically starts another task or grants permission for external effects.
+
 ## Roles and sequence
+
+Use the roles where separate work adds value; this is not a mandatory agent pipeline
+for every task. Keep the three existing roles rather than duplicating them per stack.
+
 
 1. The coordinating agent checks the working tree, defines the requested outcome, and owns the task record and integration.
 2. `investigator` traces existing behavior read-only when the change crosses components or has uncertain contracts.

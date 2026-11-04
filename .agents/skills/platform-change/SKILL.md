@@ -1,40 +1,61 @@
 ---
 name: platform-change
-description: Plan and implement substantial DevOps Hub changes across application, provisioning, or CI/CD boundaries while preserving resource lifecycle and recovery behavior. Use for changes spanning components, not routine small edits.
+description: Coordinate substantial DevOps Hub changes, including planning, implementation and resuming work across API, dashboard, resource workers or delivery boundaries. Routine fixes need no task record.
 ---
 
-# Platform changes
+# Platform change workflow
 
-Use the repository's `AGENTS.md` as the source of stable project rules.
-Read the named task file. Create a task record only when the user requests one,
-using [the task template](../../../.codex/workflow/templates/task.md) under
-`.codex/workflow/tasks/`. Preserve existing records. Otherwise keep the requested
-scope and progress in the conversation.
-See [the workflow guide](../../../.codex/workflow/README.md) for navigation and handoffs.
+## Establish scope and phase
 
-1. Trace the affected behavior before proposing a change. Record facts separately
-   from hypotheses and identify resource/state behavior that must be preserved.
-2. Define observable acceptance criteria and an ordered plan. Identify material
-   ambiguities; resolve routine choices within the user's scope. If only planning
-   was requested, stop after the plan.
-3. For authorized implementation, follow main agent defines scope → investigator
-   gathers evidence → coder implements a bounded part → reviewer
-   checks the diff → main agent integrates and verifies. Reuse completed evidence.
-   Assign explicit file ownership, acceptance criteria and safeguards. Preserve
-   others' edits. Keep shared contracts and integration with the main agent.
-   Small fixes may stay single-agent. Verify affected behavior as work proceeds;
-   use characterization checks when refactoring could alter state transitions,
-   API compatibility, lease expiry, idempotency or cleanup behavior.
-4. Delegate bounded independent investigation/review when useful and available.
-   Keep edit ownership non-overlapping. For substantial changes obtain a separate
-   review when possible. If unavailable, label self-review accurately.
-5. Resolve findings, rerun checks justified by changes and record actual results,
-   limitations and next actions in the requested task record or conversation.
+Read `AGENTS.md`, applicable nested guidance and the brief. Identify the developer
+outcome and authorized phase. On resume, reconcile the record with current branch,
+HEAD, staged/unstaged changes, untracked implementation and actual check results.
+Continue unfinished authorized work; a stale summary must not narrow explicit user scope.
 
-Distinguish invalid developer requests, provider failures, provisioning timeouts
-and cleanup failures. A passing check does not justify deleting existing resources
-or changing shared environments. Task records are specifications and handoffs;
-they do not authorize live provisioning, deployment, paid services or migrations.
+Create a record only when the user requests one, using
+[the task template](../../../.codex/workflow/templates/task.md). Preserve existing
+records. Write only permitted paths; otherwise report in chat. The
+[workflow guide](../../../.codex/workflow/README.md) maps roles, prompts and records.
 
-Keep reporting proportional. The requested task record holds the plan, decisions
-and handoff together; do not create extra scorecards or reporting hierarchies.
+## Investigate and plan
+
+Trace affected callers and failure paths. Separate source-backed facts, assumptions
+and proposals. Define observable acceptance criteria, preserved behavior, contracts,
+ordered dependencies and file ownership. Resolve routine choices within scope;
+identify material product decisions needing input.
+
+Use [architecture-review](../architecture-review/SKILL.md) for boundaries and DI,
+[resource-lifecycle](../resource-lifecycle/SKILL.md) for persistence/provider recovery,
+and [platform-verification](../platform-verification/SKILL.md) for check isolation.
+Load only relevant specialists; they supply subject evidence, not another task record.
+Delegate investigation when a separate evidence gap justifies it; no fixed agent
+sequence is required for every task.
+
+For planning-only work, save the requested plan and stop before implementation or
+proposed test execution. Explicitly requested safe read-only checks remain permitted.
+
+## Implement and integrate
+
+Reuse evidence. Assign bounded coding work when useful, with explicit owned paths,
+acceptance criteria, safeguards and expected checks. Tell coders they share the
+workspace and must preserve others' edits. Resolve shared contracts first; sequence
+dependent edits and parallelize only independent ownership. The coordinator owns
+integration and the requested task record.
+
+Verify affected behavior through platform-verification. For substantial changes,
+request independent read-only review of the actual diff against acceptance criteria.
+Address confirmed findings and rerun justified checks. If a separate agent is
+unavailable, continue within scope and label self-review and its limits accurately.
+Role configuration alone is not evidence of execution.
+
+## Report the real outcome
+
+Refresh the requested record's scope, baseline, completed/remaining work, decisions,
+actual commands/results and agent activity; otherwise report in chat. Distinguish
+code present, fake-provider tests, real local acceptance and external verification.
+Do not mark a milestone complete while required acceptance remains unresolved.
+Finish the authorized scope or identify the concrete blocker and preserved state.
+Keep one requested record, without extra scorecards or status hierarchies.
+
+This procedure grants no additional authority to provision live resources, deploy,
+run shared migrations, publish repositories/images or change secrets.
