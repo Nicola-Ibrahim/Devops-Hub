@@ -1,0 +1,1 @@
+{"id":"nodejs-http","version":"1.0.0","language":"nodejs","display_name":"Node.js HTTP service","description":"Minimal Node.js service with health endpoint, tests, Docker and shared CI."}

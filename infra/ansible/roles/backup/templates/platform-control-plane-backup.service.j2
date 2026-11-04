@@ -1,0 +1,20 @@
+[Unit]
+Description=Encrypt and upload the DevOps Hub control-plane database backup
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+WorkingDirectory={{ app_root | default('/opt/devops-hub') }}
+Environment=AWS_REGION={{ aws_region | default('eu-central-1') }}
+EnvironmentFile=/etc/devops-hub/backup/backup.env
+ExecStart=/usr/local/sbin/platform-control-plane-backup /var/backups/devops-hub
+TimeoutStartSec=2h
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/backups/devops-hub
+NoNewPrivileges=true

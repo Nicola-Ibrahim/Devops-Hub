@@ -19,14 +19,15 @@ class ReadCatalogTests(unittest.TestCase):
             scopes=frozenset({"catalog:read"}),
         )
 
-    def test_returns_empty_catalog_for_authorized_project(self) -> None:
+    def test_returns_disabled_option_for_authorized_project(self) -> None:
         result = ReadCatalog().execute(self.access)
 
         self.assertEqual(result.project_id, self.project_id)
-        self.assertEqual(result.templates, ())
+        self.assertEqual(len(result.templates), 1)
+        self.assertFalse(result.templates[0].requestable)
         self.assertEqual(
             result.message,
-            "No provisioning providers are enabled in this foundation release",
+            "No verified provisioning provider is enabled; requests are disabled",
         )
 
     def test_denies_missing_scope_even_for_admin(self) -> None:

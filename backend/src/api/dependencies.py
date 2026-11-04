@@ -4,8 +4,8 @@ from typing import Annotated, Literal, Protocol
 
 from dishka.integrations.fastapi import FromDishka, inject
 from fastapi import Depends
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from api.credentials import RequestIdentity, request_identity
 from api.identity.schemas import PrincipalView
 from developer_platform.application.dto import AccessContext
 
@@ -17,18 +17,15 @@ class ReadinessProbe(Protocol):
 
 
 class ReadCurrentIdentity(Protocol):
-    async def execute(self, token: str | None) -> PrincipalView: ...
-
-
-bearer = HTTPBearer(auto_error=False)
+    async def execute(self, token: RequestIdentity) -> PrincipalView: ...
 
 
 @inject
 async def current_principal(
-    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
+    credentials: Annotated[RequestIdentity, Depends(request_identity)],
     authenticate: FromDishka[ReadCurrentIdentity],
 ) -> PrincipalView:
-    return await authenticate.execute(credentials.credentials if credentials else None)
+    return await authenticate.execute(credentials)
 
 
 async def platform_access(

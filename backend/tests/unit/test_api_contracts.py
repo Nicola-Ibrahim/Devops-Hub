@@ -33,7 +33,7 @@ def test_liveness_and_openapi_do_not_connect_or_migrate():
         assert client.get("/health/live").json() == {"status": "alive"}
         spec = client.get("/openapi.json").json()
         assert spec["paths"]["/api/v1/me"]["get"]["security"] == [{"HTTPBearer": []}]
-        assert "/api/v1/resources" not in spec["paths"]
+        assert spec["paths"]["/api/v1/resources"]["post"]["responses"]["202"]
         assert client.get("/health/ready").status_code == 503
 
 
@@ -86,6 +86,8 @@ def test_validation_and_unexpected_errors_are_sanitized():
 def test_resource_contract_rejects_owner_injection_arbitrary_image_and_boolean_ttl(field, value):
     payload = {
         "project_id": str(uuid4()),
+        "environment_id": str(uuid4()),
+        "version": "16",
         "display_name": "Feature database",
         "template_id": "postgres",
         "target_id": "local",
@@ -104,6 +106,7 @@ def test_renew_contract_requires_timezone_and_public_views_omit_secrets():
         id=uuid4(),
         project_id=uuid4(),
         owner_id=uuid4(),
+        environment_id=None,
         display_name="db",
         template_id="postgres",
         target_id="local",
@@ -183,12 +186,12 @@ def test_http_transport_works_with_fake_application_ports():
         assert me.json()["project_id"] == str(project)
         assert me.headers["cache-control"] == "no-store"
         catalog = client.get("/api/v1/catalog", headers=headers)
-        assert catalog.json() == {
-            "project_id": str(project),
-            "templates": [],
-            "message": "No provisioning providers are enabled in this foundation release",
-        }
+        assert catalog.json()["project_id"] == str(project)
+        option = catalog.json()["templates"][0]
+        assert option["requestable"] is False
+        assert option["unavailable_reason"] == "provider_not_implemented"
+        assert option["size"]["storage_enforcement"] == "reservation_only"
         assert client.get("/health/ready").status_code == 200
-        assert client.get("/api/v1/resources", headers=headers).status_code == 404
+        assert client.get("/api/v1/resources", headers=headers).status_code == 405
 
     asyncio.run(container.close())

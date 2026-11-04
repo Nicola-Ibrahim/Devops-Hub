@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from identity.application.errors import IdentityUnavailable
 from identity.domain.credentials import ApiTokenAuthenticationDetails
+from identity.domain.errors import IdentityValidationError
 from identity.domain.records import ApiTokenAuditEvent, ApiTokenStatus, ProjectMembershipStatus
 from identity.infra.persistence.models import (
     ApiAccessTokenRow,
@@ -31,12 +32,16 @@ class SQLAlchemyApiTokenRepository:
                 await self._session.execute(
                     select(ApiAccessTokenRow, InternalUserRow.active, ProjectMembershipRow.role)
                     .join(InternalUserRow, InternalUserRow.id == ApiAccessTokenRow.user_id)
-                    .outerjoin(
+                    .join(
                         ProjectMembershipRow,
                         (ProjectMembershipRow.user_id == ApiAccessTokenRow.user_id)
                         & (ProjectMembershipRow.project_id == ApiAccessTokenRow.project_id),
                     )
                     .where(ApiAccessTokenRow.digest == digest)
+                    .with_for_update(
+                        read=True,
+                        of=(ApiAccessTokenRow, InternalUserRow, ProjectMembershipRow),
+                    )
                 )
             ).one_or_none()
             if row is None:
@@ -70,9 +75,7 @@ class SQLAlchemyApiTokenRepository:
                 select(ProjectRow).where(ProjectRow.name == project_name)
             )
             if project is None:
-                project = ProjectRow(name=project_name)
-                self._session.add(project)
-                await self._session.flush()
+                raise IdentityValidationError("Register project before issuing tokens")
             membership = await self._session.get(ProjectMembershipRow, (user.id, project.id))
             if membership is None:
                 self._session.add(

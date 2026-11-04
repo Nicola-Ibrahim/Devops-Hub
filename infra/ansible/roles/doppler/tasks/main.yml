@@ -4,13 +4,15 @@
   tags: [setup, tools]
 
 - name: Configure Doppler Service Token (Servers)
-  shell: "doppler configure set token {{ doppler_token }}"
+  command: doppler configure set token "{{ doppler_token }}"
   become: true
-  when: 
+  no_log: true
+  when:
     - ansible_system == "Linux"
     - doppler_token is defined
-  tags: [setup, auth]
+  tags: [optional-secrets, auth]
 
 - name: Execute Doppler Secret Sync
   import_tasks: sync.yml
-  tags: [setup, secrets]
+  when: doppler_enabled | default(false) | bool
+  tags: [optional-secrets, secrets]

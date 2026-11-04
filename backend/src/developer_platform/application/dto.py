@@ -1,8 +1,11 @@
 """Transport-independent values exchanged with provisioning workflows."""
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 from uuid import UUID
+
+if TYPE_CHECKING:
+    from developer_platform.application.ledger import PostgresOption
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,5 +19,5 @@ class AccessContext:
 @dataclass(frozen=True, slots=True)
 class CatalogResult:
     project_id: UUID
-    templates: tuple[dict[str, str], ...] = ()
-    message: str = "No provisioning providers are enabled in this foundation release"
+    templates: tuple["PostgresOption", ...] = ()
+    message: str = "No verified provisioning provider is enabled; requests are disabled"

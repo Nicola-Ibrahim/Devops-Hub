@@ -1,0 +1,181 @@
+name: devops-hub
+
+services:
+  postgres:
+    image: postgres:16.6
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: platform
+      POSTGRES_USER: platform
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets: [postgres_password]
+    volumes:
+      - control_plane_data:/var/lib/postgresql/data
+    networks: [control]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U platform -d platform"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    image: ${PLATFORM_API_IMAGE:-devops-hub-api:local}
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      PLATFORM_DATABASE_URL_FILE: /run/secrets/platform_database_url
+      PLATFORM_TOKEN_PEPPER_FILE: /run/secrets/platform_token_pepper
+      PLATFORM_INSTALLATION_ID_FILE: /run/secrets/platform_installation_id
+    secrets:
+      - platform_database_url
+      - platform_token_pepper
+      - platform_installation_id
+    tmpfs:
+      - /run/platform-secrets
+    networks: [control]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    profiles: [app]
+
+  api:
+    image: ${PLATFORM_API_IMAGE:-devops-hub-api:local}
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["uvicorn", "entrypoints.http:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      PLATFORM_DATABASE_URL_FILE: /run/secrets/platform_database_url
+      PLATFORM_TOKEN_PEPPER_FILE: /run/secrets/platform_token_pepper
+      PLATFORM_INSTALLATION_ID_FILE: /run/secrets/platform_installation_id
+      PLATFORM_RESOURCE_KEY_FILE: /run/secrets/platform_resource_encryption_key
+      PLATFORM_RESOURCE_KEY_ID_FILE: /run/secrets/platform_resource_key_id
+      PLATFORM_METRICS_TOKEN_FILE: /run/secrets/platform_metrics_token
+      PLATFORM_LOCAL_PROVIDER_ENABLED: ${PLATFORM_LOCAL_PROVIDER_ENABLED:-false}
+      PLATFORM_COOKIE_SECURE: ${PLATFORM_COOKIE_SECURE:-true}
+      PLATFORM_TEMPLATE_ROOT: /app/templates
+    secrets:
+      - platform_database_url
+      - platform_token_pepper
+      - platform_installation_id
+      - platform_resource_encryption_key
+      - platform_resource_key_id
+      - platform_metrics_token
+    tmpfs:
+      - /run/platform-secrets
+    ports: ["127.0.0.1:8000:8000"]
+    networks: [control]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    profiles: [app]
+
+  worker:
+    image: ${PLATFORM_API_IMAGE:-devops-hub-api:local}
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["python", "-m", "entrypoints.worker"]
+    environment:
+      PLATFORM_DATABASE_URL_FILE: /run/secrets/platform_database_url
+      PLATFORM_TOKEN_PEPPER_FILE: /run/secrets/platform_token_pepper
+      PLATFORM_INSTALLATION_ID_FILE: /run/secrets/platform_installation_id
+      PLATFORM_LOCAL_PROVIDER_ENABLED: ${PLATFORM_LOCAL_PROVIDER_ENABLED:-false}
+      PLATFORM_DOCKER_URL: unix:///var/run/docker.sock
+      PLATFORM_ADVERTISED_HOST: 127.0.0.1
+      PLATFORM_RESOURCE_KEY_FILE: /run/secrets/platform_resource_encryption_key
+      PLATFORM_RESOURCE_KEY_ID_FILE: /run/secrets/platform_resource_key_id
+    secrets:
+      - platform_database_url
+      - platform_token_pepper
+      - platform_resource_encryption_key
+      - platform_installation_id
+      - platform_resource_key_id
+    tmpfs:
+      - /run/platform-secrets
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    group_add:
+      - "${PLATFORM_DOCKER_GID:-0}"
+    networks: [control]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    profiles: [app]
+
+  frontend:
+    image: ${PLATFORM_FRONTEND_IMAGE:-devops-hub-frontend:local}
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    environment:
+      BACKEND_URL: http://api:8000
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+    ports: ["127.0.0.1:3000:3000"]
+    networks: [control]
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    profiles: [app]
+
+  prometheus:
+    image: prom/prometheus:v2.53.5
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    volumes:
+      - ./infra/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    secrets:
+      - platform_metrics_token
+    ports: ["127.0.0.1:9090:9090"]
+    networks: [control]
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    profiles: [observability]
+
+networks:
+  control:
+    driver: bridge
+
+volumes:
+  control_plane_data:
+  prometheus_data:
+
+secrets:
+  postgres_password:
+    file: ${PLATFORM_SECRETS_DIR:-.local/secrets}/postgres_password
+  platform_database_url:
+    file: ${PLATFORM_SECRETS_DIR:-.local/secrets}/platform_database_url
+  platform_token_pepper:
+    file: ${PLATFORM_SECRETS_DIR:-.local/secrets}/platform_token_pepper
+  platform_installation_id:
+    file: ${PLATFORM_SECRETS_DIR:-.local/secrets}/platform_installation_id
+  platform_resource_encryption_key:
+    file: ${PLATFORM_SECRETS_DIR:-.local/secrets}/platform_resource_encryption_key
+  platform_resource_key_id:
+    file: ${PLATFORM_SECRETS_DIR:-.local/secrets}/platform_resource_key_id
+  platform_metrics_token:
+    file: ${PLATFORM_SECRETS_DIR:-.local/secrets}/platform_metrics_token

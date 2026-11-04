@@ -85,3 +85,7 @@ celerybeat.pid
 /.agent/
 /.specify/
 /.devops/
+
+/.local/
+/frontend/.next/
+/frontend/node_modules/

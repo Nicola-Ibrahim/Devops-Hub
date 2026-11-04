@@ -1,12 +1,13 @@
 ---
-- name: Update apt cache (Debian/Ubuntu)
-  apt:
-    update_cache: yes
+- name: Update apt cache on Debian hosts
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
   when: ansible_os_family == "Debian"
   become: true
 
-- name: Install base utilities
-  package:
+- name: Install required host utilities
+  ansible.builtin.package:
     name:
       - curl
       - git
@@ -17,66 +18,117 @@
     state: present
   become: true
 
-- name: Ensure 'app' directories exist
-  file:
+- name: Ensure platform directories exist
+  ansible.builtin.file:
     path: "{{ item }}"
     state: directory
-    mode: '0755'
+    owner: "{{ app_user | default('root') }}"
+    group: "{{ app_group | default('root') }}"
+    mode: '0750'
   loop:
-    - "{{ app_root | default('/opt/app') }}"
-    - "{{ app_root | default('/opt/app') }}/logs"
+    - "{{ app_root | default('/opt/devops-hub') }}"
+    - "{{ app_root | default('/opt/devops-hub') }}/logs"
   become: true
 
-# Security Hardening: UFW
-- name: UFW - Allow SSH
-  ufw:
+- name: Check remote operator has an SSH account and valid SSH port before firewall setup
+  ansible.builtin.assert:
+    that:
+      - ansible_user is defined
+      - ansible_user | length > 0
+      - ansible_port | default(22) | int > 0
+      - ssh_key_access_confirmed | default(false) | bool
+    fail_msg: "Set the intended SSH user/port and pass ssh_key_access_confirmed=true only after key-based reconnect is verified."
+  when: ansible_connection | default('ssh') != 'local'
+
+- name: Verify the controller can reconnect before changing SSH or firewall policy
+  ansible.builtin.wait_for_connection:
+    timeout: 20
+    sleep: 2
+  when: ansible_connection | default('ssh') != 'local'
+
+- name: Allow SSH on the configured port before enabling firewall
+  ansible.posix.ufw:
     rule: allow
-    name: OpenSSH
+    port: "{{ ansible_port | default(22) }}"
+    proto: tcp
   become: true
 
-- name: UFW - Allow HTTP
-  ufw:
+- name: Allow HTTP for ACME challenges and web traffic
+  ansible.posix.ufw:
     rule: allow
     port: '80'
     proto: tcp
   become: true
 
-- name: UFW - Allow HTTPS
-  ufw:
+- name: Allow HTTPS web traffic
+  ansible.posix.ufw:
     rule: allow
     port: '443'
     proto: tcp
   become: true
 
-- name: UFW - Enable firewall
-  ufw:
+- name: Enable default-deny firewall after allowing required ports
+  ansible.posix.ufw:
     state: enabled
     policy: deny
   become: true
 
-# Security Hardening: SSH
-- name: SSH - Disable root login
-  lineinfile:
-    path: /etc/ssh/sshd_config
-    regexp: '^PermitRootLogin'
-    line: 'PermitRootLogin no'
-    state: present
+- name: Confirm SSH daemon includes its drop-in configuration directory
+  ansible.builtin.command:
+    argv:
+      - grep
+      - --extended-regexp
+      - --quiet
+      - '^Include[[:space:]]+.*sshd_config\.d'
+      - /etc/ssh/sshd_config
+  register: ssh_dropin_include
+  changed_when: false
+  when: ansible_connection | default('ssh') != 'local'
+  become: true
+
+- name: Require sshd drop-in support before applying SSH hardening
+  ansible.builtin.assert:
+    that: ssh_dropin_include.rc == 0
+    fail_msg: "This playbook requires an sshd_config.d Include so hardening has deterministic precedence."
+  when: ansible_connection | default('ssh') != 'local'
+
+- name: Install SSH hardening before cloud-init drop-ins
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/00-devops-hub-hardening.conf
+    content: "PermitRootLogin no\nPasswordAuthentication no\nPubkeyAuthentication yes\n"
+    owner: root
+    group: root
+    mode: '0600'
   notify: restart ssh
   become: true
 
-- name: SSH - Disable password authentication
-  lineinfile:
-    path: /etc/ssh/sshd_config
-    regexp: '^PasswordAuthentication'
-    line: 'PasswordAuthentication no'
-    state: present
-  notify: restart ssh
+- name: Validate complete sshd configuration before restart
+  ansible.builtin.command: /usr/sbin/sshd -t
+  changed_when: false
   become: true
 
-# Security Hardening: Fail2Ban
-- name: Fail2Ban - Ensure service is running
-  service:
+- name: Verify effective SSH hardening settings before restart
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/sshd
+      - -T
+      - -C
+      - "user={{ ansible_user | default('ubuntu') }},host=localhost,addr=127.0.0.1"
+  register: ssh_effective_settings
+  changed_when: false
+  become: true
+
+- name: Require public-key-only SSH and disabled root access
+  ansible.builtin.assert:
+    that:
+      - "'permitrootlogin no' in ssh_effective_settings.stdout_lines"
+      - "'passwordauthentication no' in ssh_effective_settings.stdout_lines"
+      - "'pubkeyauthentication yes' in ssh_effective_settings.stdout_lines"
+  when: ansible_connection | default('ssh') != 'local'
+
+- name: Ensure Fail2Ban is enabled and running
+  ansible.builtin.service:
     name: fail2ban
     state: started
-    enabled: yes
+    enabled: true
   become: true

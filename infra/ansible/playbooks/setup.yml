@@ -5,7 +5,15 @@
   gather_facts: true
 
   roles:
-    - common
-    - docker
-    - doppler
-    - nginx
+    - role: common
+      tags: [setup, hardening]
+    - role: docker
+      tags: [setup, docker]
+    - role: nginx
+      tags: [setup, nginx]
+    - role: doppler
+      when: doppler_enabled | default(false) | bool
+      tags: [optional-secrets]
+    - role: backup
+      when: backup_enabled | default(false) | bool
+      tags: [backup]

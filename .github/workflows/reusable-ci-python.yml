@@ -12,7 +12,12 @@ on:
         description: 'Directory to run commands in'
         required: false
         type: string
-        default: '.'
+        default: 'backend'
+      lint-paths:
+        description: 'Space-separated paths checked by Ruff; paths are treated as literal arguments'
+        required: false
+        type: string
+        default: 'src migrations tests'
       run-lint:
         description: 'Whether to run linting'
         required: false
@@ -27,7 +32,7 @@ on:
         description: 'The environment to set (e.g., development, production)'
         required: false
         type: string
-        default: 'production'
+        default: 'test'
 
 
 jobs:
@@ -37,30 +42,37 @@ jobs:
       run:
         working-directory: ${{ inputs.working-directory }}
     env:
-      ENV: ${{ inputs.environment }}
+      ENVIRONMENT: ${{ inputs.environment }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          version: "latest"
+          version: "0.8.6"
+          working-directory: ${{ inputs.working-directory }}
+          cache-dependency-glob: ${{ inputs.working-directory }}/uv.lock
 
       - name: Set up Python ${{ inputs.python-version }}
         run: uv python install ${{ inputs.python-version }}
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen --python ${{ inputs.python-version }}
 
       - name: Run Lint (Ruff)
         if: ${{ inputs.run-lint }}
+        env:
+          LINT_PATHS: ${{ inputs.lint-paths }}
         run: |
-          uv run ruff check .
-          uv run ruff format --check .
+          read -r -a lint_paths <<< "$LINT_PATHS"
+          uv run --frozen ruff check "${lint_paths[@]}"
+          uv run --frozen ruff format --check "${lint_paths[@]}"
 
       - name: Run Tests (Pytest)
         if: ${{ inputs.run-test }}
-        run: uv run pytest
+        run: uv run --frozen pytest -q

@@ -1,22 +1,22 @@
 ---
-- name: Check if Docker is already in PATH
-  command: which docker
-  register: docker_check
-  ignore_errors: true
+- name: Install distribution Docker Engine and Compose plugin
+  ansible.builtin.package:
+    name:
+      - docker.io
+      - docker-compose-v2
+    state: present
+  become: true
+  when: ansible_os_family == "Debian"
+
+- name: Ensure Docker daemon starts on boot and is running
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
+  become: true
+  when: ansible_os_family == "Debian"
+
+- name: Verify Docker Compose plugin is available
+  ansible.builtin.command: docker compose version
   changed_when: false
-
-- name: "[Linux] Install Docker Engine"
-  block:
-    - name: "Install base prerequisites"
-      package:
-        name: [curl, ca-certificates]
-        state: present
-      become: true
-
-    - name: "Install Docker via official script (Universal Linux)"
-      shell: "curl -fsSL https://get.docker.com | sh"
-      become: true
-  when: 
-    - ansible_system == "Linux"
-    - docker_check.rc != 0
-  tags: [setup, cloud]
+  when: ansible_os_family == "Debian"

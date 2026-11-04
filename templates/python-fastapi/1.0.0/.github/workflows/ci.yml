@@ -1,0 +1,11 @@
+name: application-ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  checks:
+    uses: __PLATFORM_WORKFLOWS_REPOSITORY__/.github/workflows/reusable-ci-python.yml@main
+    with:
+      python-version: "3.12"
+      lint-paths: "app tests"

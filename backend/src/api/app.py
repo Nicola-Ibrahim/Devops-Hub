@@ -7,12 +7,15 @@ from starlette.exceptions import HTTPException
 from starlette.types import Lifespan
 
 from api.errors import APIError, error_response, handle_api_error, handle_validation_error
+from api.health.metrics import router as metrics_router
 from api.health.routes import router as health_router
+from api.identity.browser import router as browser_router
 from api.identity.routes import router as identity_router
 from api.middleware import request_boundary
+from api.platform.applications import router as applications_router
 from api.platform.routes import router as platform_router
 from api.schemas import ErrorResponse
-from developer_platform.application.errors import CatalogForbidden
+from developer_platform.application.errors import CatalogForbidden, PlatformRequestError
 from developer_platform.domain import DomainError
 from identity.application.errors import CredentialDeliveryError, IdentityUnavailable
 from identity.domain.errors import AuthenticationRejected, IdentityValidationError
@@ -22,9 +25,14 @@ def create_api(*, lifespan: Lifespan[FastAPI] | None = None) -> FastAPI:
     app = FastAPI(
         title="DevOps Hub API",
         version="0.1.0",
-        description="Phase 1 foundation. Resource provisioning routes are not implemented yet.",
+        description=(
+            "Developer platform API for identity, projects, approved resources, "
+            "application templates, and durable delivery workflows."
+        ),
         lifespan=lifespan,
         responses={
+            404: {"model": ErrorResponse},
+            409: {"model": ErrorResponse},
             401: {"model": ErrorResponse},
             403: {"model": ErrorResponse},
             422: {"model": ErrorResponse},
@@ -38,6 +46,10 @@ def create_api(*, lifespan: Lifespan[FastAPI] | None = None) -> FastAPI:
     @app.exception_handler(AuthenticationRejected)
     async def unauthenticated(request: Request, exc: AuthenticationRejected) -> JSONResponse:
         return error_response(request, 401, exc.code, exc.message)
+
+    @app.exception_handler(PlatformRequestError)
+    async def platform_error(request: Request, exc: PlatformRequestError) -> JSONResponse:
+        return error_response(request, exc.status, exc.code, exc.message)
 
     @app.exception_handler(CatalogForbidden)
     async def forbidden(request: Request, exc: CatalogForbidden) -> JSONResponse:
@@ -66,6 +78,10 @@ def create_api(*, lifespan: Lifespan[FastAPI] | None = None) -> FastAPI:
         )
 
     app.include_router(health_router)
+    app.include_router(metrics_router)
+
+    app.include_router(browser_router)
     app.include_router(identity_router)
     app.include_router(platform_router)
+    app.include_router(applications_router)
     return app

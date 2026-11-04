@@ -1,0 +1,82 @@
+---
+- name: Validate encrypted backup configuration
+  ansible.builtin.assert:
+    that:
+      - backup_age_recipient is defined
+      - backup_age_recipient is match('^age1[0-9a-z]{20,}$')
+      - platform_backup_bucket is defined
+      - platform_backup_bucket is match('^[a-z0-9.-]{3,63}$')
+    fail_msg: "Set the public age recipient and approved Terraform backup bucket before enabling the backup timer."
+  no_log: true
+
+- name: Install age encryption tool
+  ansible.builtin.package:
+    name: age
+    state: present
+  become: true
+
+- name: Create private backup configuration directory
+  ansible.builtin.file:
+    path: /etc/devops-hub/backup
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+  become: true
+
+- name: Create encrypted backup staging directory
+  ansible.builtin.file:
+    path: /var/backups/devops-hub
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+  become: true
+
+- name: Install encrypted control-plane backup script
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../../scripts/ops/backup-control-plane.sh"
+    dest: /usr/local/sbin/platform-control-plane-backup
+    owner: root
+    group: root
+    mode: '0750'
+  become: true
+  notify: reload backup systemd units
+
+- name: Configure public age recipient and remote bucket path
+  ansible.builtin.template:
+    src: backup.env.j2
+    dest: /etc/devops-hub/backup/backup.env
+    owner: root
+    group: root
+    mode: '0600'
+  become: true
+  notify: reload backup systemd units
+
+- name: Install backup systemd service
+  ansible.builtin.template:
+    src: platform-control-plane-backup.service.j2
+    dest: /etc/systemd/system/platform-control-plane-backup.service
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  notify: reload backup systemd units
+
+- name: Install daily encrypted backup timer
+  ansible.builtin.template:
+    src: platform-control-plane-backup.timer.j2
+    dest: /etc/systemd/system/platform-control-plane-backup.timer
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  notify: reload backup systemd units
+
+- name: Enable scheduled control-plane backup timer
+  ansible.builtin.systemd:
+    name: platform-control-plane-backup.timer
+    state: started
+    enabled: true
+    daemon_reload: true
+  become: true

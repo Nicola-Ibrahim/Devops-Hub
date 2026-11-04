@@ -191,7 +191,7 @@ else:
         )
 
 
-def test_public_openapi_preserved():
+def test_public_openapi_matches_versioned_ledger_contract():
     expected = json.loads((BACKEND / "tests/contracts/openapi.json").read_text())
     settings = Settings(
         database_url="postgresql+psycopg://localhost:1/devops_hub_test",

@@ -7,6 +7,7 @@ from dishka.integrations.fastapi import FastapiProvider
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from containers.providers import (
+    ApplicationDeliveryProvider,
     DatabaseProvider,
     ExternalDatabase,
     IdentityProvider,
@@ -30,6 +31,7 @@ def create_container(
         DatabaseProvider(),
         IdentityProvider(),
         PlatformProvider(),
+        ApplicationDeliveryProvider(),
         FastapiProvider(),
         *overrides,
         context={Settings: settings, ExternalDatabase: ExternalDatabase(engine)},

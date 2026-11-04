@@ -1,0 +1,99 @@
+name: Publish Platform Images
+
+on:
+  workflow_run:
+    workflows: ["Platform CI"]
+    types: [completed]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-platform-images-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.head_branch == 'main' &&
+      vars.AWS_PUBLISH_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ROLE_TO_ASSUME: ${{ vars.AWS_PUBLISH_ROLE_ARN }}
+      AWS_ECR_REPOSITORY: ${{ vars.AWS_ECR_REPOSITORY }}
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - name: Validate publishing configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "$AWS_REGION" && -n "$AWS_ROLE_TO_ASSUME" && -n "$AWS_ECR_REPOSITORY" ]]
+          [[ "$AWS_ECR_REPOSITORY" =~ ^[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com/.+$ ]]
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: platform-publish-${{ github.run_id }}
+      - uses: aws-actions/amazon-ecr-login@v2
+      - uses: docker/setup-buildx-action@v3
+      - name: Build and publish API image once
+        id: api
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ env.AWS_ECR_REPOSITORY }}:api-${{ env.RELEASE_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+      - name: Scan API image digest before it can be released
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.AWS_ECR_REPOSITORY }}@${{ steps.api.outputs.digest }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+      - name: Build and publish frontend image once
+        id: frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./frontend/Dockerfile
+          push: true
+          tags: ${{ env.AWS_ECR_REPOSITORY }}:frontend-${{ env.RELEASE_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+      - name: Scan frontend image digest before it can be released
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.AWS_ECR_REPOSITORY }}@${{ steps.frontend.outputs.digest }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+      - name: Record immutable release inputs
+        env:
+          API_DIGEST: ${{ steps.api.outputs.digest }}
+          FRONTEND_DIGEST: ${{ steps.frontend.outputs.digest }}
+        run: |
+          {
+            echo '### Immutable platform image digests'
+            echo
+            printf '\n- API: `%s@%s`\n' "$AWS_ECR_REPOSITORY" "$API_DIGEST"
+            printf '\n- Frontend: `%s@%s`\n' "$AWS_ECR_REPOSITORY" "$FRONTEND_DIGEST"
+            echo
+            echo 'Publishing does not deploy. Use the protected **Deploy Platform** workflow with these exact digests.'
+          } >> "$GITHUB_STEP_SUMMARY"

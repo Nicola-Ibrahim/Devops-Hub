@@ -1,0 +1,7 @@
+name: CI
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  ci:
+    uses: __PLATFORM_WORKFLOWS_REPOSITORY__/.github/workflows/reusable-ci-dotnet.yml@main

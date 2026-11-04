@@ -6,7 +6,7 @@ def sync_platform_workspace() -> bool:
     with TaskGroup("Workspace Synchronization"):
         # Python dependencies
         uv_task = Task(
-            cmd="uv sync",
+            cmd="uv sync --project backend --frozen",
             description="Syncing Python dependencies (uv)",
             stream=True,
         )

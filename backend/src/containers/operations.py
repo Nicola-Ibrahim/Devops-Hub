@@ -1,8 +1,13 @@
 """Typed execution adapters: transaction and delivery completion live outside use cases."""
 
+from datetime import UTC, datetime
 from uuid import UUID
 
+from api.credentials import BrowserRequestCredentials, RequestIdentity
 from api.identity.schemas import PrincipalView
+from containers.authentication import authenticate_request
+from developer_platform.application.dto import AccessContext
+from entrypoints.settings import Settings
 from identity.application.authenticate import AuthenticateApiToken
 from identity.application.dto import IssueTokenCommand, PreparedApiToken
 from identity.application.errors import IdentityUnavailable
@@ -16,12 +21,18 @@ from shared.infra.persistence.unit_of_work import DatabaseUnavailable, SqlAlchem
 class CurrentIdentityQuery:
     """Materialize the HTTP identity result before completing its database operation."""
 
-    def __init__(self, inner: AuthenticateApiToken, unit: SqlAlchemyUnitOfWork) -> None:
+    def __init__(
+        self,
+        inner: AuthenticateApiToken,
+        unit: SqlAlchemyUnitOfWork,
+        settings: Settings | None = None,
+    ) -> None:
+        self.settings = settings
         self.inner = inner
         self.unit = unit
 
-    async def execute(self, token: str | None) -> PrincipalView:
-        def present(principal: AuthenticatedPrincipal) -> PrincipalView:
+    async def execute(self, token: RequestIdentity) -> PrincipalView:
+        def present(principal: AuthenticatedPrincipal | AccessContext) -> PrincipalView:
             return PrincipalView(
                 user_id=principal.user_id,
                 project_id=principal.project_id,
@@ -29,8 +40,16 @@ class CurrentIdentityQuery:
                 scopes=sorted(principal.scopes),
             )
 
+        async def authenticate() -> AuthenticatedPrincipal | AccessContext:
+            if isinstance(token, BrowserRequestCredentials):
+                assert self.settings is not None
+                return await authenticate_request(
+                    self.unit.session, token, self.settings, lambda: datetime.now(UTC)
+                )
+            return await self.inner.execute(token)
+
         try:
-            return await self.unit.run(lambda: self.inner.execute(token), present)
+            return await self.unit.run(authenticate, present)
         except DatabaseUnavailable as error:
             raise IdentityUnavailable() from error
 

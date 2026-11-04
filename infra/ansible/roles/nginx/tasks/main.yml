@@ -1,45 +1,128 @@
 ---
-- name: Install Nginx
-  package:
-    name: nginx
-    state: present
-  become: true
-
-- name: Install Certbot and Nginx plugin
-  package:
+- name: Install Nginx and Certbot packages
+  ansible.builtin.package:
     name:
+      - nginx
       - certbot
-      - python3-certbot-nginx
     state: present
   become: true
 
-- name: Ensure Nginx is running
-  service:
-    name: nginx
-    state: started
-    enabled: yes
+- name: Create ACME webroot with restricted ownership
+  ansible.builtin.file:
+    path: /var/www/letsencrypt
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
   become: true
 
-# Note: SSL certificate generation usually requires a domain and manual intervention or a specific flow.
-# This task sets up the foundation.
-- name: Create basic Nginx configuration for App
-  template:
+- name: Check for an existing TLS certificate
+  ansible.builtin.stat:
+    path: "/etc/letsencrypt/live/{{ server_name | default('localhost') }}/fullchain.pem"
+  register: platform_tls_certificate
+
+- name: Install initial HTTP Nginx site and enable it
+  ansible.builtin.template:
     src: app_nginx.conf.j2
-    dest: /etc/nginx/sites-available/app
-  become: true
+    dest: /etc/nginx/sites-available/devops-hub
+    owner: root
+    group: root
+    mode: '0644'
+  vars:
+    tls_enabled: "{{ platform_tls_certificate.stat.exists | default(false) }}"
   notify: reload nginx
+  become: true
 
-- name: Enable App site
-  file:
-    src: /etc/nginx/sites-available/app
-    dest: /etc/nginx/sites-enabled/app
+- name: Enable DevOps Hub Nginx site
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/devops-hub
+    dest: /etc/nginx/sites-enabled/devops-hub
     state: link
-  become: true
   notify: reload nginx
+  become: true
 
-- name: Remove default site
-  file:
+- name: Remove the default Nginx site
+  ansible.builtin.file:
     path: /etc/nginx/sites-enabled/default
     state: absent
-  become: true
   notify: reload nginx
+  become: true
+
+- name: Validate Nginx configuration before reload
+  ansible.builtin.command: nginx -t
+  changed_when: false
+  become: true
+
+- name: Start and enable Nginx
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: true
+  become: true
+
+- name: Issue an HTTPS certificate through the ACME webroot challenge
+  ansible.builtin.command:
+    argv:
+      - certbot
+      - certonly
+      - --webroot
+      - --webroot-path
+      - /var/www/letsencrypt
+      - --non-interactive
+      - --agree-tos
+      - --email
+      - "{{ certbot_email }}"
+      - --domain
+      - "{{ server_name }}"
+  args:
+    creates: "/etc/letsencrypt/live/{{ server_name | default('localhost') }}/fullchain.pem"
+  when:
+    - server_name is defined
+    - server_name != 'localhost'
+    - certbot_email is defined
+    - certbot_email | length > 0
+    - not (platform_tls_certificate.stat.exists | default(false))
+  become: true
+
+- name: Refresh certificate discovery after issuance
+  ansible.builtin.stat:
+    path: "/etc/letsencrypt/live/{{ server_name | default('localhost') }}/fullchain.pem"
+  register: platform_tls_certificate
+
+- name: Install TLS-enabled Nginx site when a certificate is present
+  ansible.builtin.template:
+    src: app_nginx.conf.j2
+    dest: /etc/nginx/sites-available/devops-hub
+    owner: root
+    group: root
+    mode: '0644'
+  vars:
+    tls_enabled: "{{ platform_tls_certificate.stat.exists | default(false) }}"
+  notify: reload nginx
+  become: true
+
+- name: Validate the final Nginx configuration
+  ansible.builtin.command: nginx -t
+  changed_when: false
+  become: true
+
+- name: Apply validated Nginx configuration now
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable automated Certbot renewal timer when TLS is configured
+  ansible.builtin.service:
+    name: certbot.timer
+    state: started
+    enabled: true
+  when: platform_tls_certificate.stat.exists | default(false)
+  become: true
+
+- name: Reload Nginx after successful Certbot certificate renewal
+  ansible.builtin.copy:
+    dest: /etc/letsencrypt/renewal-hooks/deploy/90-reload-nginx
+    content: "#!/bin/sh\n/usr/sbin/nginx -t && /usr/bin/systemctl reload nginx\n"
+    owner: root
+    group: root
+    mode: '0750'
+  when: platform_tls_certificate.stat.exists | default(false)
+  become: true

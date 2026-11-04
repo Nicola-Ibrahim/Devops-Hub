@@ -2,7 +2,6 @@ import sys
 
 from platform_dev.engine.core import TaskGroup
 from platform_dev.engine.ui import Logger
-from platform_dev.tasks.env_secrets import setup_identity
 from platform_dev.tasks.infrastructure import boot_platform_infrastructure
 from platform_dev.tasks.setup import run_platform_setup
 from platform_dev.tasks.workspace import sync_platform_workspace
@@ -22,19 +21,14 @@ def run_bootstrap() -> None:
             group.logger.error("Stop: Platform setup failed.")
             sys.exit(1)
 
-        # 2. Identity (Interactive login if needed)
-        if not setup_identity(skip_confirm=True):
-            group.logger.error("Stop: Identity authentication failed.")
-            sys.exit(1)
-
-        # 3. Boot Infrastructure
-        if not boot_platform_infrastructure():
-            group.logger.error("Stop: Infrastructure failed to boot.")
-            sys.exit(1)
-
-        # 5. Sync Workspace
+        # 2. Sync Workspace before starting the local platform.
         if not sync_platform_workspace():
             group.logger.error("Stop: Workspace synchronization failed.")
+            sys.exit(1)
+
+        # 3. Boot Infrastructure. The demo uses generated local-only secrets.
+        if not boot_platform_infrastructure():
+            group.logger.error("Stop: Infrastructure failed to boot.")
             sys.exit(1)
 
         group.logger.success(
@@ -48,6 +42,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         Logger().info_step("\nBootstrap aborted by user.")
         sys.exit(0)
-    except Exception as e:
-        Logger().error(f"Bootstrap failed: {str(e)}")
+    except Exception as exc:  # noqa: BLE001 - CLI boundary must report all failed setup steps.
+        Logger().error(f"Bootstrap failed: {exc!s}")
         sys.exit(1)

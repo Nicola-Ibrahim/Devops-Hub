@@ -5,14 +5,92 @@
   gather_facts: true
 
   tasks:
-    - name: Pull latest Docker images
-      command: doppler run -- docker compose pull
-      args:
-        chdir: "{{ app_root | default('/opt/app') }}"
-      tags: [deploy, pull]
+    - name: Validate immutable platform image references
+      assert:
+        that:
+          - platform_api_image is defined
+          - platform_api_image is match('^.+@sha256:[0-9a-f]{64}$')
+          - platform_frontend_image is defined
+          - platform_frontend_image is match('^.+@sha256:[0-9a-f]{64}$')
+        fail_msg: "Provide registry image digests; mutable tags and host builds are not supported."
+      tags: [deploy]
 
-    - name: Restart services
-      command: doppler run -- docker compose up -d --build
-      args:
-        chdir: "{{ app_root | default('/opt/app') }}"
-      tags: [deploy, restart]
+    - name: Ensure deploy paths exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0750'
+      loop:
+        - "{{ app_root | default('/opt/devops-hub') }}"
+        - "{{ app_root | default('/opt/devops-hub') }}/scripts/ops"
+      tags: [deploy]
+
+    - name: Install the reviewed Compose manifest
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../../compose.yaml"
+        dest: "{{ app_root | default('/opt/devops-hub') }}/compose.yaml"
+        owner: root
+        group: root
+        mode: '0644'
+      tags: [deploy]
+
+    - name: Install release and rollback script
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../../scripts/ops/release.sh"
+        dest: "{{ app_root | default('/opt/devops-hub') }}/scripts/ops/release.sh"
+        owner: root
+        group: root
+        mode: '0750'
+      tags: [deploy]
+
+    - name: Verify operator-managed secret directory is private
+      ansible.builtin.stat:
+        path: /etc/devops-hub/secrets
+      register: platform_secret_directory
+      tags: [deploy]
+
+    - name: Require root-owned mode-0700 secret directory
+      ansible.builtin.assert:
+        that:
+          - platform_secret_directory.stat.isdir
+          - platform_secret_directory.stat.pw_name == 'root'
+          - platform_secret_directory.stat.mode[-3:] == '700'
+      no_log: true
+      tags: [deploy]
+
+    - name: Verify operator-managed secret files exist with restricted permissions
+      ansible.builtin.stat:
+        path: "/etc/devops-hub/secrets/{{ item }}"
+      loop:
+        - postgres_password
+        - platform_database_url
+        - platform_token_pepper
+        - platform_installation_id
+        - platform_resource_encryption_key
+        - platform_resource_key_id
+        - platform_metrics_token
+      register: platform_secret_files
+      tags: [deploy]
+
+    - name: Fail closed if any required secret file is absent or accessible to group/others
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - (item.stat.mode[-3:] == '444' if item.item == 'platform_metrics_token' else item.stat.mode[-3:] == '600' or item.stat.mode[-3:] == '400')
+        fail_msg: "Required secret file is absent or not private; provision it out of band under /etc/devops-hub/secrets."
+      loop: "{{ platform_secret_files.results }}"
+      no_log: true
+      tags: [deploy]
+
+    - name: Apply immutable release and keep previous digest for readiness rollback
+      ansible.builtin.command:
+        argv:
+          - "{{ app_root | default('/opt/devops-hub') }}/scripts/ops/release.sh"
+          - "{{ platform_api_image }}"
+          - "{{ platform_frontend_image }}"
+          - "{{ migration_compatible_previous | default(false) | bool | ternary('true', 'false') }}"
+      environment:
+        AWS_REGION: "{{ aws_region | default('') }}"
+      tags: [deploy]

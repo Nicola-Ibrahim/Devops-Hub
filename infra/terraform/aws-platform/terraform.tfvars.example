@@ -1,0 +1,10 @@
+aws_region             = "eu-central-1"
+name_prefix            = "devops-hub"
+github_repository      = "company/devops-hub"
+github_oidc_thumbprint = "replace-with-current-40-character-thumbprint"
+ssh_ingress_cidrs      = []
+instance_type          = "t3.large"
+host_disk_gib          = 100
+docker_data_disk_gib   = 200
+# Optional; required only when ssh_ingress_cidrs is non-empty.
+# ssh_key_name          = "company-vpn-operator"

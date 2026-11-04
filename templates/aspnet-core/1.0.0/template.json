@@ -1,0 +1,1 @@
+{"id":"aspnet-core","version":"1.0.0","language":"csharp","display_name":"ASP.NET Core service","description":"Minimal ASP.NET Core service with health endpoint, Docker and shared CI."}

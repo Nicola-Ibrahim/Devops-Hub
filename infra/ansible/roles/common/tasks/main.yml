@@ -1,4 +1,4 @@
 ---
 - name: Execute Common OS Setup
   import_tasks: setup.yml
-  when: "'setup' in ansible_run_tags"
+  tags: [setup, hardening]

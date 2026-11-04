@@ -7,10 +7,7 @@ from platform_dev.tasks.infrastructure import (
     shutdown_platform_services,
 )
 from platform_dev.tasks.setup import run_platform_setup
-from platform_dev.tasks.workspace import (
-    cleanup_platform_workspace,
-    sync_platform_workspace,
-)
+from platform_dev.tasks.workspace import sync_platform_workspace
 
 
 def handle_up(skip_confirm: bool = False) -> bool:
@@ -18,11 +15,11 @@ def handle_up(skip_confirm: bool = False) -> bool:
     logger = Logger()
     logger.header("Development Workspace: UP (Ansible)")
 
-    # 1. Sync Everything (Optional: Ensures secrets/tools are fresh)
+    # 1. Install/configure local tools. Doppler is not required by the local demo.
     if not run_platform_setup():
         return False
 
-    # 2. Sync Workspace (Dependencies + Pre-flight)
+    # 2. Sync pinned backend dependencies before startup.
     if not sync_platform_workspace():
         return False
 
@@ -37,15 +34,13 @@ def handle_up(skip_confirm: bool = False) -> bool:
 
 
 def handle_down(skip_confirm: bool = False) -> bool:
-    """Graceful shutdown and session cleanup via Ansible."""
+    """Gracefully stop services without deleting database or resource data."""
     logger = Logger()
     logger.header("Development Workspace: DOWN (Ansible)")
 
-    # 1. Shutdown Services
-    shutdown_platform_services(skip_confirm=skip_confirm)
-
-    # 2. Cleanup Workspace
-    cleanup_platform_workspace(skip_confirm=skip_confirm)
+    if not shutdown_platform_services(skip_confirm=skip_confirm):
+        logger.error("Service shutdown failed; workspace is left intact.")
+        return False
 
     logger.header("Shutdown Complete")
     logger.success("All background services have been terminated via Ansible.")
@@ -78,13 +73,15 @@ Examples:
 
     try:
         if args.action == "up":
-            handle_up(skip_confirm=args.yes)
+            succeeded = handle_up(skip_confirm=args.yes)
         elif args.action == "down":
-            handle_down(skip_confirm=args.yes)
+            succeeded = handle_down(skip_confirm=args.yes)
+        if not succeeded:
+            sys.exit(1)
     except KeyboardInterrupt:
         sys.exit(0)
-    except Exception as e:
-        Logger().error(f"Execution failed: {str(e)}")
+    except Exception as exc:  # noqa: BLE001 - CLI boundary must return a failing process status.
+        Logger().error(f"Execution failed: {exc!s}")
         sys.exit(1)
 
 

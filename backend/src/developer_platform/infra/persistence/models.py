@@ -43,6 +43,7 @@ class Resource(Base):
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    environment_id: Mapped[UUID | None] = mapped_column(ForeignKey("project_environments.id"))
     owner_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
     project_id: Mapped[UUID] = mapped_column(ForeignKey("projects.id"))
     display_name: Mapped[str] = mapped_column(String(100))
@@ -154,3 +155,43 @@ class ResourceSecret(Base):
     key_id: Mapped[str] = mapped_column(String(100))
     ciphertext: Mapped[bytes] = mapped_column(LargeBinary)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class ProjectRegistrationRow(Base):
+    __tablename__ = "project_registrations"
+
+    project_id: Mapped[UUID] = mapped_column(ForeignKey("projects.id"), primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    owning_team_id: Mapped[UUID | None] = mapped_column(ForeignKey("teams.id"))
+    owning_team_name: Mapped[str | None] = mapped_column(String(100))
+    repository: Mapped[str | None] = mapped_column(String(200))
+    configured: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class ProjectEnvironmentRow(Base):
+    __tablename__ = "project_environments"
+    __table_args__ = (UniqueConstraint("project_id", "name", name="uq_project_environment"),)
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    project_id: Mapped[UUID] = mapped_column(ForeignKey("project_registrations.project_id"))
+    name: Mapped[str] = mapped_column(String(64))
+
+
+class ResourceActivityRow(Base):
+    __tablename__ = "resource_activity"
+    __table_args__ = (Index("ix_resource_activity_time", "resource_id", "created_at"),)
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    actor_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
+    project_id: Mapped[UUID] = mapped_column(ForeignKey("projects.id"))
+    resource_id: Mapped[UUID] = mapped_column(ForeignKey("resources.id"))
+    operation_id: Mapped[UUID] = mapped_column(ForeignKey("operations.id"))
+    action: Mapped[str] = mapped_column(String(80))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class ProviderOrphanRow(Base):
+    __tablename__ = "provider_orphans"
+    resource_id: Mapped[UUID] = mapped_column(primary_key=True)
+    installation_id: Mapped[UUID]
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

@@ -1,0 +1,38 @@
+groups:
+  - name: platform-resource-lifecycle
+    rules:
+      - alert: PlatformOperationQueueAgeHigh
+        expr: platform_operation_oldest_age_seconds > 120
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Platform operation is waiting longer than two minutes
+          description: "Check worker health and provider availability for kind {{ $labels.kind }}."
+
+      - alert: PlatformOverdueCleanupPresent
+        expr: platform_resources_overdue_cleanup_total > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: One or more temporary resources are overdue for cleanup
+          description: "Inspect cleanup failures and provider reachability; do not manually remove unowned resources."
+
+      - alert: PlatformOrphanedResourcesDetected
+        expr: platform_orphaned_resources > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: Reconciliation found orphaned resources
+          description: "Review ownership metadata and recovery runbook before cleanup."
+
+      - alert: PlatformWorkerRetryRateHigh
+        expr: increase(platform_worker_claim_retries_total[10m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Worker claims are retrying repeatedly
+          description: "Check provider error classes and database lock contention."

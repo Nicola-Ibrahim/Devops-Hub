@@ -1,0 +1,326 @@
+"""HTTP contracts for approved application templates and delivery workflows."""
+
+from datetime import datetime
+from typing import Annotated, Protocol
+from uuid import UUID
+
+from dishka.integrations.fastapi import FromDishka, inject
+from fastapi import APIRouter, Depends, Header, Request
+from pydantic import Field
+
+from api.credentials import RequestIdentity, request_identity
+from api.schemas import Contract
+from developer_platform.application.delivery import (
+    ApplicationCommand,
+    ApplicationDetails,
+    DeliveryStepDetails,
+    DeploymentCommand,
+    DeploymentDetails,
+    ResourceAttachmentCommand,
+    TemplateVersion,
+    WebhookResult,
+)
+
+
+class TemplateView(Contract):
+    id: str
+    version: str
+    language: str
+    name: str
+    description: str
+
+
+class ApplicationCreate(Contract):
+    name: Annotated[str, Field(min_length=1, max_length=64)]
+    environment_id: UUID
+    template_id: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_-]{0,63}$")]
+    template_version: Annotated[str, Field(pattern=r"^[0-9]+.[0-9]+.[0-9]+$")]
+
+
+class ResourceAttachment(Contract):
+    template_id: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_-]{0,63}$")] = "postgres"
+    version: Annotated[str, Field(pattern=r"^[0-9]{1,2}$")] = "16"
+    target_id: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_-]{0,63}$")] = "local"
+    size_id: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_-]{0,63}$")] = "small"
+    ttl_seconds: Annotated[int, Field(strict=True, ge=60, le=86400)] = 3600
+
+
+class DeploymentRequest(Contract):
+    image_digest: Annotated[str, Field(min_length=71, max_length=320)]
+    target_id: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_-]{0,63}$")] = "local"
+
+
+class ApplicationView(Contract):
+    id: UUID
+    project_id: UUID
+    environment_id: UUID
+    owner_id: UUID
+    name: str
+    template_id: str
+    template_version: str
+    repository_url: str | None
+    resource_id: UUID | None
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    is_preview: bool = False
+    source_repository: str | None = None
+    pull_request: int | None = None
+    expires_at: datetime | None = None
+
+
+class DeliveryStepView(Contract):
+    id: UUID
+    application_id: UUID
+    kind: str
+    status: str
+    attempts: int
+    error_code: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ApplicationDetail(Contract):
+    application: ApplicationView
+    steps: list[DeliveryStepView]
+
+
+class ApplicationAccepted(Contract):
+    application: ApplicationView
+    replayed: bool
+
+
+class DeploymentView(Contract):
+    id: UUID
+    application_id: UUID
+    image_digest: str
+    target_id: str
+    status: str
+    url: str | None
+    created_at: datetime
+
+
+class WebhookResponse(Contract):
+    accepted: bool
+    duplicate: bool
+    application_id: UUID | None = None
+    cleanup_count: int = 0
+    reason: str | None = None
+
+
+class ApplicationDeliveryOperations(Protocol):
+    def templates(self) -> tuple[TemplateVersion, ...]: ...
+
+    async def create_application(
+        self, identity: RequestIdentity, command: ApplicationCommand, idempotency_key: str
+    ) -> tuple[ApplicationDetails, bool]: ...
+
+    async def list_applications(
+        self, identity: RequestIdentity
+    ) -> tuple[ApplicationDetails, ...]: ...
+
+    async def application(
+        self, identity: RequestIdentity, application_id: UUID
+    ) -> tuple[ApplicationDetails, tuple[DeliveryStepDetails, ...]]: ...
+
+    async def attach_resource(
+        self,
+        identity: RequestIdentity,
+        application_id: UUID,
+        command: ResourceAttachmentCommand,
+        idempotency_key: str,
+    ) -> DeliveryStepDetails: ...
+
+    async def deploy(
+        self,
+        identity: RequestIdentity,
+        application_id: UUID,
+        command: DeploymentCommand,
+        idempotency_key: str,
+    ) -> DeploymentDetails: ...
+
+    async def deployment_history(
+        self, identity: RequestIdentity, application_id: UUID
+    ) -> tuple[DeploymentDetails, ...]: ...
+
+    async def retry_step(
+        self, identity: RequestIdentity, application_id: UUID, step_id: UUID
+    ) -> DeliveryStepDetails: ...
+
+    async def github_webhook(
+        self, raw_body: bytes, signature: str | None, delivery_id: str | None, event: str | None
+    ) -> WebhookResult: ...
+
+
+router = APIRouter()
+RequestCredential = Annotated[RequestIdentity, Depends(request_identity)]
+IdempotencyKey = Annotated[str, Header(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:-]+$")]
+
+
+def _application(row: ApplicationDetails) -> ApplicationView:
+    return ApplicationView.model_validate(row.__dict__)
+
+
+def _step(row: DeliveryStepDetails) -> DeliveryStepView:
+    return DeliveryStepView.model_validate(row.__dict__)
+
+
+def _deployment(row: DeploymentDetails) -> DeploymentView:
+    return DeploymentView.model_validate(row.__dict__)
+
+
+@router.get("/api/v1/templates", response_model=list[TemplateView], tags=["templates"])
+@inject
+async def templates(operations: FromDishka[ApplicationDeliveryOperations]) -> list[TemplateView]:
+    return [
+        TemplateView(
+            id=item.template_id,
+            version=item.version,
+            language=item.language,
+            name=item.display_name,
+            description=item.description,
+        )
+        for item in operations.templates()
+    ]
+
+
+@router.post(
+    "/api/v1/applications",
+    response_model=ApplicationAccepted,
+    status_code=202,
+    tags=["applications"],
+)
+@inject
+async def create_application(
+    body: ApplicationCreate,
+    identity: RequestCredential,
+    operations: FromDishka[ApplicationDeliveryOperations],
+    idempotency_key: IdempotencyKey,
+) -> ApplicationAccepted:
+    application, replayed = await operations.create_application(
+        identity, ApplicationCommand(**body.model_dump()), idempotency_key
+    )
+    return ApplicationAccepted(application=_application(application), replayed=replayed)
+
+
+@router.get("/api/v1/applications", response_model=list[ApplicationView], tags=["applications"])
+@inject
+async def applications(
+    identity: RequestCredential,
+    operations: FromDishka[ApplicationDeliveryOperations],
+) -> list[ApplicationView]:
+    return [_application(item) for item in await operations.list_applications(identity)]
+
+
+@router.get(
+    "/api/v1/applications/{application_id}",
+    response_model=ApplicationDetail,
+    tags=["applications"],
+)
+@inject
+async def application(
+    application_id: UUID,
+    identity: RequestCredential,
+    operations: FromDishka[ApplicationDeliveryOperations],
+) -> ApplicationDetail:
+    app, steps = await operations.application(identity, application_id)
+    return ApplicationDetail(application=_application(app), steps=[_step(item) for item in steps])
+
+
+@router.post(
+    "/api/v1/applications/{application_id}/resources",
+    response_model=DeliveryStepView,
+    status_code=202,
+    tags=["applications"],
+)
+@inject
+async def attach_resource(
+    application_id: UUID,
+    body: ResourceAttachment,
+    identity: RequestCredential,
+    operations: FromDishka[ApplicationDeliveryOperations],
+    idempotency_key: IdempotencyKey,
+) -> DeliveryStepView:
+    step = await operations.attach_resource(
+        identity, application_id, ResourceAttachmentCommand(**body.model_dump()), idempotency_key
+    )
+    return _step(step)
+
+
+@router.post(
+    "/api/v1/applications/{application_id}/deployments",
+    response_model=DeploymentView,
+    status_code=202,
+    tags=["deployments"],
+)
+@inject
+async def deploy(
+    application_id: UUID,
+    body: DeploymentRequest,
+    identity: RequestCredential,
+    operations: FromDishka[ApplicationDeliveryOperations],
+    idempotency_key: IdempotencyKey,
+) -> DeploymentView:
+    deployment = await operations.deploy(
+        identity,
+        application_id,
+        DeploymentCommand(**body.model_dump()),
+        idempotency_key,
+    )
+    return _deployment(deployment)
+
+
+@router.get(
+    "/api/v1/applications/{application_id}/deployments",
+    response_model=list[DeploymentView],
+    tags=["deployments"],
+)
+@inject
+async def deployment_history(
+    application_id: UUID,
+    identity: RequestCredential,
+    operations: FromDishka[ApplicationDeliveryOperations],
+) -> list[DeploymentView]:
+    return [
+        _deployment(item) for item in await operations.deployment_history(identity, application_id)
+    ]
+
+
+@router.post(
+    "/api/v1/applications/{application_id}/steps/{step_id}/retry",
+    response_model=DeliveryStepView,
+    tags=["applications"],
+)
+@inject
+async def retry_step(
+    application_id: UUID,
+    step_id: UUID,
+    identity: RequestCredential,
+    operations: FromDishka[ApplicationDeliveryOperations],
+) -> DeliveryStepView:
+    return _step(await operations.retry_step(identity, application_id, step_id))
+
+
+@router.post(
+    "/api/v1/webhooks/github",
+    response_model=WebhookResponse,
+    tags=["integrations"],
+)
+@inject
+async def github_webhook(
+    request: Request,
+    operations: FromDishka[ApplicationDeliveryOperations],
+) -> WebhookResponse:
+    result = await operations.github_webhook(
+        await request.body(),
+        request.headers.get("x-hub-signature-256"),
+        request.headers.get("x-github-delivery"),
+        request.headers.get("x-github-event"),
+    )
+    return WebhookResponse(
+        accepted=result.accepted,
+        duplicate=result.duplicate,
+        application_id=result.application_id,
+        cleanup_count=result.cleanup_count,
+        reason=result.reason,
+    )

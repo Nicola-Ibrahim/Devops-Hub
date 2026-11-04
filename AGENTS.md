@@ -8,7 +8,7 @@ The [platform requirements](docs/platform-requirements.md) define the intended c
 
 ## Agreed technology and execution environment
 
-- Backend: Python with FastAPI, SQLAlchemy and Alembic over PostgreSQL. The phase-1 foundation is implemented; resource lifecycle endpoints and provisioning workflows are subsequent work in the backend task record.
+- Backend: Python with FastAPI, SQLAlchemy and Alembic over PostgreSQL. Inspect current code and the requested task record for implementation and acceptance status. Documentation describes intent, not proof of working behavior.
 - Frontend: Next.js developer dashboard for requesting resources, viewing status and expiry, and managing authorized lifecycle actions. The dashboard consumes the backend API; provisioning logic belongs in the Python backend and worker.
 - Initial runtime: local Docker. The core demo must run without AWS or Azure credentials and demonstrate real container provisioning, readiness and cleanup.
 - Keep provider-specific infrastructure behind explicit interfaces for local Docker, configured server runtimes, and future Kubernetes or cloud providers. Resource types and targets must be registered and supported; arbitrary destinations and arbitrary infrastructure commands are not developer inputs. Add providers only within requested scope.
@@ -22,7 +22,34 @@ The [platform requirements](docs/platform-requirements.md) define the intended c
 - `backend/` contains the API foundation, pure lifecycle rules, control-plane schema/migrations, local token administration and focused tests. See `backend/README.md` for setup and verification.
 - Backend business contexts are `src/identity/` and `src/developer_platform/`, each containing `application/`, `domain/` and `infra/`. `src/api/` owns HTTP, `src/containers/` declares DI providers and outer operation completion, `src/entrypoints/` owns minimal executable hosts, and `src/shared/infra/` contains technical database/UoW/readiness infrastructure (plus the documented legacy audit adapter). Do not create a top-level Python package named `platform`, which would shadow the standard library.
 - `docs/` contains onboarding and operations guides.
-- There is no frontend, resource lifecycle API or provisioner yet. The backend currently exposes health, identity and an empty catalog; do not claim it provisions resources.
+- `frontend/`, resource/application worker entrypoints, Docker provider adapters, `templates/`, Compose and delivery/operations assets are present in the working tree. Their presence does not establish integrated readiness or completed milestones. Check current wiring, authorization, provider verification and actual acceptance evidence before claiming support. Do not claim queued ledger rows are provisioned databases.
+
+## Delivery responsibilities
+
+Terraform provisions hosting infrastructure; Ansible configures hosts; CI/CD builds
+and delivers immutable releases with readiness and rollback; platform API/workers
+manage developer-requested resources. The core portfolio demonstration must work
+locally without a cloud account. Identity is internal company authentication and
+project permissions; do not add Google/social login without a new requirement.
+Python/FastAPI is the first application template; other languages follow the same
+operational contracts after that foundation works.
+
+## When to use skills
+
+Load only skills matching the task. Skills describe procedures; `.codex/agents/`
+defines delegated actors. Small fixes need no task record or automatic agent sequence.
+
+| Task | Skill |
+| --- | --- |
+| Plan, implement or resume substantial work | [platform-change](.agents/skills/platform-change/SKILL.md) |
+| Review boundaries, application services, DI or structural design | [architecture-review](.agents/skills/architecture-review/SKILL.md) |
+| Change resource requests, persistence, providers, leases or recovery | [resource-lifecycle](.agents/skills/resource-lifecycle/SKILL.md) |
+| Choose and execute isolated code, provider or delivery checks | [platform-verification](.agents/skills/platform-verification/SKILL.md) |
+| Create or revise a skill | Use skill-creator when available |
+
+Use [backend setup](backend/README.md), frontend package scripts and the
+[operations guide](docs/operations.md) for current commands. The verification skill
+owns check isolation; the change skill owns task phases, delegation and handoff.
 
 ## Shared working rules
 

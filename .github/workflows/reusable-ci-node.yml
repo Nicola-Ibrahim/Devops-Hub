@@ -17,7 +17,7 @@ on:
         description: 'Package manager to use (pnpm, npm, yarn)'
         required: false
         type: string
-        default: 'pnpm'
+        default: 'npm'
       run-lint:
         description: 'Whether to run linting'
         required: false
@@ -38,6 +38,11 @@ on:
         required: false
         type: string
         default: 'package.json'
+      lockfile:
+        description: 'Lockfile path relative to working-directory'
+        required: false
+        type: string
+        default: 'package-lock.json'
 
 
 
@@ -52,6 +57,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Install pnpm
         if: ${{ inputs.package-manager == 'pnpm' }}
@@ -67,6 +74,7 @@ jobs:
         with:
           node-version: ${{ inputs.node-version }}
           cache: ${{ inputs.package-manager }}
+          cache-dependency-path: ${{ inputs.working-directory }}/${{ inputs.lockfile }}
 
       - name: Install dependencies
         run: |

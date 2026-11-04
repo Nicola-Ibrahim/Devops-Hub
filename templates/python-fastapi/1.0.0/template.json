@@ -1,0 +1,7 @@
+{
+  "id": "python-fastapi",
+  "version": "1.0.0",
+  "language": "python",
+  "display_name": "Python / FastAPI",
+  "description": "Company-approved FastAPI service with health, JSON logging, tests, Docker and shared CI."
+}

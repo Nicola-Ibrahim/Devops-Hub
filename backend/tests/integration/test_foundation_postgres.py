@@ -18,6 +18,8 @@ from sqlalchemy.pool import NullPool
 
 from containers.factory import create_container
 from containers.operations import IssueApiTokenToFile, RevokeApiTokenCommand
+from containers.platform_operations import RegisterProjectCommandHandler
+from developer_platform.application.ledger import RegisterProjectCommand
 from developer_platform.infra.persistence.models import Resource
 from entrypoints.http import create_app
 from entrypoints.schema import registered_metadata
@@ -29,6 +31,7 @@ from identity.infra.persistence.models import (
     ApiAccessTokenRow,
     InternalUserRow,
     ProjectMembershipRow,
+    ProjectRow,
 )
 from shared.infra.persistence.audit import AuditEvent
 
@@ -79,9 +82,35 @@ async def issue_with_container(database: AsyncEngine, path, config, user, projec
         await container.close()
 
 
+async def register_project_with_container(database: AsyncEngine, config, project):
+    container = create_container(config, engine=database)
+    try:
+        async with container() as scope:
+            handler = await scope.get(RegisterProjectCommandHandler)
+            return await handler.execute(
+                RegisterProjectCommand(
+                    name=project,
+                    owning_team="test-team",
+                    repository="example/repo",
+                    environments=("dev",),
+                )
+            )
+    finally:
+        await container.close()
+
+
+def register_project(sync_engine, project, config=None):
+    database = async_engine_for(sync_engine)
+    try:
+        return asyncio.run(register_project_with_container(database, config or settings(), project))
+    finally:
+        asyncio.run(database.dispose())
+
+
 def issue(sync_engine, path, user="developer", project="project", **kwargs):
     database = async_engine_for(sync_engine)
     try:
+        asyncio.run(register_project_with_container(database, settings(), project))
         token_id = asyncio.run(
             issue_with_container(database, path, settings(), user, project, **kwargs)
         )
@@ -132,7 +161,9 @@ def test_issue_authenticate_and_revoke(postgres_engine, tmp_path, capsys):
         me = client.get("/api/v1/me", headers=headers)
         assert me.status_code == 200
         catalog = client.get("/api/v1/catalog", headers=headers)
-        assert catalog.json()["templates"] == []
+        assert len(catalog.json()["templates"]) == 1
+        assert catalog.json()["templates"][0]["requestable"] is False
+        assert catalog.json()["templates"][0]["version"] == "16"
         assert token not in me.text + catalog.text
         assert revoke(postgres_engine, token_id)
         assert client.get("/api/v1/me", headers=headers).status_code == 401
@@ -183,6 +214,10 @@ def test_existing_output_does_not_get_overwritten_or_commit_identity(postgres_en
     with Session(postgres_engine) as session:
         assert session.scalar(select(func.count()).select_from(InternalUserRow)) == 0
         assert session.scalar(select(func.count()).select_from(ApiAccessTokenRow)) == 0
+        assert session.scalar(select(func.count()).select_from(ProjectMembershipRow)) == 0
+        assert session.scalar(select(func.count()).select_from(AuditEvent)) == 0
+        # Trusted project registration is a separate, prior operator operation.
+        assert session.scalar(select(func.count()).select_from(ProjectRow)) == 1
 
 
 def test_failed_commit_removes_new_token_file(postgres_engine, tmp_path):
@@ -191,6 +226,7 @@ def test_failed_commit_removes_new_token_file(postgres_engine, tmp_path):
 
     output = tmp_path / "credential"
     database = async_engine_for(postgres_engine)
+    asyncio.run(register_project_with_container(database, settings(), "new"))
     event.listen(database.sync_engine, "commit", fail_commit)
     try:
         with pytest.raises(RuntimeError):
@@ -254,7 +290,7 @@ def test_pre_refactor_token_digest_still_authenticates(postgres_engine, tmp_path
         )
 
 
-def test_disabled_issuance_rolls_back_new_membership_and_project(postgres_engine, tmp_path):
+def test_disabled_issuance_rolls_back_membership_for_registered_project(postgres_engine, tmp_path):
     token_id, _ = issue(postgres_engine, tmp_path / "credential")
     from identity.domain.errors import IdentityValidationError
     from identity.infra.persistence.models import ProjectRow
@@ -263,10 +299,12 @@ def test_disabled_issuance_rolls_back_new_membership_and_project(postgres_engine
         session.get(
             InternalUserRow, session.get(ApiAccessTokenRow, token_id).user_id
         ).active = False
+    register_project(postgres_engine, "second")
     with pytest.raises(IdentityValidationError):
         issue(postgres_engine, tmp_path / "second", project="second")
     with Session(postgres_engine) as session:
-        assert session.scalar(select(func.count()).select_from(ProjectRow)) == 1
+        # Project registration is already committed independently of identity token issuance.
+        assert session.scalar(select(func.count()).select_from(ProjectRow)) == 2
         assert session.scalar(select(func.count()).select_from(ProjectMembershipRow)) == 1
         assert session.scalar(select(func.count()).select_from(AuditEvent)) == 1
     assert not (tmp_path / "second").exists()
@@ -279,3 +317,27 @@ def test_revoke_is_idempotent_and_does_not_duplicate_audit(postgres_engine, tmp_
     assert not revoke(postgres_engine, uuid4())
     with Session(postgres_engine) as session:
         assert session.scalar(select(func.count()).select_from(AuditEvent)) == 2
+
+
+def test_forward_migration_preserves_legacy_project_identity_without_invented_metadata(
+    postgres_engine,
+):
+    project_id = uuid4()
+    with postgres_engine.begin() as connection:
+        command.downgrade(migration_config(connection), "0001_foundation")
+        connection.execute(
+            text("INSERT INTO projects (id, name, created_at) VALUES (:id, :name, now())"),
+            {"id": project_id, "name": "legacy-project"},
+        )
+        command.upgrade(migration_config(connection), "head")
+        row = connection.execute(
+            text(
+                "SELECT project_id, name, owning_team_id, owning_team_name, "
+                "repository, configured FROM project_registrations WHERE project_id = :id"
+            ),
+            {"id": project_id},
+        ).one()
+        assert tuple(row) == (project_id, "legacy-project", None, None, None, False)
+        assert connection.scalar(text("SELECT count(*) FROM project_environments")) == 0
+        assert connection.scalar(text("SELECT count(*) FROM teams")) == 0
+        assert compare_metadata(MigrationContext.configure(connection), registered_metadata()) == []
