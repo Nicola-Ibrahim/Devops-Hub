@@ -1,12 +1,16 @@
 """Database readiness without transport or business dependencies."""
 
-from typing import Literal
+from typing import Literal, Protocol
 
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 ReadinessStatus = Literal["ready", "schema_not_ready", "database_unavailable"]
+
+
+class ReadinessProbe(Protocol):
+    async def inspect(self) -> ReadinessStatus: ...
 
 
 class SqlAlchemyReadinessProbe:

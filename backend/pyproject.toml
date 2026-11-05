@@ -9,16 +9,13 @@ dependencies = [
     "cryptography>=44,<52",
     "dishka>=1.6,<2",
     "docker>=7,<8",
-    "fastapi>=0.115,<1",
+    "fastapi[standard-no-fastapi-cloud-cli]>=0.115,<1",
     "httpx>=0.28,<1",
     "psycopg[binary]>=3.2,<4",
     "pydantic-settings>=2.8,<3",
     "sqlalchemy[asyncio]>=2.0,<2.1",
     "uvicorn>=0.34,<1",
 ]
-
-[project.scripts]
-platform-admin = "entrypoints.cli:main"
 
 [dependency-groups]
 dev = ["mypy>=1.15,<2", "pytest>=8.3,<10", "ruff>=0.11,<1"]
@@ -27,6 +24,9 @@ dev = ["mypy>=1.15,<2", "pytest>=8.3,<10", "ruff>=0.11,<1"]
 requires = ["hatchling>=1.27,<2"]
 build-backend = "hatchling.build"
 
+[tool.fastapi]
+entrypoint = "containers.asgi:app"
+
 [tool.hatch.build.targets.wheel]
 packages = [
     "src/api",
@@ -34,7 +34,6 @@ packages = [
     "src/developer_platform",
     "src/shared",
     "src/containers",
-    "src/entrypoints",
 ]
 
 [tool.pytest.ini_options]

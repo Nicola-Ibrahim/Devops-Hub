@@ -6,9 +6,9 @@ from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from api.app import create_api
+from api.app import APIConfiguration, DevOpsHubAPI
 from containers.factory import create_container
-from entrypoints.settings import Settings
+from shared.infra.settings import Settings
 
 
 def create_app(
@@ -16,6 +16,7 @@ def create_app(
     *,
     engine: AsyncEngine | None = None,
     container: AsyncContainer | None = None,
+    api_config: APIConfiguration | None = None,
 ) -> FastAPI:
     # An explicitly injected container/engine remains caller-owned.
     runtime = (
@@ -35,6 +36,6 @@ def create_app(
             if container is None:
                 await runtime.close()
 
-    app = create_api(lifespan=lifespan)
+    app = DevOpsHubAPI(api_config, lifespan=lifespan)
     setup_dishka(runtime, app)
     return app

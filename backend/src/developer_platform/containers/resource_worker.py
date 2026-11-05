@@ -7,14 +7,17 @@ from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from containers.worker_queue import PostgresResourceEffectGuard, SqlAlchemyProvisioningQueue
+from containers.schema import registered_metadata
 from developer_platform.application.worker import ResourceWorker
 from developer_platform.infra.credentials import FernetResourceCredentialCipher
 from developer_platform.infra.docker_provider import DockerPostgresProvider
-from entrypoints.schema import registered_metadata
-from entrypoints.settings import Settings
+from developer_platform.infra.persistence.worker_queue import (
+    PostgresResourceEffectGuard,
+    SqlAlchemyProvisioningQueue,
+)
 from shared.infra.persistence.database import create_async_database_engine
 from shared.infra.readiness import SqlAlchemyReadinessProbe
+from shared.infra.settings import Settings
 
 
 async def run_worker(config: Settings, once: bool = False) -> None:
@@ -31,7 +34,7 @@ async def run_worker(config: Settings, once: bool = False) -> None:
         config.database_url.get_secret_value(), config.database_connect_timeout
     )
     try:
-        from entrypoints.settings import SCHEMA_REVISION
+        from shared.infra.settings import SCHEMA_REVISION
 
         if await SqlAlchemyReadinessProbe(engine, SCHEMA_REVISION).inspect() != "ready":
             raise ValueError("Worker schema is not ready")

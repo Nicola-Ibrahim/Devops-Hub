@@ -9,7 +9,6 @@ installation-labeled resource objects. Never prints generated credentials.
 import base64
 import json
 import os
-import re
 import secrets
 import subprocess
 import tempfile
@@ -126,71 +125,87 @@ with tempfile.TemporaryDirectory(prefix="hub-packaged-", dir="/private/tmp") as 
                 "/run/platform-secrets/acceptance_password",
             ]
         )
-        output = run(
-            compose
-            + [
-                "exec",
-                "-T",
-                "api",
-                "platform-admin",
-                "register-project",
-                "--name",
-                "demo",
-                "--team",
-                "platform",
-                "--repository",
-                "example/demo",
-                "--environment",
-                "dev",
-            ]
+        seed_fixture = r"""import asyncio, json
+from pathlib import Path
+from containers.factory import create_container
+from containers.project_registration import RegisterProjectCommandHandler
+from identity.containers.browser_operations import BrowserIdentityService
+from containers.schema import registered_metadata
+from developer_platform.application.ledger import RegisterProjectCommand
+from shared.infra.settings import Settings
+from api.identity.browser import BrowserIdentityOperations
+
+async def seed():
+    settings = Settings()
+    registered_metadata()
+    container = create_container(settings)
+    try:
+        async with container() as scope:
+            registration = await scope.get(RegisterProjectCommandHandler)
+            project = await registration.execute(
+                RegisterProjectCommand("demo", "platform", "example/demo", ("dev",))
+            )
+            identity = await scope.get(BrowserIdentityOperations)
+            assert isinstance(identity, BrowserIdentityService)
+            password = Path("/run/platform-secrets/acceptance_password").read_text().strip()
+            user_id = await identity.create_user("demo", password)
+            await identity.bootstrap_first_project_admin(user_id, project.project_id)
+        print(json.dumps({"project_id": str(project.project_id), "user_id": str(user_id)}))
+    finally:
+        await container.close()
+
+asyncio.run(seed())
+"""
+        seeded = subprocess.run(
+            ["docker", "exec", "-i", api, "python", "-"],
+            cwd=root, env=env, text=True, input=seed_fixture, capture_output=True, check=False,
         )
-        project_id = re.search(
-            r"[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}", output
-        ).group()
-        output = run(
-            compose
-            + [
-                "exec",
-                "-T",
-                "api",
-                "platform-admin",
-                "create-user",
-                "--name",
-                "demo",
-                "--password-file",
-                "/run/platform-secrets/acceptance_password",
-            ]
+        if seeded.returncode:
+            raise RuntimeError("Packaged identity fixture setup failed; private details suppressed")
+        identifiers = json.loads(seeded.stdout.strip().splitlines()[-1])
+        project_id = identifiers["project_id"]
+        probe_fixture = r"""import asyncio, secrets
+from uuid import uuid4
+from sqlalchemy.ext.asyncio import AsyncSession
+from containers.schema import registered_metadata
+from developer_platform.application.lifecycle import DatabaseCredentials, ProvisioningJob
+from developer_platform.infra.docker_provider import DockerPostgresProvider
+from developer_platform.infra.persistence.models import QuotaBudget
+from shared.infra.settings import Settings
+from shared.infra.persistence.database import create_async_database_engine
+
+async def probe():
+    settings = Settings()
+    if settings.installation_id is None or settings.resource_key is None:
+        raise RuntimeError("Acceptance target configuration is incomplete")
+    registered_metadata()
+    engine = create_async_database_engine(settings.database_url.get_secret_value(), settings.database_connect_timeout)
+    try:
+        job = ProvisioningJob(uuid4(), uuid4(), settings.installation_id, 1, uuid4(),
+            "provision", 500, 536870912,
+            DatabaseCredentials("verify_user", "verify_db", secrets.token_urlsafe(32), secrets.token_urlsafe(32)))
+        provider = DockerPostgresProvider(settings.docker_url, settings.postgres_image, settings.advertised_host)
+        try:
+            await provider.provision(job)
+            await provider.provision(job)
+        finally:
+            observation = await provider.delete(job)
+            if not observation.absent:
+                raise RuntimeError("Owned target probe cleanup incomplete")
+        async with AsyncSession(engine) as session, session.begin():
+            session.add(QuotaBudget(scope="target", scope_id="local", max_resources=3,
+                max_cpu_millis=1500, max_memory_bytes=1610612736, max_storage_bytes=3221225472))
+    finally:
+        await engine.dispose()
+
+asyncio.run(probe())
+"""
+        checked_probe = subprocess.run(
+            compose + ["run", "--rm", "--no-deps", "-T", "worker", "python", "-"],
+            cwd=root, env=env, text=True, input=probe_fixture, capture_output=True, check=False,
         )
-        user_id = re.search(
-            r"[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}", output
-        ).group()
-        run(
-            compose
-            + [
-                "exec",
-                "-T",
-                "api",
-                "platform-admin",
-                "bootstrap-project-admin",
-                "--user-id",
-                user_id,
-                "--project-id",
-                project_id,
-            ]
-        )
-        run(
-            compose
-            + [
-                "run",
-                "--rm",
-                "--no-deps",
-                "worker",
-                "platform-admin",
-                "verify-local-target",
-                "--max-resources",
-                "3",
-            ]
-        )
+        if checked_probe.returncode:
+            raise RuntimeError("Owned local-target probe failed; private details suppressed")
         run(compose + ["up", "-d", "--no-build", "worker"])
         with httpx.Client(base_url="http://127.0.0.1:3000", timeout=10) as client:
             assert client.get("/").status_code == 200

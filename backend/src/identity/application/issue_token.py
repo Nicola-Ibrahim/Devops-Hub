@@ -3,7 +3,8 @@ from collections.abc import Callable
 from datetime import datetime, timedelta
 
 from identity.application.dto import IssueTokenCommand, PreparedApiToken
-from identity.application.ports import ApiTokenRepository, TokenGenerator, TokenHasher
+from identity.application.ports import TokenGenerator, TokenHasher
+from identity.domain.api_tokens import ApiTokenRepository
 from identity.domain.credentials import require_active_project_member
 from identity.domain.errors import IdentityValidationError
 from identity.domain.records import ApiTokenAuditEvent

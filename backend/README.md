@@ -15,17 +15,20 @@ See [operations](../docs/operations.md) for packaging, release and recovery asse
 src/
   api/                       HTTP routes, schemas, injected query ports and errors
   identity/
-    domain/                  Pure token and project-membership policies/status values
-    application/             AuthenticateApiToken, IssueApiToken, RevokeApiToken + ports
+    domain/                  Identity records, repository contracts and policies
+    application/             Login, session, account, membership and token actions
     infra/persistence/       Identity-owned ORM rows and async token repository
-    infra/                   Hashing, randomness and private file delivery
+    infra/                   SQL transaction adapter, hashing and private file delivery
   developer_platform/
-    domain/                  Resource states, lease and deletion rules
-    application/             Catalog and resource permission contracts
-    infra/persistence/       Platform-owned ORM rows; Docker/provider adapters live in infra/
+    domain/                  Project/resource/application records and repository contracts
+    application/             Resource lifecycle, catalog and delivery use cases
+    infra/persistence/       Platform-owned ORM rows and SQL adapters
+    infra/                   Docker, GitHub and credential adapters
   shared/infra/              Technical engine/session/UoW, metadata and readiness
-  containers/                Declarative Dishka providers and typed completion adapters
-  entrypoints/               Settings, schema registration and minimal HTTP/CLI hosts
+  identity/containers/       Identity Dishka providers and compatibility host imports
+  developer_platform/containers/ Platform DI, HTTP and worker hosts
+  containers/                Process composition and cross-context HTTP/resource wiring
+  shared/infra/settings.py    Runtime and database configuration
 ```
 
 Application services receive repositories, clocks and domain-facing interfaces.
@@ -36,7 +39,7 @@ outside application code. The API receives ready query capabilities from Dishka;
 there is no manually constructed global service bundle.
 
 Dishka application scope owns the async engine/session factory and stateless
-collaborators. Request/CLI scope supplies the repository, async session and use
+collaborators. Request/operation scope supplies the repository, async session and use
 cases. Each UoW executes once; repeated/concurrent use is rejected before work.
 Enter a fresh scope for another operation. Independent requests never share
 sessions. `CurrentIdentityQuery` materializes the public identity view before
@@ -47,7 +50,7 @@ an uncertain outcome; a rollback attempt does not prove that commit never occurr
 Resource request acceptance writes only the control-plane ledger. Workers use
 short explicit operation scopes around database phases, outside Docker/provider waits.
 
-`entrypoints.http:create_app` owns its normally created container/engine. A supplied
+`containers.http:create_app` owns its normally created container/engine. A supplied
 `AsyncEngine` remains caller-owned. A supplied container is also caller-owned and
 must be closed explicitly on its owning event loop before that loop shuts down.
 SQLAlchemy runtime persistence is async; Alembic uses
@@ -80,9 +83,9 @@ neither context imports the other's internals.
 
 Previous `bootstrap.*`, `platform_api.*`, `provisioning.*`, `platform_runtime.*` and
 `platform_infrastructure.*` paths are retired. Use the new launch path below.
-The `platform-admin` token command options remain available; issuing a token now
-requires an existing project reference, created through operator registration. Internal account login/session management, local Docker provisioning and a Next.js
-dashboard are present. External Google login is not planned.
+The operator command-line interface has been removed. Internal account/session APIs,
+local Docker provider services and the dashboard remain. No replacement public
+account bootstrap or target-administration endpoint is implied by this refactor.
 
 ## Install and configure
 
@@ -113,61 +116,31 @@ uv run alembic upgrade head
 Startup never creates tables or runs migrations. Start the API on loopback:
 
 ```bash
-uv run uvicorn entrypoints.http:create_app --factory --host 127.0.0.1 --port 8000
+uv run fastapi dev --host 127.0.0.1 --port 8000
 ```
+
+`[tool.fastapi]` selects `containers.asgi:app`. The `DevOpsHubAPI` class owns HTTP
+assembly and accepts `APIConfiguration` for metadata/documentation routes. The host
+keeps DI and lifecycle ownership; tests can still inject settings, engines and
+containers through `create_app`. For production use `uv run fastapi run` (no reload).
 
 `GET /health/live` checks the process; `GET /health/ready` checks database access
 and the exact migration revision. API readiness does not establish provider or
 worker readiness. OpenAPI is available at `/openapi.json` and `/docs`.
 
-## Register a project (trusted operator only)
+## Trusted administration services
 
-After explicitly applying the migration, use the restricted operator CLI:
+Project registration, account bootstrap, password recovery and token administration
+remain service capabilities at the composition boundary (`containers/`). There is
+currently no operator CLI or replacement administrative HTTP API for these actions.
+A fresh installation therefore needs a separately authorized bootstrap integration;
+guest dashboard access does not create an account or grant project permissions.
 
-```bash
-uv run platform-admin register-project --name demo --team platform --repository example/demo --environment dev --environment test
-```
-
-It atomically registers identity references and platform-owned metadata, prints the
-project/environment IDs and creates the initial project budget: three resources,
-2000 CPU millis, 2 GiB memory and 5 GiB storage reservations. It grants no team/user
-membership automatically and creates no database/container. Same configuration is
-idempotent; changed configuration conflicts rather than overwriting ownership.
-Target budgets are not auto-created. Missing target quotas fail closed. Global
-operator privileges are deliberately not inferred from a project-admin token;
-there is no public project-creation endpoint in this increment.
-
-Legacy project IDs/names are preserved by the migration. Run the same registration
-command with their actual team/repository/environments to complete metadata. Team
-ownership is separate from explicit project membership. Platform owns registration
-and environments; identity owns team/access references and credentials.
-
-## Issue a local developer token
-
-Run this restricted command only as an administrator with control-plane database
-access. Register the project first. Token issuance creates the named user and
-developer membership if missing, then issues a project-bound token. It never upgrades an existing membership role.
-
-```bash
-mkdir -p .local
-chmod 700 .local
-uv run platform-admin issue-token --user developer --project demo --output .local/developer-token
-```
-
-The token is written to a newly created file with mode `0600`. An existing output
-file is never overwritten. Its ID is printed for later revocation; the credential
-is not printed. Tokens expire after 24 hours by default (`--hours`, maximum 720).
-Use repeated `--scope` arguments to restrict the default scopes. The database
-stores a peppered hash, not the token value. Token issuance and revocation create
-audit events. An interrupted issuance can leave a private file for a transaction
-that never committed; revoke/reissue through the admin command rather than
-assuming that file is valid.
-
-Use the token as an HTTP bearer credential. `/api/v1/me` returns identity and
-project membership; `/api/v1/catalog` requires `catalog:read`. The catalog lists a
-approved PostgreSQL 16/local/small option with typed CPU/memory/storage/lifetime
-limits, disabled-by-default requestability (`provider_not_enabled`) and storage enforcement
-`reservation_only`. Dedicated volumes do not imply hard disk quotas. Enable only after the verification command below succeeds.
+`RegisterProjectCommandHandler` retains atomic project/environment registration and
+project quotas. `BrowserIdentityService` retains internal account and first-project-
+administrator setup. Existing user-facing identity endpoints remain protected.
+Missing target quotas continue to fail closed; do not write arbitrary quotas to
+bypass provider verification.
 
 ## Resource request/read contracts
 
@@ -206,19 +179,12 @@ normally `unix:///Users/<user>/.docker/run/docker.sock`. The default is the Linu
 `unix:///var/run/docker.sock`. Values also support `_FILE` configuration for the
 control-plane URL, token pepper, installation ID, resource key/key ID and metrics token.
 
-After explicit migrations and before catalog enablement, run:
+Target verification and budget configuration require a trusted integration; the
+former operator command has been removed. Do not enable an unverified target.
+For an already configured target, start the durable worker separately:
 
 ```bash
-uv run platform-admin verify-local-target --max-resources 10
-```
-
-This operator command provisions and deletes one owned probe, verifies SQL readiness
-and cleanup, then records target reservation budgets. It requires Docker access and
-is an explicit resource operation. Set `PLATFORM_LOCAL_PROVIDER_ENABLED=true` only
-after success, then start the durable worker separately:
-
-```bash
-uv run python -m entrypoints.worker
+uv run python -m developer_platform.containers.resource_worker
 ```
 
 API requests never call Docker. The worker claims durable operations, stores encrypted
@@ -239,11 +205,9 @@ A queued ledger row is not a ready database.
 
 ## Internal browser accounts and dashboard
 
-Use `platform-admin create-user --name <name>` (interactive password or private
-`--password-file`), then `bootstrap-project-admin --user-id <id> --project-id <id>`
-for the first project administrator. Setup recovery uses `issue-password-setup`
-and `consume-password-setup`; `platform-admin --help` lists required arguments.
-There is no public registration or social login.
+Accounts must already exist through an authorized internal bootstrap integration.
+The former operator commands for creation, initial membership and recovery have
+been removed. There is no public registration or social login.
 
 The dashboard proxies same-origin requests to the API; configure its server-only
 `BACKEND_URL`. Backend cookie mutations require an approved exact origin and CSRF.
@@ -264,7 +228,7 @@ and drift acceptance remain pending in
 is not proof that the entire application deployment flow works. Missing configuration
 fails closed, and disabled adapters report failure rather than external success.
 
-Run `uv run python -m entrypoints.application_worker` separately for application steps.
+Run `uv run python -m developer_platform.containers.application_worker` separately for application steps.
 Resources are requested through the same quota/idempotency ledger and database
 worker. Preview events require a configured signing secret and registered repository;
 untrusted forks are rejected. External GitHub/cloud end-to-end acceptance is separate
@@ -294,9 +258,7 @@ transaction across the database and filesystem. If commit succeeded but session
 cleanup failed, the private credential file is retained; treat the failed command
 as requiring administrative reconciliation rather than overwriting that file.
 
-```bash
-uv run platform-admin revoke-token <token-id>
-```
+Token revocation remains an internal service capability; no operator CLI is installed.
 
 Local bearer tokens are for the trusted demonstration. Remote deployment requires
 protected transport, server configuration and a reviewed identity boundary.

@@ -4,7 +4,7 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from contextlib import AbstractAsyncContextManager
 from datetime import datetime
-from typing import Any, TypeVar, cast
+from typing import TypeVar
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -32,6 +32,7 @@ from developer_platform.application.delivery import (
     WebhookResult,
     WebhookSignatureVerifier,
 )
+from developer_platform.application.delivery_effects import ExecuteDeliveryStep
 from developer_platform.application.dto import AccessContext
 from developer_platform.application.errors import PlatformRequestError
 from developer_platform.infra.persistence.delivery import SQLAlchemyApplicationDeliveryRepository
@@ -43,7 +44,7 @@ Clock = Callable[[], datetime]
 AuthenticateRequest = Callable[[AsyncSession, RequestIdentity], Awaitable[AccessContext]]
 
 
-class ApplicationDeliveryService:
+class ApplicationDeliveryHost:
     def __init__(
         self,
         sessions: async_sessionmaker[AsyncSession],
@@ -225,10 +226,7 @@ class ApplicationDeliveryService:
 
     async def _execute_and_complete(self, claim: DeliveryClaim) -> None:
         try:
-            usecase = self._use_case(cast(ApplicationDeliveryRepository, _DetachedRepository()))
-            result = await usecase.execute_claim(
-                claim, self.repositories, self.resources, self.deployer
-            )
+            result = await self._effect_executor().execute(claim)
         except ApplicationDeliveryFailure as error:
             await self._record_failure(claim, error.code, error.retryable)
         except asyncio.CancelledError:
@@ -292,16 +290,18 @@ class ApplicationDeliveryService:
             preview_ttl_seconds=self.preview_ttl_seconds,
         )
 
-
-class _DetachedRepository:
-    """Worker execution does not query or mutate the ledger during provider effects."""
-
-    def __getattr__(self, _name: str) -> Any:
-        raise RuntimeError("Provider execution must not access a detached delivery repository")
+    def _effect_executor(self) -> ExecuteDeliveryStep:
+        return ExecuteDeliveryStep(
+            self.template_catalog,
+            self.images,
+            self.repositories,
+            self.resources,
+            self.deployer,
+        )
 
 
 async def run_application_worker(
-    service: ApplicationDeliveryService, *, once: bool = False, poll_seconds: float = 1
+    service: ApplicationDeliveryHost, *, once: bool = False, poll_seconds: float = 1
 ) -> None:
     while True:
         worked = await service.tick()

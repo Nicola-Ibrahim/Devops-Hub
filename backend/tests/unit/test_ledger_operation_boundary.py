@@ -9,14 +9,14 @@ from test_operation_lifecycle import CapturedResponses, FakeSession
 
 from api.platform.capabilities import PlatformRequestQueries
 from containers.factory import create_container
-from containers.platform_operations import PlatformHttpOperations
+from containers.http import create_app
+from containers.platform_http_operations import PlatformHttpOperations
 from developer_platform.application.dto import AccessContext
 from developer_platform.application.errors import PlatformRequestError
 from developer_platform.application.ledger import AcceptedDatabaseRequest
-from entrypoints.http import create_app
-from entrypoints.settings import Settings
 from identity.contracts import AuthenticatedPrincipal
 from shared.infra.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from shared.infra.settings import Settings
 
 
 def test_platform_di_binds_both_context_repositories_to_one_operation_session():
@@ -70,7 +70,7 @@ def test_http_ledger_authentication_and_commit_precede_success(outcome):
                 raise PlatformRequestError("idempotency_conflict", "Request conflicts", 409)
             return AcceptedDatabaseRequest(resource_id, operation_id)
 
-    service = PlatformHttpOperations(Auth(), Requester(), None, SqlAlchemyUnitOfWork(session))
+    service = PlatformHttpOperations(Auth(), Requester(), None, None, SqlAlchemyUnitOfWork(session))
 
     class Override(Provider):
         @provide(scope=Scope.REQUEST, override=True)

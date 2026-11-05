@@ -38,6 +38,10 @@ npm run build
 
 ## Account and project administration
 
+Visitors can choose **Visit as guest** on the sign-in screen to explore a read-only
+dashboard preview without an account. Preview content is illustrative; resource
+actions require sign-in and guest mode grants no API access.
+
 The Identity administration panel uses the existing internal identity APIs:
 
 - Review active session IDs and timestamps; revoke another session, end the current

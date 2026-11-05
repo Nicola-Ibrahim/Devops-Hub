@@ -7,13 +7,13 @@ from typing import Literal, cast
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.credentials import BrowserRequestCredentials, RequestIdentity
-from containers.browser_operations import authenticate_browser_operation
 from developer_platform.application.dto import AccessContext
 from developer_platform.application.errors import PlatformRequestError
-from entrypoints.settings import Settings
 from identity.application.authenticate import AuthenticateApiToken
+from identity.containers.browser_operations import authenticate_browser_operation
 from identity.infra.persistence.store import SQLAlchemyApiTokenRepository
 from identity.infra.tokens import PepperedTokenHasher
+from shared.infra.settings import Settings
 
 
 async def authenticate_request(

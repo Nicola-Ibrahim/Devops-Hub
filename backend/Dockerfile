@@ -27,4 +27,4 @@ COPY --chmod=0755 scripts/ops/backend-container-entrypoint.sh /usr/local/bin/pla
 USER root
 ENTRYPOINT ["/usr/local/bin/platform-entrypoint"]
 EXPOSE 8000
-CMD ["uvicorn", "entrypoints.http:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["fastapi", "run", "--entrypoint", "containers.asgi:app", "--host", "0.0.0.0", "--port", "8000"]

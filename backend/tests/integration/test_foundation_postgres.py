@@ -17,15 +17,14 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import NullPool
 
 from containers.factory import create_container
-from containers.operations import IssueApiTokenToFile, RevokeApiTokenCommand
-from containers.platform_operations import RegisterProjectCommandHandler
+from containers.http import create_app
+from containers.project_registration import RegisterProjectCommandHandler
+from containers.schema import registered_metadata
 from developer_platform.application.ledger import RegisterProjectCommand
 from developer_platform.infra.persistence.models import Resource
-from entrypoints.http import create_app
-from entrypoints.schema import registered_metadata
-from entrypoints.settings import SCHEMA_REVISION, Settings
 from identity.application.dto import IssueTokenCommand
 from identity.application.errors import CredentialDeliveryError
+from identity.containers.operations import IssueApiTokenToFile, RevokeApiTokenCommand
 from identity.infra.credential_file import PrivateCredentialFile
 from identity.infra.persistence.models import (
     ApiAccessTokenRow,
@@ -34,6 +33,7 @@ from identity.infra.persistence.models import (
     ProjectRow,
 )
 from shared.infra.persistence.audit import AuditEvent
+from shared.infra.settings import SCHEMA_REVISION, Settings
 
 pytestmark = pytest.mark.postgres
 PEPPER = "test-only-token-pepper-" * 3

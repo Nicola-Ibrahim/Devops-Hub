@@ -1,5 +1,7 @@
 """HTTP assembly from application capabilities; no concrete infrastructure imports."""
 
+from dataclasses import dataclass
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -21,67 +23,89 @@ from identity.application.errors import CredentialDeliveryError, IdentityUnavail
 from identity.domain.errors import AuthenticationRejected, IdentityValidationError
 
 
-def create_api(*, lifespan: Lifespan[FastAPI] | None = None) -> FastAPI:
-    app = FastAPI(
-        title="DevOps Hub API",
-        version="0.1.0",
-        description=(
-            "Developer platform API for identity, projects, approved resources, "
-            "application templates, and durable delivery workflows."
-        ),
-        lifespan=lifespan,
-        responses={
-            404: {"model": ErrorResponse},
-            409: {"model": ErrorResponse},
-            401: {"model": ErrorResponse},
-            403: {"model": ErrorResponse},
-            422: {"model": ErrorResponse},
-            503: {"model": ErrorResponse},
-        },
+@dataclass(frozen=True)
+class APIConfiguration:
+    """HTTP metadata and documentation routes; deployment secrets stay in Settings."""
+
+    title: str = "DevOps Hub API"
+    version: str = "0.1.0"
+    description: str = (
+        "Developer platform API for identity, projects, approved resources, "
+        "application templates, and durable delivery workflows."
     )
-    app.middleware("http")(request_boundary)
-    app.add_exception_handler(APIError, handle_api_error)  # type: ignore[arg-type]
-    app.add_exception_handler(RequestValidationError, handle_validation_error)  # type: ignore[arg-type]
+    docs_url: str | None = "/docs"
+    redoc_url: str | None = "/redoc"
 
-    @app.exception_handler(AuthenticationRejected)
-    async def unauthenticated(request: Request, exc: AuthenticationRejected) -> JSONResponse:
-        return error_response(request, 401, exc.code, exc.message)
 
-    @app.exception_handler(PlatformRequestError)
-    async def platform_error(request: Request, exc: PlatformRequestError) -> JSONResponse:
-        return error_response(request, exc.status, exc.code, exc.message)
+class DevOpsHubAPI(FastAPI):
+    """Configured HTTP application, independent of concrete infrastructure wiring."""
 
-    @app.exception_handler(CatalogForbidden)
-    async def forbidden(request: Request, exc: CatalogForbidden) -> JSONResponse:
-        return error_response(request, 403, exc.code, exc.message)
-
-    @app.exception_handler(IdentityUnavailable)
-    async def unavailable(request: Request, exc: IdentityUnavailable) -> JSONResponse:
-        return error_response(request, 503, exc.code, exc.message)
-
-    @app.exception_handler(IdentityValidationError)
-    async def identity_invalid(request: Request, exc: IdentityValidationError) -> JSONResponse:
-        return error_response(request, 422, exc.code, exc.message)
-
-    @app.exception_handler(CredentialDeliveryError)
-    async def delivery_failed(request: Request, exc: CredentialDeliveryError) -> JSONResponse:
-        return error_response(request, 500, exc.code, "Credential delivery failed")
-
-    @app.exception_handler(DomainError)
-    async def domain_error(request: Request, exc: DomainError) -> JSONResponse:
-        return error_response(request, 422, exc.code, exc.message)
-
-    @app.exception_handler(HTTPException)
-    async def http_error(request: Request, exc: HTTPException) -> JSONResponse:
-        return error_response(
-            request, exc.status_code, "http_error", "Request could not be completed"
+    def __init__(
+        self,
+        config: APIConfiguration | None = None,
+        *,
+        lifespan: Lifespan[FastAPI] | None = None,
+    ) -> None:
+        config = config or APIConfiguration()
+        super().__init__(
+            title=config.title,
+            version=config.version,
+            description=config.description,
+            docs_url=config.docs_url,
+            redoc_url=config.redoc_url,
+            lifespan=lifespan,
+            responses={
+                404: {"model": ErrorResponse},
+                409: {"model": ErrorResponse},
+                401: {"model": ErrorResponse},
+                403: {"model": ErrorResponse},
+                422: {"model": ErrorResponse},
+                503: {"model": ErrorResponse},
+            },
         )
+        app = self
+        app.middleware("http")(request_boundary)
+        app.add_exception_handler(APIError, handle_api_error)  # type: ignore[arg-type]
+        app.add_exception_handler(RequestValidationError, handle_validation_error)  # type: ignore[arg-type]
 
-    app.include_router(health_router)
-    app.include_router(metrics_router)
+        @app.exception_handler(AuthenticationRejected)
+        async def unauthenticated(request: Request, exc: AuthenticationRejected) -> JSONResponse:
+            return error_response(request, 401, exc.code, exc.message)
 
-    app.include_router(browser_router)
-    app.include_router(identity_router)
-    app.include_router(platform_router)
-    app.include_router(applications_router)
-    return app
+        @app.exception_handler(PlatformRequestError)
+        async def platform_error(request: Request, exc: PlatformRequestError) -> JSONResponse:
+            return error_response(request, exc.status, exc.code, exc.message)
+
+        @app.exception_handler(CatalogForbidden)
+        async def forbidden(request: Request, exc: CatalogForbidden) -> JSONResponse:
+            return error_response(request, 403, exc.code, exc.message)
+
+        @app.exception_handler(IdentityUnavailable)
+        async def unavailable(request: Request, exc: IdentityUnavailable) -> JSONResponse:
+            return error_response(request, 503, exc.code, exc.message)
+
+        @app.exception_handler(IdentityValidationError)
+        async def identity_invalid(request: Request, exc: IdentityValidationError) -> JSONResponse:
+            return error_response(request, 422, exc.code, exc.message)
+
+        @app.exception_handler(CredentialDeliveryError)
+        async def delivery_failed(request: Request, exc: CredentialDeliveryError) -> JSONResponse:
+            return error_response(request, 500, exc.code, "Credential delivery failed")
+
+        @app.exception_handler(DomainError)
+        async def domain_error(request: Request, exc: DomainError) -> JSONResponse:
+            return error_response(request, 422, exc.code, exc.message)
+
+        @app.exception_handler(HTTPException)
+        async def http_error(request: Request, exc: HTTPException) -> JSONResponse:
+            return error_response(
+                request, exc.status_code, "http_error", "Request could not be completed"
+            )
+
+        app.include_router(health_router)
+        app.include_router(metrics_router)
+
+        app.include_router(browser_router)
+        app.include_router(identity_router)
+        app.include_router(platform_router)
+        app.include_router(applications_router)

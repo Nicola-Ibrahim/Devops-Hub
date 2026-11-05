@@ -2,42 +2,32 @@
 
 import hashlib
 import json
-from collections.abc import AsyncIterator, Callable
-from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from dataclasses import asdict
 from pathlib import Path
 
 from dishka import Provider, Scope, provide
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from api.dependencies import ReadCurrentIdentity, ReadinessProbe
 from api.health.metrics import OperationalMetrics
-from api.identity.browser import BrowserIdentityOperations
 from api.platform.applications import ApplicationDeliveryOperations
-from api.platform.capabilities import PlatformRequestQueries
-from containers.application_bindings import SQLAlchemyApplicationDatabaseBindings
-from containers.application_operations import ApplicationDeliveryService
-from containers.application_resources import LedgerApplicationResources
-from containers.authentication import authenticate_request
-from containers.browser_operations import BrowserIdentityService
-from containers.metrics_operations import DatabaseOperationalMetrics
-from containers.operations import (
-    CurrentIdentityQuery,
-    IssueApiTokenToFile,
-    RevokeApiTokenCommand,
-)
-from containers.platform_operations import PlatformHttpOperations, RegisterProjectCommandHandler
-from containers.worker_queue import PostgresResourceEffectGuard
 from developer_platform.application.catalog import ReadCatalog
-from developer_platform.application.delivery import ApplicationDeliveryRepository
+from developer_platform.application.delivery import (
+    ApplicationDeliveryRepository,
+    ResourceProvisioner,
+)
 from developer_platform.application.ledger import PlatformLedgerRepository, RequestDatabaseCommand
-from developer_platform.application.permissions import ALL_SCOPES
+from developer_platform.application.lifecycle import ResourceCredentialCipher
+from developer_platform.application.manage_databases import ManageDatabases
 from developer_platform.application.requests import (
     ApprovedPostgresCatalog,
     ReadPlatformLedger,
     RegisterProject,
     RequestTestDatabase,
 )
+from developer_platform.containers.application_host import ApplicationDeliveryHost
+from developer_platform.containers.metrics_operations import DatabaseOperationalMetrics
+from developer_platform.containers.ports import PlatformRequestAuthenticator
+from developer_platform.domain.resource_lifecycle_repository import ResourceLifecycleRepository
 from developer_platform.infra.application_runtime import (
     ApplicationDatabaseBindingResolver,
     DockerApplicationRuntime,
@@ -51,113 +41,15 @@ from developer_platform.infra.delivery_adapters import (
     Sha256RequestFingerprint,
     StaticApprovedImageCatalog,
 )
+from developer_platform.infra.persistence.application_bindings import (
+    SQLAlchemyApplicationDatabaseBindings,
+)
 from developer_platform.infra.persistence.delivery import SQLAlchemyApplicationDeliveryRepository
 from developer_platform.infra.persistence.ledger import SQLAlchemyPlatformLedgerRepository
-from entrypoints.settings import SCHEMA_REVISION, Settings
-from identity.application.authenticate import AuthenticateApiToken
-from identity.application.issue_token import IssueApiToken
-from identity.application.ports import ApiTokenRepository, TokenGenerator, TokenHasher
-from identity.application.project_directory import ProjectAccessDirectory
-from identity.application.revoke_token import RevokeApiToken
-from identity.infra.persistence.project_directory import SQLAlchemyProjectAccessDirectory
-from identity.infra.persistence.store import SQLAlchemyApiTokenRepository
-from identity.infra.tokens import PepperedTokenHasher, SecureTokenGenerator
-from shared.infra.persistence.database import create_async_database_engine
-from shared.infra.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from shared.infra.readiness import SqlAlchemyReadinessProbe
-
-Clock = Callable[[], datetime]
-
-
-@dataclass(frozen=True)
-class ExternalDatabase:
-    engine: AsyncEngine | None = None
-
-
-class DatabaseProvider(Provider):
-    metrics = provide(DatabaseOperationalMetrics, provides=OperationalMetrics, scope=Scope.APP)
-
-    @provide(scope=Scope.APP)
-    async def engine(
-        self, settings: Settings, external: ExternalDatabase
-    ) -> AsyncIterator[AsyncEngine]:
-        engine = external.engine or create_async_database_engine(
-            settings.database_url.get_secret_value(), settings.database_connect_timeout
-        )
-        try:
-            yield engine
-        finally:
-            if external.engine is None:
-                await engine.dispose()
-
-    @provide(scope=Scope.APP)
-    def sessions(self, engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
-        return async_sessionmaker(engine, expire_on_commit=False)
-
-    @provide(scope=Scope.REQUEST)
-    def session(self, sessions: async_sessionmaker[AsyncSession]) -> AsyncSession:
-        # The outer UoW closes this session before returning, not after HTTP emission.
-        return sessions()
-
-    unit = provide(SqlAlchemyUnitOfWork, scope=Scope.REQUEST)
-
-    @provide(scope=Scope.APP)
-    def readiness(self, engine: AsyncEngine) -> ReadinessProbe:
-        return SqlAlchemyReadinessProbe(engine, SCHEMA_REVISION)
-
-
-class IdentityProvider(Provider):
-    @provide(scope=Scope.APP)
-    def browser(
-        self, sessions: async_sessionmaker[AsyncSession], clock: Clock, settings: Settings
-    ) -> BrowserIdentityOperations:
-        return BrowserIdentityService(
-            sessions,
-            clock,
-            settings.cookie_secure,
-            settings.browser_allowed_origins,
-            settings.token_pepper.get_secret_value(),
-        )
-
-    @provide(scope=Scope.APP)
-    def clock(self) -> Clock:
-        return lambda: datetime.now(UTC)
-
-    @provide(scope=Scope.APP)
-    def hasher(self, settings: Settings) -> TokenHasher:
-        return PepperedTokenHasher(settings.token_pepper.get_secret_value())
-
-    @provide(scope=Scope.APP)
-    def generator(self) -> TokenGenerator:
-        return SecureTokenGenerator()
-
-    project_directory = provide(
-        SQLAlchemyProjectAccessDirectory, provides=ProjectAccessDirectory, scope=Scope.REQUEST
-    )
-
-    repository = provide(
-        SQLAlchemyApiTokenRepository, provides=ApiTokenRepository, scope=Scope.REQUEST
-    )
-    authenticate = provide(AuthenticateApiToken, scope=Scope.REQUEST)
-    revoke = provide(RevokeApiToken, scope=Scope.REQUEST)
-    revoke_command = provide(RevokeApiTokenCommand, scope=Scope.REQUEST)
-    issue_command = provide(IssueApiTokenToFile, scope=Scope.REQUEST)
-
-    @provide(scope=Scope.REQUEST)
-    def issue(
-        self,
-        repository: ApiTokenRepository,
-        hasher: TokenHasher,
-        generator: TokenGenerator,
-        clock: Clock,
-    ) -> IssueApiToken:
-        return IssueApiToken(repository, hasher, generator, clock, ALL_SCOPES, ALL_SCOPES)
-
-    @provide(scope=Scope.REQUEST)
-    def current_identity(
-        self, inner: AuthenticateApiToken, unit: SqlAlchemyUnitOfWork, settings: Settings
-    ) -> ReadCurrentIdentity:
-        return CurrentIdentityQuery(inner, unit, settings)
+from developer_platform.infra.persistence.lifecycle import SQLAlchemyResourceLifecycleRepository
+from developer_platform.infra.persistence.worker_queue import PostgresResourceEffectGuard
+from shared.infra.clock import Clock
+from shared.infra.settings import Settings
 
 
 class PlatformProvider(Provider):
@@ -166,18 +58,20 @@ class PlatformProvider(Provider):
     )
     read = provide(ReadPlatformLedger, scope=Scope.REQUEST)
     register = provide(RegisterProject, scope=Scope.REQUEST)
-    register_command = provide(RegisterProjectCommandHandler, scope=Scope.REQUEST)
+    lifecycle_repository = provide(
+        SQLAlchemyResourceLifecycleRepository,
+        provides=ResourceLifecycleRepository,
+        scope=Scope.REQUEST,
+    )
+    manage_databases = provide(ManageDatabases, scope=Scope.REQUEST)
 
     @provide(scope=Scope.REQUEST)
-    def queries(
-        self,
-        authenticate: AuthenticateApiToken,
-        request: RequestTestDatabase,
-        read: ReadPlatformLedger,
-        unit: SqlAlchemyUnitOfWork,
-        settings: Settings,
-    ) -> PlatformRequestQueries:
-        return PlatformHttpOperations(authenticate, request, read, unit, settings)
+    def credential_cipher(self, settings: Settings) -> ResourceCredentialCipher | None:
+        if settings.resource_key is None:
+            return None
+        return FernetResourceCredentialCipher(
+            settings.resource_key.get_secret_value(), settings.resource_key_id
+        )
 
     @provide(scope=Scope.APP)
     def approved_catalog(self, settings: Settings) -> ApprovedPostgresCatalog:
@@ -222,6 +116,8 @@ class PlatformProvider(Provider):
 
 
 class ApplicationDeliveryProvider(Provider):
+    metrics = provide(DatabaseOperationalMetrics, provides=OperationalMetrics, scope=Scope.APP)
+
     repository = provide(
         SQLAlchemyApplicationDeliveryRepository,
         provides=ApplicationDeliveryRepository,
@@ -288,20 +184,19 @@ class ApplicationDeliveryProvider(Provider):
         templates: FilesystemTemplateCatalog,
         images: StaticApprovedImageCatalog,
         repository_provisioner: GitHubRepositoryAdapter | None,
-        catalog: ApprovedPostgresCatalog,
+        resources: ResourceProvisioner,
         deployer: DockerApplicationAdapter | None,
         settings: Settings,
-    ) -> ApplicationDeliveryService:
-        return ApplicationDeliveryService(
+        authenticate: PlatformRequestAuthenticator,
+    ) -> ApplicationDeliveryHost:
+        return ApplicationDeliveryHost(
             sessions=sessions,
             clock=clock,
-            authenticate=lambda session, identity: authenticate_request(
-                session, identity, settings, clock
-            ),
+            authenticate=lambda session, identity: authenticate(session, identity, settings, clock),
             templates=templates,
             images=images,
             repositories=repository_provisioner,
-            resources=LedgerApplicationResources(sessions, catalog, settings.installation_id),
+            resources=resources,
             deployer=deployer,
             fingerprint=Sha256RequestFingerprint(),
             webhook_verifier=(
@@ -317,6 +212,6 @@ class ApplicationDeliveryProvider(Provider):
 
     @provide(scope=Scope.REQUEST)
     def application_delivery_operations(
-        self, service: ApplicationDeliveryService
+        self, service: ApplicationDeliveryHost
     ) -> ApplicationDeliveryOperations:
         return service

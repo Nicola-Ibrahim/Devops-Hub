@@ -3,9 +3,9 @@
 from alembic import context
 from sqlalchemy import Connection
 
-from entrypoints.schema import registered_metadata
-from entrypoints.settings import DatabaseSettings
+from containers.schema import registered_metadata
 from shared.infra.persistence.database import create_database_engine
+from shared.infra.settings import DatabaseSettings
 
 config = context.config
 target_metadata = registered_metadata()

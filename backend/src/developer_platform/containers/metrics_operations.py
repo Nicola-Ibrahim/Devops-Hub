@@ -3,8 +3,8 @@ import hmac
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from api.errors import APIError
-from containers.metrics import render_metrics
-from entrypoints.settings import Settings
+from developer_platform.containers.metrics import render_metrics
+from shared.infra.settings import Settings
 
 
 class DatabaseOperationalMetrics:

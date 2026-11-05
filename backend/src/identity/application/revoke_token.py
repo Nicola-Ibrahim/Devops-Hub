@@ -2,7 +2,7 @@ from collections.abc import Callable
 from datetime import datetime
 from uuid import UUID
 
-from identity.application.ports import ApiTokenRepository
+from identity.domain.api_tokens import ApiTokenRepository
 from identity.domain.records import ApiTokenAuditEvent
 
 

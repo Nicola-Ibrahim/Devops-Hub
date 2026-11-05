@@ -3,11 +3,14 @@
 import argparse
 import asyncio
 
-from containers.application_operations import ApplicationDeliveryService, run_application_worker
 from containers.factory import create_container
-from entrypoints.settings import SCHEMA_REVISION, Settings
+from developer_platform.containers.application_host import (
+    ApplicationDeliveryHost,
+    run_application_worker,
+)
 from shared.infra.persistence.database import create_async_database_engine
 from shared.infra.readiness import SqlAlchemyReadinessProbe
+from shared.infra.settings import SCHEMA_REVISION, Settings
 
 
 async def run(config: Settings, once: bool = False) -> None:
@@ -19,7 +22,7 @@ async def run(config: Settings, once: bool = False) -> None:
         if await SqlAlchemyReadinessProbe(engine, SCHEMA_REVISION).inspect() != "ready":
             raise ValueError("Application delivery schema is not ready")
         async with container() as scope:
-            service = await scope.get(ApplicationDeliveryService)
+            service = await scope.get(ApplicationDeliveryHost)
             await run_application_worker(service, once=once)
     finally:
         await container.close()

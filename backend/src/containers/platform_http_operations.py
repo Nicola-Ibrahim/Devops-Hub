@@ -4,10 +4,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Literal, TypeVar, cast
-from urllib.parse import quote
 from uuid import UUID
-
-from sqlalchemy import select
 
 from api.credentials import BrowserRequestCredentials, RequestIdentity
 from api.platform.schemas import (
@@ -24,28 +21,19 @@ from api.platform.schemas import (
 )
 from containers.authentication import authenticate_request
 from developer_platform.application.dto import AccessContext
-from developer_platform.application.errors import PlatformRequestError, ledger_unavailable
+from developer_platform.application.errors import ledger_unavailable
 from developer_platform.application.ledger import (
     ProjectRegistrationDetails,
-    RegisterProjectCommand,
     RequestDatabaseCommand,
-    ResourceDetails,
 )
+from developer_platform.application.manage_databases import ManageDatabases, RenewDatabaseLease
 from developer_platform.application.requests import (
     ReadPlatformLedger,
-    RegisterProject,
     RequestTestDatabase,
-    require_project_scope,
-    validate_registration,
 )
-from developer_platform.infra.credentials import FernetResourceCredentialCipher
-from developer_platform.infra.persistence.ledger import SQLAlchemyPlatformLedgerRepository
-from developer_platform.infra.persistence.lifecycle import SQLAlchemyResourceLifecycle
-from developer_platform.infra.persistence.models import ResourceActivityRow
-from entrypoints.settings import Settings
 from identity.application.authenticate import AuthenticateApiToken
-from identity.application.project_directory import ProjectAccessDirectory
 from shared.infra.persistence.unit_of_work import DatabaseUnavailable, SqlAlchemyUnitOfWork
+from shared.infra.settings import Settings
 
 T = TypeVar("T")
 R = TypeVar("R")
@@ -57,6 +45,7 @@ class PlatformHttpOperations:
         authenticate: AuthenticateApiToken,
         request: RequestTestDatabase,
         read: ReadPlatformLedger,
+        databases: ManageDatabases,
         unit: SqlAlchemyUnitOfWork,
         settings: Settings | None = None,
     ) -> None:
@@ -64,6 +53,7 @@ class PlatformHttpOperations:
         self.authenticate = authenticate
         self.request = request
         self.read = read
+        self.databases = databases
         self.unit = unit
 
     async def _run(
@@ -105,8 +95,8 @@ class PlatformHttpOperations:
         if isinstance(token, BrowserRequestCredentials):
 
             async def all_projects() -> list[ProjectRegistrationDetails]:
-                from containers.browser_operations import authenticate_browser_operation
                 from developer_platform.application.permissions import ALL_SCOPES
+                from identity.containers.browser_operations import authenticate_browser_operation
 
                 assert self.settings is not None
                 principal = await authenticate_browser_operation(
@@ -173,102 +163,36 @@ class PlatformHttpOperations:
     async def renew(
         self, token: RequestIdentity, resource_id: UUID, command: RenewRequest
     ) -> ResourceView:
-        async def action(access: AccessContext) -> ResourceDetails:
-            row = await SQLAlchemyResourceLifecycle(self.unit.session).renew(
-                access, resource_id, command.expected_revision, command.expires_at
-            )
-            return SQLAlchemyPlatformLedgerRepository._resource_details(row)
-
-        return await self._run(token, action, lambda row: ResourceView.model_validate(asdict(row)))
+        return await self._run(
+            token,
+            lambda access: self.databases.renew(
+                access,
+                RenewDatabaseLease(resource_id, command.expected_revision, command.expires_at),
+            ),
+            lambda row: ResourceView.model_validate(asdict(row)),
+        )
 
     async def delete(self, token: RequestIdentity, resource_id: UUID) -> AcceptedOperation:
-        async def action(access: AccessContext) -> AcceptedOperation:
-            operation = await SQLAlchemyResourceLifecycle(self.unit.session).delete(
-                access, resource_id
-            )
-            return AcceptedOperation(resource_id=resource_id, operation_id=operation.id)
-
-        return await self._run(token, action, lambda row: row)
+        return await self._run(
+            token,
+            lambda access: self.databases.delete(access, resource_id),
+            lambda operation_id: AcceptedOperation(
+                resource_id=resource_id, operation_id=operation_id
+            ),
+        )
 
     async def connection(self, token: RequestIdentity, resource_id: UUID) -> ConnectionView:
-        async def action(access: AccessContext) -> ConnectionView:
-            if self.settings is None or self.settings.resource_key is None:
-                raise PlatformRequestError(
-                    "credentials_unavailable", "Resource access is unavailable", 503
-                )
-            row, secret = await SQLAlchemyResourceLifecycle(self.unit.session).connection(
-                access, resource_id
-            )
-            credentials = FernetResourceCredentialCipher(
-                self.settings.resource_key.get_secret_value(), self.settings.resource_key_id
-            ).decrypt(row.id, secret.ciphertext, secret.key_id)
-            assert row.endpoint is not None
-            host = str(row.endpoint["host"])
-            port = int(row.endpoint["port"])
-            hostpart = "[" + host + "]" if ":" in host else host
-            dsn = (
-                f"postgresql://{quote(credentials.user, safe='')}:"
-                f"{quote(credentials.password, safe='')}@{hostpart}:{port}/"
-                f"{quote(credentials.database, safe='')}"
-            )
-            return ConnectionView(
-                connection_string=dsn,
-                host=host,
-                port=port,
-                database=credentials.database,
-                user=credentials.user,
-                instructions=(
-                    "Connect from the configured developer host or approved tunnel. "
-                    "This temporary database and its stored data are removed "
-                    "on deletion or lease expiry."
-                ),
-            )
-
-        return await self._run(token, action, lambda row: row)
+        return await self._run(
+            token,
+            lambda access: self.databases.connection(access, resource_id),
+            lambda result: ConnectionView.model_validate(asdict(result)),
+        )
 
     async def activity(self, token: RequestIdentity, project_id: UUID) -> ActivityPage:
-        async def action(access: AccessContext) -> list[ActivityView]:
-            require_project_scope(access, project_id, "resources:read")
-            rows = await self.unit.session.scalars(
-                select(ResourceActivityRow)
-                .where(ResourceActivityRow.project_id == project_id)
-                .order_by(ResourceActivityRow.created_at.desc())
-                .limit(100)
-            )
-            return [
-                ActivityView(
-                    id=row.id,
-                    actor_id=row.actor_id,
-                    resource_id=row.resource_id,
-                    operation_id=row.operation_id,
-                    action=row.action,
-                    created_at=row.created_at,
-                )
-                for row in rows
-            ]
-
-        return await self._run(token, action, lambda rows: ActivityPage(items=rows))
-
-
-class RegisterProjectCommandHandler:
-    def __init__(
-        self,
-        directory: ProjectAccessDirectory,
-        register: RegisterProject,
-        unit: SqlAlchemyUnitOfWork,
-    ) -> None:
-        self.directory = directory
-        self.register = register
-        self.unit = unit
-
-    async def execute(self, command: RegisterProjectCommand) -> ProjectRegistrationDetails:
-        validate_registration(command)
-
-        async def register() -> ProjectRegistrationDetails:
-            refs = await self.directory.register_references(command.name, command.owning_team)
-            return await self.register.execute(command, refs.project_id, refs.team_id)
-
-        try:
-            return await self.unit.run(register, lambda result: result)
-        except DatabaseUnavailable as error:
-            raise ledger_unavailable() from error
+        return await self._run(
+            token,
+            lambda access: self.databases.activity(access, project_id),
+            lambda rows: ActivityPage(
+                items=[ActivityView.model_validate(asdict(row)) for row in rows]
+            ),
+        )

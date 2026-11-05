@@ -10,13 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Session
 from test_foundation_postgres import async_engine_for
 
-from containers.worker_queue import SqlAlchemyProvisioningQueue
 from developer_platform.application.lifecycle import (
     DatabaseCredentials,
     DatabaseEndpoint,
     DeletionObservation,
     ProviderFailure,
 )
+from developer_platform.containers.worker_queue import SqlAlchemyProvisioningQueue
 from developer_platform.domain.leases import LeasePolicy
 from developer_platform.domain.resources import DesiredState, ResourceStatus
 from developer_platform.infra.credentials import FernetResourceCredentialCipher

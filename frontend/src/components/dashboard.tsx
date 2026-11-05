@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import IdentityAdministration from "./identity-administration";
+import GuestDashboard from "./guest-dashboard";
 
 type Environment = { id: string; name: string };
 type Project = { project_id: string; name: string; owning_team_name?: string | null; repository?: string | null; configured: boolean; environments: Environment[] };
@@ -89,6 +90,7 @@ function formatDuration(seconds: number) { return seconds < 3600 ? `${Math.floor
 function makeIdempotencyKey() { return crypto.randomUUID(); }
 
 export default function Dashboard() {
+  const [guest, setGuest] = useState(false);
   const [principal, setPrincipal] = useState<BrowserPrincipal | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [project, setProject] = useState<Project | null>(null);
@@ -439,8 +441,9 @@ export default function Dashboard() {
     }
   }
 
+  if (guest && !principal) return <GuestDashboard onSignIn={() => setGuest(false)} />;
   if (loading) return <main className="center-screen"><div className="loader" aria-label="Loading" /></main>;
-  if (!principal) return <Login username={username} password={password} setUsername={setUsername} setPassword={setPassword} submit={login} error={error} busy={busy} />;
+  if (!principal) return <Login visitAsGuest={() => { setPassword(""); setError(""); setGuest(true); }} username={username} password={password} setUsername={setUsername} setPassword={setPassword} submit={login} error={error} busy={busy} />;
 
   return <main className="shell">
     <aside className="sidebar">
@@ -558,6 +561,6 @@ function ResourceCard({ resource, project, operation, connection, canExtend, onC
   </article>;
 }
 
-function Login({ username, password, setUsername, setPassword, submit, error, busy }: { username: string; password: string; setUsername: (value: string) => void; setPassword: (value: string) => void; submit: (event: FormEvent<HTMLFormElement>) => void; error: string; busy: boolean }) {
-  return <main className="login-screen"><div className="login-decoration decor-one" /><div className="login-decoration decor-two" /><section className="login-card"><div className="brand login-brand"><span className="brand-mark">D</span><span>devops<span className="brand-light">hub</span></span></div><div className="login-overline">INTERNAL DEVELOPER PLATFORM</div><h1>Build with confidence.</h1><p className="login-intro">Sign in to provision and manage your team’s development resources.</p>{error && <div role="alert" className="login-error">{error}</div>}<form onSubmit={submit} className="login-form"><label htmlFor="username">Username<input id="username" autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} required /></label><label htmlFor="password">Password<input id="password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label><button className="primary-button login-button" disabled={busy}>{busy ? "Signing in…" : "Sign in"}<span>→</span></button></form><div className="login-security"><span>◈</span> Company managed access <i /> Secure session</div></section><p className="login-footnote">Need access? Contact your platform administrator.</p></main>;
+function Login({ visitAsGuest, username, password, setUsername, setPassword, submit, error, busy }: { visitAsGuest: () => void; username: string; password: string; setUsername: (value: string) => void; setPassword: (value: string) => void; submit: (event: FormEvent<HTMLFormElement>) => void; error: string; busy: boolean }) {
+  return <main className="login-screen"><div className="login-decoration decor-one" /><div className="login-decoration decor-two" /><section className="login-card"><div className="brand login-brand"><span className="brand-mark">D</span><span>devops<span className="brand-light">hub</span></span></div><div className="login-overline">INTERNAL DEVELOPER PLATFORM</div><h1>Build with confidence.</h1><p className="login-intro">Sign in to provision and manage your team’s development resources.</p>{error && <div role="alert" className="login-error">{error}</div>}<form onSubmit={submit} className="login-form"><label htmlFor="username">Username<input id="username" autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} required /></label><label htmlFor="password">Password<input id="password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label><button className="primary-button login-button" disabled={busy}>{busy ? "Signing in…" : "Sign in"}<span>→</span></button></form><button type="button" className="secondary-button login-button" onClick={visitAsGuest} disabled={busy}>Visit as guest →</button><div className="login-security"><span>◈</span> Company managed access <i /> Secure session</div></section><p className="login-footnote">Need access? Contact your platform administrator.</p></main>;
 }

@@ -11,7 +11,7 @@ def test_worker_registers_all_foreign_key_targets_before_database_work():
             "-c",
             """
 import asyncio
-import entrypoints.worker as worker
+import developer_platform.containers.resource_worker as worker
 from shared.infra.persistence.base import Base
 
 def check_metadata(*args):

@@ -1,23 +1,35 @@
 """Outer transaction and security adapter for internal browser identity."""
 
-import asyncio
 import hashlib
 import hmac
 from collections.abc import Awaitable, Callable
 from dataclasses import replace
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import TypeVar
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from identity.application.browser_accounts import (
+    BootstrapFirstProjectAdmin,
+    ConsumePasswordSetup,
+    CreateInternalUser,
+    IssuePasswordSetup,
+    SetInternalUserActive,
+)
 from identity.application.browser_contracts import (
     BrowserLogin,
     BrowserPrincipal,
     BrowserProjectMember,
     BrowserSession,
 )
-from identity.application.browser_identity import BrowserIdentity
+from identity.application.browser_login import CheckBrowserLogin, VerifyBrowserPasswordChange
+from identity.application.browser_memberships import (
+    ListProjectMembers,
+    ManageProjectMembership,
+    SetProjectMembership,
+)
+from identity.application.browser_sessions import BrowserSessionService, require_browser_origin
 from identity.application.errors import IdentityUnavailable
 from identity.domain.browser_errors import BrowserAuthenticationRejected
 from identity.infra.browser_security import (
@@ -72,8 +84,12 @@ class BrowserIdentityService:
         return secret_digest(secret)
 
     def _check_origin(self, origin: str | None) -> None:
-        if origin is None or origin.rstrip("/") not in self.allowed_origins:
-            raise BrowserAuthenticationRejected()
+        require_browser_origin(origin, tuple(self.allowed_origins))
+
+    def _sessions_for(self, repo: SQLAlchemyBrowserIdentityRepository) -> BrowserSessionService:
+        return BrowserSessionService(
+            repo, self.clock, self._digest, self._tokens.generate, tuple(self.allowed_origins)
+        )
 
     async def _check_csrf(
         self, repo: SQLAlchemyBrowserIdentityRepository, token: str, csrf: str, origin: str | None
@@ -92,18 +108,18 @@ class BrowserIdentityService:
         self, user_name: str, password: str, project_id: UUID | None, origin: str | None
     ) -> BrowserLogin:
         self._check_origin(origin)
-        name = BrowserIdentity.login_name(user_name)
+        login = CheckBrowserLogin(self._passwords, self._dummy_password_hash)
+        name = login.normalize_user_name(user_name)
         account = await self._run(lambda repo: repo.find_login_account(name), lambda result: result)
-        encoded = account.password_hash if account is not None else self._dummy_password_hash
-        matches = await asyncio.to_thread(self._passwords.verify, password, encoded)
-        accepted = account is not None and account.active and matches
+        check = await login.execute(name, password, account)
+        name = check.normalized_user_name
         token, csrf, now = self._tokens.generate(), self._tokens.generate(), self.clock()
         result = await self._run(
             lambda repo: repo.complete_login(
                 user_name=name,
                 username_digest=self._digest(name),
-                expected_version=account.credential_version if account else None,
-                accepted=accepted,
+                expected_version=check.credential_version,
+                accepted=check.accepted,
                 token_digest=self._digest(token),
                 csrf_digest=self._digest(csrf),
                 now=now,
@@ -132,83 +148,52 @@ class BrowserIdentityService:
         self, session_token: str, project_id: UUID | None = None
     ) -> BrowserPrincipal:
         result = await self._run(
-            lambda repo: repo.authenticate_session(
-                token_digest=self._digest(session_token), project_id=project_id, now=self.clock()
-            ),
+            lambda repo: self._sessions_for(repo).authenticate(session_token, project_id),
             lambda value: value,
         )
-        if result is None:
-            raise BrowserAuthenticationRejected()
-        return result[0]
+        return result
 
     async def browser_me(self, session_token: str) -> BrowserPrincipal:
-        csrf = self._tokens.generate()
-
-        async def action(repo: SQLAlchemyBrowserIdentityRepository) -> BrowserPrincipal:
-            result = await repo.authenticate_session(
-                token_digest=self._digest(session_token), project_id=None, now=self.clock()
-            )
-            if result is None or not await repo.rotate_csrf(
-                self._digest(session_token), self._digest(csrf), self.clock()
-            ):
-                raise BrowserAuthenticationRejected()
-            return result[0]
-
-        return replace(await self._run(action, lambda value: value), csrf_token=csrf)
+        return await self._run(
+            lambda repo: self._sessions_for(repo).current(session_token), lambda value: value
+        )
 
     async def select_project(
         self, session_token: str, project_id: UUID, csrf_token: str, origin: str | None
     ) -> BrowserPrincipal:
-        next_csrf_token = self._tokens.generate()
-
-        async def action(repo: SQLAlchemyBrowserIdentityRepository) -> BrowserPrincipal:
-            await self._check_csrf(repo, session_token, csrf_token, origin)
-            principal = await repo.select_project(
-                token_digest=self._digest(session_token), project_id=project_id, now=self.clock()
-            )
-            if principal is None or not await repo.rotate_csrf(
-                self._digest(session_token), self._digest(next_csrf_token), self.clock()
-            ):
-                raise BrowserAuthenticationRejected()
-            return replace(principal, csrf_token=next_csrf_token)
-
-        return await self._run(action, lambda value: value)
+        return await self._run(
+            lambda repo: self._sessions_for(repo).select_project(
+                session_token, project_id, csrf_token, origin
+            ),
+            lambda value: value,
+        )
 
     async def logout(self, session_token: str, csrf_token: str, origin: str | None) -> None:
-        async def action(repo: SQLAlchemyBrowserIdentityRepository) -> None:
-            await self._check_csrf(repo, session_token, csrf_token, origin)
-            await repo.logout(self._digest(session_token), self.clock())
-
-        await self._run(action, lambda _: None)
+        await self._run(
+            lambda repo: self._sessions_for(repo).logout(session_token, csrf_token, origin),
+            lambda _: None,
+        )
 
     async def logout_all(self, session_token: str, csrf_token: str, origin: str | None) -> int:
-        async def action(repo: SQLAlchemyBrowserIdentityRepository) -> int:
-            principal = await self._check_csrf(repo, session_token, csrf_token, origin)
-            return await repo.logout_all(principal.user_id, self.clock())
-
-        return await self._run(action, int)
+        return await self._run(
+            lambda repo: self._sessions_for(repo).logout_all(session_token, csrf_token, origin),
+            int,
+        )
 
     async def list_sessions(self, session_token: str) -> tuple[BrowserSession, ...]:
-        async def action(
-            repo: SQLAlchemyBrowserIdentityRepository,
-        ) -> tuple[BrowserSession, ...]:
-            result = await repo.authenticate_session(
-                token_digest=self._digest(session_token), project_id=None, now=self.clock()
-            )
-            if result is None:
-                raise BrowserAuthenticationRejected()
-            return await repo.list_sessions(result[0].user_id, result[0].session_id, self.clock())
-
-        return await self._run(action, tuple)
+        return await self._run(
+            lambda repo: self._sessions_for(repo).list_sessions(session_token), tuple
+        )
 
     async def revoke_session(
         self, session_token: str, session_id: UUID, csrf_token: str, origin: str | None
     ) -> bool:
-        async def action(repo: SQLAlchemyBrowserIdentityRepository) -> bool:
-            principal = await self._check_csrf(repo, session_token, csrf_token, origin)
-            return await repo.revoke_session(principal.user_id, session_id, self.clock())
-
-        return await self._run(action, bool)
+        return await self._run(
+            lambda repo: self._sessions_for(repo).revoke_session(
+                session_token, session_id, csrf_token, origin
+            ),
+            bool,
+        )
 
     async def change_password(
         self,
@@ -223,19 +208,16 @@ class BrowserIdentityService:
         account = await self._run(
             lambda repo: repo.find_login_account(principal.user_name), lambda result: result
         )
-        if account is None or not await asyncio.to_thread(
-            self._passwords.verify, current_password, account.password_hash
-        ):
-            raise BrowserAuthenticationRejected()
-        BrowserIdentity.password(new_password)
-        encoded = await asyncio.to_thread(self._passwords.hash, new_password)
+        password_change = await VerifyBrowserPasswordChange(self._passwords).execute(
+            account, current_password, new_password
+        )
 
         async def action(repo: SQLAlchemyBrowserIdentityRepository) -> None:
             await self._check_csrf(repo, session_token, csrf_token, origin)
             if not await repo.change_password(
                 user_id=principal.user_id,
-                expected_version=account.credential_version,
-                password_hash=encoded,
+                expected_version=password_change.credential_version,
+                password_hash=password_change.encoded_password,
                 now=self.clock(),
             ):
                 raise BrowserAuthenticationRejected()
@@ -246,19 +228,16 @@ class BrowserIdentityService:
     async def create_user(
         self, user_name: str, password: str, actor_id: UUID | None = None
     ) -> UUID:
-        name = BrowserIdentity.login_name(user_name)
-        BrowserIdentity.password(password)
-        encoded = await asyncio.to_thread(self._passwords.hash, password)
         return await self._run(
-            lambda repo: repo.create_user(name, encoded, actor_id, self.clock()),
+            lambda repo: CreateInternalUser(repo, self._passwords, self.clock).execute(
+                user_name, password, actor_id
+            ),
             lambda value: value,
         )
 
     async def bootstrap_first_project_admin(self, user_id: UUID, project_id: UUID) -> None:
         await self._run(
-            lambda repo: repo.bootstrap_first_project_admin(
-                user_id=user_id, project_id=project_id, now=self.clock()
-            ),
+            lambda repo: BootstrapFirstProjectAdmin(repo, self.clock).execute(user_id, project_id),
             lambda _: None,
         )
 
@@ -266,12 +245,8 @@ class BrowserIdentityService:
         self, actor_id: UUID, user_id: UUID, project_id: UUID, role: str | None
     ) -> None:
         await self._run(
-            lambda repo: repo.set_membership(
-                actor_id=actor_id,
-                user_id=user_id,
-                project_id=project_id,
-                role=role,
-                now=self.clock(),
+            lambda repo: SetProjectMembership(repo, self.clock).execute(
+                actor_id, user_id, project_id, role
             ),
             lambda _: None,
         )
@@ -279,19 +254,12 @@ class BrowserIdentityService:
     async def list_project_members(
         self, session_token: str, project_id: UUID
     ) -> tuple[BrowserProjectMember, ...]:
-        async def action(
-            repo: SQLAlchemyBrowserIdentityRepository,
-        ) -> tuple[BrowserProjectMember, ...]:
-            principal = await repo.authorize_browser_operation(
-                self._digest(session_token), project_id, self.clock()
-            )
-            if principal is None:
-                raise BrowserAuthenticationRejected()
-            return await repo.list_project_members(
-                actor_id=principal.user_id, project_id=project_id
-            )
-
-        return await self._run(action, tuple)
+        return await self._run(
+            lambda repo: ListProjectMembers(repo, self.clock, self._digest).execute(
+                session_token, project_id
+            ),
+            tuple,
+        )
 
     async def manage_project_membership(
         self,
@@ -302,48 +270,32 @@ class BrowserIdentityService:
         csrf_token: str,
         origin: str | None,
     ) -> None:
-        async def action(repo: SQLAlchemyBrowserIdentityRepository) -> None:
-            await repo.lock_project_membership_admin_scope(project_id)
-            principal = await self._check_csrf(repo, session_token, csrf_token, origin)
-            await repo.set_membership(
-                actor_id=principal.user_id,
-                user_id=user_id,
-                project_id=project_id,
-                role=role,
-                now=self.clock(),
-            )
-
-        await self._run(action, lambda _: None)
+        await self._run(
+            lambda repo: ManageProjectMembership(
+                repo, self.clock, self._digest, self._tokens.generate, tuple(self.allowed_origins)
+            ).execute(session_token, project_id, user_id, role, csrf_token, origin),
+            lambda _: None,
+        )
 
     async def set_user_active(self, actor_id: UUID, user_id: UUID, active: bool) -> None:
         await self._run(
-            lambda repo: repo.set_user_active(
-                actor_id=actor_id, user_id=user_id, active=active, now=self.clock()
-            ),
+            lambda repo: SetInternalUserActive(repo, self.clock).execute(actor_id, user_id, active),
             lambda _: None,
         )
 
     async def issue_password_setup(self, user_id: UUID, actor_id: UUID) -> str:
-        secret, now = self._tokens.generate(), self.clock()
-        await self._run(
-            lambda repo: repo.issue_password_setup(
-                user_id=user_id,
-                digest=self._digest(secret),
-                expires_at=now + timedelta(hours=1),
-                actor_id=actor_id,
-                now=now,
-            ),
-            lambda _: None,
+        return await self._run(
+            lambda repo: IssuePasswordSetup(
+                repo, self.clock, self._tokens.generate, self._digest
+            ).execute(user_id, actor_id),
+            lambda secret: secret,
         )
-        return secret
 
     async def consume_password_setup(self, secret: str, new_password: str) -> bool:
-        BrowserIdentity.password(new_password)
-        encoded = await asyncio.to_thread(self._passwords.hash, new_password)
         return await self._run(
-            lambda repo: repo.consume_password_setup(
-                digest=self._digest(secret), password_hash=encoded, now=self.clock()
-            ),
+            lambda repo: ConsumePasswordSetup(
+                repo, self._passwords, self.clock, self._digest
+            ).execute(secret, new_password),
             bool,
         )
 

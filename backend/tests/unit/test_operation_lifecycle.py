@@ -13,17 +13,17 @@ from sqlalchemy.pool import NullPool
 
 from api.dependencies import ReadCurrentIdentity
 from containers.factory import create_container
-from containers.operations import IssueApiTokenToFile
-from entrypoints.http import create_app
-from entrypoints.settings import Settings
+from containers.http import create_app
 from identity.application.dto import IssueTokenCommand, PreparedApiToken
 from identity.application.errors import IdentityUnavailable
 from identity.application.ports import ApiTokenRepository
+from identity.containers.operations import IssueApiTokenToFile
 from identity.domain.credentials import ApiTokenAuthenticationDetails
 from identity.domain.records import ApiTokenStatus, ProjectMembershipStatus
 from identity.infra.credential_file import PrivateCredentialFile
 from identity.infra.persistence.store import SQLAlchemyApiTokenRepository
 from shared.infra.persistence.unit_of_work import DatabaseUnavailable, SqlAlchemyUnitOfWork
+from shared.infra.settings import Settings
 
 NOW = datetime(2026, 1, 1, tzinfo=UTC)
 TOKEN = "synthetic-token-secret-that-is-never-logged"

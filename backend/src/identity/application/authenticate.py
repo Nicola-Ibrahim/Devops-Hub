@@ -1,8 +1,9 @@
 from collections.abc import Callable
 from datetime import datetime
 
-from identity.application.ports import ApiTokenRepository, TokenHasher
+from identity.application.ports import TokenHasher
 from identity.contracts import AuthenticatedPrincipal
+from identity.domain.api_tokens import ApiTokenRepository
 from identity.domain.credentials import authenticate_api_token_credentials
 from identity.domain.errors import AuthenticationRejected
 

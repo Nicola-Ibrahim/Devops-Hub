@@ -7,10 +7,15 @@ import io
 import tarfile
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
-from typing import Any, Protocol, TypeVar
+from typing import Any, TypeVar
 from uuid import UUID
 
+from developer_platform.application.database_binding import (
+    ApplicationDatabaseBinding as ApplicationDatabaseBinding,
+)
+from developer_platform.application.database_binding import (
+    ApplicationDatabaseBindingResolver as ApplicationDatabaseBindingResolver,
+)
 from developer_platform.application.delivery import ApplicationDeliveryFailure
 
 _T = TypeVar("_T")
@@ -21,24 +26,6 @@ _APPLICATION = "devops-hub.application"
 _DEPLOYMENT = "devops-hub.deployment"
 _RESOURCE = "devops-hub.resource"
 _DATABASE_URL_FILE = "/run/devops-hub/database-url"
-
-
-@dataclass(frozen=True)
-class ApplicationDatabaseBinding:
-    """Short-lived private binding returned after the resource SQL transaction ends."""
-
-    installation_id: UUID
-    project_id: UUID
-    application_id: UUID
-    resource_id: UUID
-    container_name: str
-    dsn: str = field(repr=False)
-
-
-class ApplicationDatabaseBindingResolver(Protocol):
-    async def resolve(
-        self, project_id: UUID, application_id: UUID, resource_id: UUID
-    ) -> ApplicationDatabaseBinding: ...
 
 
 def managed_resource_container_name(installation_id: UUID, resource_id: UUID) -> str:

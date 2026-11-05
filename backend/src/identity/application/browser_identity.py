@@ -3,12 +3,12 @@
 from datetime import datetime
 from uuid import UUID
 
-from identity.application.browser_contracts import BrowserMembership, BrowserPrincipal
 from identity.domain.browser_credentials import (
     normalize_user_name,
     session_expiry,
     validate_password,
 )
+from identity.domain.browser_identity import BrowserMembership, BrowserPrincipal
 from identity.domain.errors import AuthenticationRejected
 
 

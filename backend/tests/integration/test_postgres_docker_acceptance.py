@@ -18,8 +18,11 @@ from test_foundation_postgres import (
     issue,
 )
 
-from containers.worker_queue import PostgresResourceEffectGuard, SqlAlchemyProvisioningQueue
 from developer_platform.application.worker import ResourceWorker
+from developer_platform.containers.worker_queue import (
+    PostgresResourceEffectGuard,
+    SqlAlchemyProvisioningQueue,
+)
 from developer_platform.infra.credentials import FernetResourceCredentialCipher
 from developer_platform.infra.docker_provider import DockerPostgresProvider
 from developer_platform.infra.persistence.models import (
@@ -29,7 +32,7 @@ from developer_platform.infra.persistence.models import (
     Resource,
     ResourceSecret,
 )
-from entrypoints.settings import Settings
+from shared.infra.settings import Settings
 
 pytestmark = pytest.mark.postgres
 

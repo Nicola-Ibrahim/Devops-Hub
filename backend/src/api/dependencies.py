@@ -1,6 +1,6 @@
 """HTTP authentication/access mapping; DI supplies ready application capabilities."""
 
-from typing import Annotated, Literal, Protocol
+from typing import Annotated, Protocol
 
 from dishka.integrations.fastapi import FromDishka, inject
 from fastapi import Depends
@@ -8,12 +8,6 @@ from fastapi import Depends
 from api.credentials import RequestIdentity, request_identity
 from api.identity.schemas import PrincipalView
 from developer_platform.application.dto import AccessContext
-
-ReadinessStatus = Literal["ready", "schema_not_ready", "database_unavailable"]
-
-
-class ReadinessProbe(Protocol):
-    async def inspect(self) -> ReadinessStatus: ...
 
 
 class ReadCurrentIdentity(Protocol):

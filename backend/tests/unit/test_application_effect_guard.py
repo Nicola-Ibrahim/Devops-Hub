@@ -5,8 +5,8 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from containers.application_operations import ApplicationDeliveryService
 from developer_platform.application.delivery import DeliveryClaim, DeliveryResult
+from developer_platform.containers.application_host import ApplicationDeliveryHost
 
 
 def test_application_effect_and_completion_keep_exclusive_ownership():
@@ -66,17 +66,17 @@ def test_application_effect_and_completion_keep_exclusive_ownership():
                 return True
 
         class UseCase:
-            async def execute_claim(self, *_args):
+            async def execute(self, *_args):
                 assert locked
                 effects_started.set()
                 await finish.wait()
                 return DeliveryResult()
 
-        class Service(ApplicationDeliveryService):
+        class Service(ApplicationDeliveryHost):
             async def _worker_transaction(self, action, present):
                 return present(await action(Repository()))
 
-            def _use_case(self, _repository):
+            def _effect_executor(self):
                 return UseCase()
 
         service = Service(

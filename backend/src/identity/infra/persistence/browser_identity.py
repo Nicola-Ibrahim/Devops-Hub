@@ -8,7 +8,10 @@ from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from identity.application.browser_contracts import (
+from identity.application.browser_identity import principal_for_project
+from identity.domain.browser_credentials import session_is_valid
+from identity.domain.browser_errors import BrowserAuthenticationRejected
+from identity.domain.browser_identity import (
     BrowserAccount,
     BrowserIdentityRepository,
     BrowserMembership,
@@ -16,9 +19,6 @@ from identity.application.browser_contracts import (
     BrowserProjectMember,
     BrowserSession,
 )
-from identity.application.browser_identity import principal_for_project
-from identity.domain.browser_credentials import session_is_valid
-from identity.domain.browser_errors import BrowserAuthenticationRejected
 from identity.domain.errors import IdentityValidationError
 from identity.infra.persistence.models import (
     BrowserLoginThrottleRow,
@@ -504,11 +504,11 @@ class SQLAlchemyBrowserIdentityRepository(BrowserIdentityRepository):
     ) -> None:
         if role not in {None, "developer", "admin"}:
             raise IdentityValidationError("Unsupported project role")
-        project = await self.lock_project_membership_admin_scope(project_id)
+        project_exists = await self.lock_project_membership_admin_scope(project_id)
         target = await self._session.scalar(
             select(InternalUserRow).where(InternalUserRow.id == user_id).with_for_update(read=True)
         )
-        if project is None or target is None or not target.active:
+        if not project_exists or target is None or not target.active:
             raise IdentityValidationError("Active user and project are required")
         actor_role = await self._session.scalar(
             select(ProjectMembershipRow.role).where(
@@ -547,13 +547,13 @@ class SQLAlchemyBrowserIdentityRepository(BrowserIdentityRepository):
             actor_id, user_id, project_id, "membership_changed", "succeeded", now
         )
 
-    async def lock_project_membership_admin_scope(self, project_id: UUID) -> ProjectRow:
+    async def lock_project_membership_admin_scope(self, project_id: UUID) -> bool:
         project = await self._session.scalar(
             select(ProjectRow).where(ProjectRow.id == project_id).with_for_update()
         )
         if project is None:
-            raise IdentityValidationError("Project does not exist")
-        return project
+            return False
+        return True
 
     async def bootstrap_first_project_admin(
         self, *, user_id: UUID, project_id: UUID, now: datetime

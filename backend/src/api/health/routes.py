@@ -1,8 +1,8 @@
 from dishka.integrations.fastapi import FromDishka, inject
 from fastapi import APIRouter
 
-from api.dependencies import ReadinessProbe
 from api.errors import APIError
+from shared.infra.readiness import ReadinessProbe
 
 router = APIRouter()
 

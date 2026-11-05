@@ -10,14 +10,20 @@ from pathlib import Path
 
 import pytest
 
-from entrypoints.http import create_app
-from entrypoints.settings import Settings
+from containers.http import create_app
+from shared.infra.settings import Settings
 
 BACKEND = Path(__file__).parents[2]
 SRC = BACKEND / "src"
-ROOTS = {"api", "identity", "developer_platform", "shared", "containers", "entrypoints"}
+ROOTS = {"api", "identity", "developer_platform", "shared", "containers"}
 CONTEXTS = {"identity", "developer_platform"}
-RETIRED_ROOTS = {"bootstrap", "provisioning", "platform_runtime", "platform_infrastructure"}
+RETIRED_ROOTS = {
+    "entrypoints",
+    "bootstrap",
+    "provisioning",
+    "platform_runtime",
+    "platform_infrastructure",
+}
 IO_LIBRARIES = {
     "fastapi",
     "starlette",
@@ -59,6 +65,18 @@ def violation(module, target):
     if other in RETIRED_ROOTS:
         return True
     if root in CONTEXTS:
+        layer = module_parts[1:2]
+        if layer == ["containers"]:
+            if other in CONTEXTS - {root}:
+                return True
+            if other == "containers":
+                return not any(
+                    target == allowed or target.startswith(allowed + ".")
+                    for allowed in ("containers.factory", "containers.schema")
+                )
+            if other == "shared":
+                return len(target_parts) < 2 or target_parts[1] != "infra"
+            return False
         if other in CONTEXTS - {root} or other in {"api", "containers", "entrypoints"}:
             return True
         if module_parts[1:2] in (["domain"], ["application"]) or module == "identity.contracts":
@@ -76,6 +94,8 @@ def violation(module, target):
     if root == "shared":
         return other in CONTEXTS | {"api", "containers", "entrypoints"}
     if root == "api":
+        if target.startswith("shared.infra.readiness"):
+            return False
         return (
             other in {"shared", "containers", "entrypoints", "sqlalchemy", "psycopg", "docker"}
             or "infra" in target_parts[1:]
@@ -106,15 +126,10 @@ def test_source_import_contracts():
 
 
 def boundary_failures(sources):
-    graph = {}
-    for module, (source, package) in sources.items():
-        targets = set(imports(source, module, package))
-        # Importing a child also executes its package initializers. Resolve symbol
-        # imports/re-exports to all matching local module/package prefixes.
-        targets.update(parent for parent in sources if module.startswith(parent + "."))
-        for target in tuple(targets):
-            targets.update(parent for parent in sources if target.startswith(parent + "."))
-        graph[module] = targets
+    graph = {
+        module: set(imports(source, module, package))
+        for module, (source, package) in sources.items()
+    }
     failures = []
     for origin in sources:
         visited = set()
@@ -126,7 +141,18 @@ def boundary_failures(sources):
             visited.add(target)
             if violation(origin, target):
                 failures.append(f"{origin} -> {target}")
-            pending.extend(graph.get(target, ()))
+            # Importing a child executes its package initializers. Follow their
+            # reexports, but check ordinary modules as their own origins; treating
+            # every transitive import as an import by the caller incorrectly makes
+            # an HTTP adapter responsible for its dependencies' SQL imports.
+            for package, (_, is_package) in sources.items():
+                if is_package and (target == package or target.startswith(package + ".")):
+                    pending.extend(graph[package])
+            if origin.split(".")[0] in CONTEXTS and origin.split(".")[1:2] in (
+                ["domain"],
+                ["application"],
+            ):
+                pending.extend(graph.get(target, ()))
     return sorted(failures)
 
 
@@ -148,7 +174,7 @@ def test_indirect_package_reexport_cannot_smuggle_infrastructure_into_core():
         ("identity.application.flow", "from ..domain import credentials", False),
         ("developer_platform.application.flow", "from identity import contracts", True),
         ("api.platform.routes", "from developer_platform.infra import persistence", True),
-        ("shared.infra.database", "import entrypoints.settings", True),
+        ("shared.infra.database", "import containers.http", True),
         ("identity.contracts", "from .infra import tokens", True),
         ("identity.infra.tokens", "from shared.infra import database", False),
         ("developer_platform.infra.persistence", "from identity.domain import records", True),

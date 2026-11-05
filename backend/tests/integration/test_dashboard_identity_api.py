@@ -4,7 +4,7 @@ import pytest
 from test_browser_identity_postgres import ORIGIN, PASSWORD, PEPPER, seed_user
 from test_foundation_postgres import client_for
 
-from entrypoints.settings import Settings
+from shared.infra.settings import Settings
 
 pytestmark = pytest.mark.postgres
 

@@ -1,6 +1,7 @@
 """Transactional lifecycle persistence; external effects never run in these transactions."""
 
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
@@ -9,7 +10,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from developer_platform.application.dto import AccessContext
 from developer_platform.application.errors import PlatformRequestError, resource_not_found
 from developer_platform.domain.leases import LeasePolicy
-from developer_platform.domain.resources import DesiredState, ResourceStatus
+from developer_platform.domain.resource_lifecycle_repository import (
+    ResourceActivity,
+    ResourceConnectionSecret,
+    ResourceSnapshot,
+)
+from developer_platform.domain.resources import (
+    DesiredState,
+    ResourceStatus,
+    resource_action_authorized,
+)
 from developer_platform.infra.persistence.models import (
     Operation,
     Resource,
@@ -21,8 +31,14 @@ from developer_platform.infra.persistence.models import (
 def require_owner(access: AccessContext, resource: Resource, scope: str) -> None:
     if resource.project_id != access.project_id:
         raise resource_not_found()
-    if scope not in access.scopes or (
-        access.user_id != resource.owner_id and access.role != "admin"
+    if not resource_action_authorized(
+        project_id=resource.project_id,
+        owner_id=resource.owner_id,
+        actor_project_id=access.project_id,
+        actor_id=access.user_id,
+        actor_role=access.role,
+        scopes=access.scopes,
+        required_scope=scope,
     ):
         raise PlatformRequestError("forbidden", "This action is not permitted", 403)
 
@@ -180,3 +196,105 @@ class SQLAlchemyResourceLifecycle:
                 )
             )
         return resource, secret
+
+
+class SQLAlchemyResourceLifecycleRepository:
+    """Map lifecycle persistence to domain-facing records."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+        self.lifecycle = SQLAlchemyResourceLifecycle(session)
+
+    @staticmethod
+    def _access(
+        project_id: UUID,
+        actor_id: UUID,
+        actor_role: Literal["developer", "admin"],
+        scopes: frozenset[str],
+    ) -> AccessContext:
+        return AccessContext(actor_id, project_id, actor_role, scopes)
+
+    async def renew(
+        self,
+        *,
+        project_id: UUID,
+        actor_id: UUID,
+        actor_role: Literal["developer", "admin"],
+        scopes: frozenset[str],
+        resource_id: UUID,
+        revision: int,
+        expiry: datetime,
+    ) -> ResourceSnapshot:
+        row = await self.lifecycle.renew(
+            self._access(project_id, actor_id, actor_role, scopes), resource_id, revision, expiry
+        )
+        return ResourceSnapshot(
+            id=row.id,
+            project_id=row.project_id,
+            environment_id=row.environment_id,
+            owner_id=row.owner_id,
+            display_name=row.display_name,
+            template_id=row.template_id,
+            target_id=row.target_id,
+            size_id=row.size_id,
+            desired_state=row.desired_state,
+            status=row.status,
+            revision=row.revision,
+            created_at=row.created_at,
+            expires_at=row.expires_at,
+            failure_code=row.failure_code,
+        )
+
+    async def delete(
+        self,
+        *,
+        project_id: UUID,
+        actor_id: UUID,
+        actor_role: Literal["developer", "admin"],
+        scopes: frozenset[str],
+        resource_id: UUID,
+    ) -> UUID:
+        operation = await self.lifecycle.delete(
+            self._access(project_id, actor_id, actor_role, scopes), resource_id
+        )
+        return operation.id
+
+    async def connection(
+        self,
+        *,
+        project_id: UUID,
+        actor_id: UUID,
+        actor_role: Literal["developer", "admin"],
+        scopes: frozenset[str],
+        resource_id: UUID,
+    ) -> ResourceConnectionSecret:
+        row, secret = await self.lifecycle.connection(
+            self._access(project_id, actor_id, actor_role, scopes), resource_id
+        )
+        assert row.endpoint is not None
+        return ResourceConnectionSecret(
+            resource_id=row.id,
+            host=str(row.endpoint["host"]),
+            port=int(row.endpoint["port"]),
+            ciphertext=secret.ciphertext,
+            key_id=secret.key_id,
+        )
+
+    async def activity(self, project_id: UUID, limit: int) -> tuple[ResourceActivity, ...]:
+        rows = await self.session.scalars(
+            select(ResourceActivityRow)
+            .where(ResourceActivityRow.project_id == project_id)
+            .order_by(ResourceActivityRow.created_at.desc())
+            .limit(limit)
+        )
+        return tuple(
+            ResourceActivity(
+                id=row.id,
+                actor_id=row.actor_id,
+                resource_id=row.resource_id,
+                operation_id=row.operation_id,
+                action=row.action,
+                created_at=row.created_at,
+            )
+            for row in rows
+        )

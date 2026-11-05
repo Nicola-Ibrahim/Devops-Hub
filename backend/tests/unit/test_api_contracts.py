@@ -9,15 +9,16 @@ from fastapi import Query
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from api.dependencies import ReadCurrentIdentity, ReadinessProbe
+from api.dependencies import ReadCurrentIdentity
 from api.identity.schemas import PrincipalView
 from api.platform.schemas import RenewRequest, ResourceRequest, ResourceView
+from containers.http import create_app
 from developer_platform.application.catalog import ReadCatalog
-from entrypoints.http import create_app
-from entrypoints.settings import Settings
 from identity.application.authenticate import AuthenticateApiToken
 from identity.domain.credentials import ApiTokenAuthenticationDetails
 from identity.infra.tokens import token_digest
+from shared.infra.readiness import ReadinessProbe
+from shared.infra.settings import Settings
 
 
 def settings():

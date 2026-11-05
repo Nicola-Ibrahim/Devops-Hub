@@ -1,8 +1,27 @@
 """Resource lifecycle vocabulary and allowed status transitions."""
 
 from enum import StrEnum
+from uuid import UUID
 
 from developer_platform.domain.errors import TransitionViolation
+
+
+def resource_action_authorized(
+    *,
+    project_id: UUID,
+    owner_id: UUID,
+    actor_project_id: UUID,
+    actor_id: UUID,
+    actor_role: str,
+    scopes: frozenset[str],
+    required_scope: str,
+) -> bool:
+    """Decide whether a project actor may operate on an owned resource."""
+    return (
+        project_id == actor_project_id
+        and required_scope in scopes
+        and (actor_id == owner_id or actor_role == "admin")
+    )
 
 
 class ResourceStatus(StrEnum):
