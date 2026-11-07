@@ -6,7 +6,10 @@ from uuid import UUID
 
 from cryptography.fernet import Fernet, InvalidToken
 
-from developer_platform.application.lifecycle import DatabaseCredentials, ProviderFailure
+from developer_platform.application.resource_lifecycle.ports import (
+    DatabaseCredentials,
+    ProviderFailure,
+)
 
 
 class FernetResourceCredentialCipher:

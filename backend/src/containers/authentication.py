@@ -7,9 +7,10 @@ from typing import Literal, cast
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.credentials import BrowserRequestCredentials, RequestIdentity
-from developer_platform.application.dto import AccessContext
-from developer_platform.application.errors import PlatformRequestError
-from identity.application.authenticate import AuthenticateApiToken
+from developer_platform.application.shared.dto import AccessContext
+from developer_platform.application.shared.errors import PlatformRequestError
+from identity.application.authenticate_api_token.handler import AuthenticateApiTokenHandler
+from identity.application.authenticate_api_token.query import AuthenticateApiTokenQuery
 from identity.containers.browser_operations import authenticate_browser_operation
 from identity.infra.persistence.store import SQLAlchemyApiTokenRepository
 from identity.infra.tokens import PepperedTokenHasher
@@ -42,11 +43,11 @@ async def authenticate_request(
             cast(Literal["developer", "admin"], principal.role),
             frozenset(principal.scopes),
         )
-    principal_token = await AuthenticateApiToken(
+    principal_token = await AuthenticateApiTokenHandler(
         SQLAlchemyApiTokenRepository(session),
         PepperedTokenHasher(settings.token_pepper.get_secret_value()),
         clock,
-    ).execute(identity)
+    ).execute(AuthenticateApiTokenQuery(identity))
     return AccessContext(
         principal_token.user_id,
         principal_token.project_id,

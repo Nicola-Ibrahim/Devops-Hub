@@ -13,8 +13,9 @@ from api.dependencies import ReadCurrentIdentity
 from api.identity.schemas import PrincipalView
 from api.platform.schemas import RenewRequest, ResourceRequest, ResourceView
 from containers.http import create_app
-from developer_platform.application.catalog import ReadCatalog
-from identity.application.authenticate import AuthenticateApiToken
+from developer_platform.application.resource_catalog.handler import ReadCatalogQueryHandler
+from identity.application.authenticate_api_token.handler import AuthenticateApiTokenHandler
+from identity.application.authenticate_api_token.query import AuthenticateApiTokenQuery
 from identity.domain.credentials import ApiTokenAuthenticationDetails
 from identity.infra.tokens import token_digest
 from shared.infra.readiness import ReadinessProbe
@@ -158,7 +159,9 @@ def test_http_transport_works_with_fake_application_ports():
 
     class FakeIdentityQuery:
         async def execute(self, token):
-            principal = await AuthenticateApiToken(Reader(), Hasher(), lambda: now).execute(token)
+            principal = await AuthenticateApiTokenHandler(Reader(), Hasher(), lambda: now).execute(
+                AuthenticateApiTokenQuery(token)
+            )
             return PrincipalView(
                 user_id=principal.user_id,
                 project_id=principal.project_id,
@@ -172,8 +175,8 @@ def test_http_transport_works_with_fake_application_ports():
             return FakeIdentityQuery()
 
         @provide(scope=Scope.REQUEST)
-        def catalog(self) -> ReadCatalog:
-            return ReadCatalog()
+        def catalog(self) -> ReadCatalogQueryHandler:
+            return ReadCatalogQueryHandler()
 
         @provide(scope=Scope.APP)
         def readiness(self) -> ReadinessProbe:

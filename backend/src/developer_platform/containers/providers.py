@@ -10,23 +10,31 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from api.health.metrics import OperationalMetrics
 from api.platform.applications import ApplicationDeliveryOperations
-from developer_platform.application.catalog import ReadCatalog
-from developer_platform.application.delivery import (
-    ApplicationDeliveryRepository,
-    ResourceProvisioner,
+from developer_platform.application.application_delivery.shared.ports import ResourceProvisioner
+from developer_platform.application.project_registration.handler import RegisterProjectHandler
+from developer_platform.application.project_registration.port import ProjectRegistrationRepository
+from developer_platform.application.resource_catalog.catalog import ApprovedPostgresCatalog
+from developer_platform.application.resource_catalog.handler import ReadCatalogQueryHandler
+from developer_platform.application.resource_lifecycle.ports import ResourceCredentialCipher
+from developer_platform.application.resource_lifecycle.service import ManageDatabaseLifecycleHandler
+from developer_platform.application.resource_requests.read_resources.handler import (
+    ReadPlatformResourcesQueryHandler,
 )
-from developer_platform.application.ledger import PlatformLedgerRepository, RequestDatabaseCommand
-from developer_platform.application.lifecycle import ResourceCredentialCipher
-from developer_platform.application.manage_databases import ManageDatabases
-from developer_platform.application.requests import (
-    ApprovedPostgresCatalog,
-    ReadPlatformLedger,
-    RegisterProject,
-    RequestTestDatabase,
+from developer_platform.application.resource_requests.read_resources.port import (
+    PlatformResourceReadRepository,
+)
+from developer_platform.application.resource_requests.submit_database_request.command import (
+    RequestDatabaseCommand,
+)
+from developer_platform.application.resource_requests.submit_database_request.handler import (
+    RequestTemporaryDatabaseHandler,
 )
 from developer_platform.containers.application_host import ApplicationDeliveryHost
 from developer_platform.containers.metrics_operations import DatabaseOperationalMetrics
 from developer_platform.containers.ports import PlatformRequestAuthenticator
+from developer_platform.domain.interfaces.resource_request_repository import (
+    ResourceRequestRepository,
+)
 from developer_platform.domain.resource_lifecycle_repository import ResourceLifecycleRepository
 from developer_platform.infra.application_runtime import (
     ApplicationDatabaseBindingResolver,
@@ -44,7 +52,6 @@ from developer_platform.infra.delivery_adapters import (
 from developer_platform.infra.persistence.application_bindings import (
     SQLAlchemyApplicationDatabaseBindings,
 )
-from developer_platform.infra.persistence.delivery import SQLAlchemyApplicationDeliveryRepository
 from developer_platform.infra.persistence.ledger import SQLAlchemyPlatformLedgerRepository
 from developer_platform.infra.persistence.lifecycle import SQLAlchemyResourceLifecycleRepository
 from developer_platform.infra.persistence.worker_queue import PostgresResourceEffectGuard
@@ -53,17 +60,34 @@ from shared.infra.settings import Settings
 
 
 class PlatformProvider(Provider):
-    repository = provide(
-        SQLAlchemyPlatformLedgerRepository, provides=PlatformLedgerRepository, scope=Scope.REQUEST
-    )
-    read = provide(ReadPlatformLedger, scope=Scope.REQUEST)
-    register = provide(RegisterProject, scope=Scope.REQUEST)
+    sql_ledger_repository = provide(SQLAlchemyPlatformLedgerRepository, scope=Scope.REQUEST)
+
+    @provide(scope=Scope.REQUEST)
+    def project_registration_repository(
+        self, repository: SQLAlchemyPlatformLedgerRepository
+    ) -> ProjectRegistrationRepository:
+        return repository
+
+    @provide(scope=Scope.REQUEST)
+    def platform_resource_read_repository(
+        self, repository: SQLAlchemyPlatformLedgerRepository
+    ) -> PlatformResourceReadRepository:
+        return repository
+
+    @provide(scope=Scope.REQUEST)
+    def request_repository(
+        self, repository: SQLAlchemyPlatformLedgerRepository
+    ) -> ResourceRequestRepository:
+        return repository
+
+    read = provide(ReadPlatformResourcesQueryHandler, scope=Scope.REQUEST)
+    register = provide(RegisterProjectHandler, scope=Scope.REQUEST)
     lifecycle_repository = provide(
         SQLAlchemyResourceLifecycleRepository,
         provides=ResourceLifecycleRepository,
         scope=Scope.REQUEST,
     )
-    manage_databases = provide(ManageDatabases, scope=Scope.REQUEST)
+    manage_databases = provide(ManageDatabaseLifecycleHandler, scope=Scope.REQUEST)
 
     @provide(scope=Scope.REQUEST)
     def credential_cipher(self, settings: Settings) -> ResourceCredentialCipher | None:
@@ -76,7 +100,7 @@ class PlatformProvider(Provider):
     @provide(scope=Scope.APP)
     def approved_catalog(self, settings: Settings) -> ApprovedPostgresCatalog:
         # Register the planned option without claiming an implemented provider.
-        from developer_platform.application.ledger import PostgresOption
+        from developer_platform.application.resource_catalog.models import PostgresOption
 
         enabled = (
             settings.local_provider_enabled
@@ -93,36 +117,30 @@ class PlatformProvider(Provider):
         )
 
     @provide(scope=Scope.REQUEST)
-    def catalog(self, catalog: ApprovedPostgresCatalog) -> ReadCatalog:
-        return ReadCatalog(catalog)
+    def catalog(self, catalog: ApprovedPostgresCatalog) -> ReadCatalogQueryHandler:
+        return ReadCatalogQueryHandler(catalog)
 
     @provide(scope=Scope.REQUEST)
     def request(
         self,
-        repository: PlatformLedgerRepository,
+        repository: ResourceRequestRepository,
         catalog: ApprovedPostgresCatalog,
         clock: Clock,
         settings: Settings,
-    ) -> RequestTestDatabase:
+    ) -> RequestTemporaryDatabaseHandler:
         def fingerprint(command: RequestDatabaseCommand) -> str:
             payload = json.dumps(
                 asdict(command), sort_keys=True, separators=(",", ":"), default=str
             )
             return hashlib.sha256(payload.encode()).hexdigest()
 
-        return RequestTestDatabase(
+        return RequestTemporaryDatabaseHandler(
             repository, catalog, clock, fingerprint, settings.installation_id
         )
 
 
 class ApplicationDeliveryProvider(Provider):
     metrics = provide(DatabaseOperationalMetrics, provides=OperationalMetrics, scope=Scope.APP)
-
-    repository = provide(
-        SQLAlchemyApplicationDeliveryRepository,
-        provides=ApplicationDeliveryRepository,
-        scope=Scope.REQUEST,
-    )
 
     @provide(scope=Scope.APP)
     def templates(self, settings: Settings) -> FilesystemTemplateCatalog:

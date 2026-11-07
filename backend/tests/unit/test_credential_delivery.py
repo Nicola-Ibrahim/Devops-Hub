@@ -3,7 +3,7 @@ import stat
 
 import pytest
 
-from identity.application.errors import CredentialDeliveryError
+from identity.application.shared.errors import CredentialDeliveryError
 from identity.infra.credential_file import PrivateCredentialFile
 
 

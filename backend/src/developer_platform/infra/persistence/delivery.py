@@ -23,20 +23,25 @@ from sqlalchemy.dialects.postgresql import JSONB, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
-from developer_platform.application.dto import AccessContext
-from developer_platform.application.errors import PlatformRequestError
-from developer_platform.domain.application_delivery import (
+from developer_platform.application.application_delivery.attach_resource.command import (
+    ResourceAttachmentCommand,
+)
+from developer_platform.application.application_delivery.create_application.command import (
     ApplicationCommand,
-    ApplicationDeliveryRepository,
+)
+from developer_platform.application.application_delivery.deploy_application.command import (
+    DeploymentCommand,
+)
+from developer_platform.application.application_delivery.shared.models import (
     ApplicationDetails,
     DeliveryClaim,
     DeliveryResult,
     DeliveryStepDetails,
-    DeploymentCommand,
     DeploymentDetails,
     RegisteredRepository,
-    ResourceAttachmentCommand,
 )
+from developer_platform.application.shared.dto import AccessContext
+from developer_platform.application.shared.errors import PlatformRequestError
 from developer_platform.infra.persistence.models import (
     ProjectEnvironmentRow,
     ProjectRegistrationRow,
@@ -203,7 +208,7 @@ def _deployment(row: ApplicationDeploymentRow) -> DeploymentDetails:
     )
 
 
-class SQLAlchemyApplicationDeliveryRepository(ApplicationDeliveryRepository):
+class SQLAlchemyApplicationDeliveryRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 

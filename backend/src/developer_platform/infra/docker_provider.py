@@ -17,7 +17,7 @@ from docker.models.images import Image  # type: ignore[import-untyped]
 from docker.models.volumes import Volume  # type: ignore[import-untyped]
 from psycopg import sql
 
-from developer_platform.application.lifecycle import (
+from developer_platform.application.resource_lifecycle.ports import (
     DatabaseEndpoint,
     DeletionObservation,
     LocalDatabaseProvider,

@@ -3,10 +3,10 @@
 import unittest
 from uuid import UUID
 
-from developer_platform.application.catalog import ReadCatalog
-from developer_platform.application.dto import AccessContext
-from developer_platform.application.errors import CatalogForbidden
-from developer_platform.application.permissions import ALL_SCOPES
+from developer_platform.application.resource_catalog.handler import ReadCatalogQueryHandler
+from developer_platform.application.shared.dto import AccessContext
+from developer_platform.application.shared.errors import CatalogForbidden
+from developer_platform.application.shared.permissions import ALL_SCOPES
 
 
 class ReadCatalogTests(unittest.TestCase):
@@ -20,7 +20,7 @@ class ReadCatalogTests(unittest.TestCase):
         )
 
     def test_returns_disabled_option_for_authorized_project(self) -> None:
-        result = ReadCatalog().execute(self.access)
+        result = ReadCatalogQueryHandler().execute(self.access)
 
         self.assertEqual(result.project_id, self.project_id)
         self.assertEqual(len(result.templates), 1)
@@ -39,7 +39,7 @@ class ReadCatalogTests(unittest.TestCase):
         )
 
         with self.assertRaises(CatalogForbidden) as caught:
-            ReadCatalog().execute(admin)
+            ReadCatalogQueryHandler().execute(admin)
 
         self.assertEqual(caught.exception.code, "forbidden")
         self.assertEqual(caught.exception.message, "The token does not permit this action")
@@ -59,4 +59,4 @@ class ReadCatalogTests(unittest.TestCase):
             scopes=frozenset({"catalog:read"}),
         )
 
-        self.assertEqual(ReadCatalog().execute(access).project_id, other_project)
+        self.assertEqual(ReadCatalogQueryHandler().execute(access).project_id, other_project)

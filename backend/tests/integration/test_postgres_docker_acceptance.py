@@ -18,7 +18,7 @@ from test_foundation_postgres import (
     issue,
 )
 
-from developer_platform.application.worker import ResourceWorker
+from developer_platform.application.resource_worker.handler import ResourceWorkerHandler
 from developer_platform.containers.worker_queue import (
     PostgresResourceEffectGuard,
     SqlAlchemyProvisioningQueue,
@@ -113,7 +113,7 @@ def test_request_connect_restart_extend_delete(postgres_engine, tmp_path, cleanu
                 cipher,
                 "acceptance",
             )
-            restarted = ResourceWorker(
+            restarted = ResourceWorkerHandler(
                 restarted_queue, provider, PostgresResourceEffectGuard(database)
             )
             assert asyncio.run(restarted.tick())

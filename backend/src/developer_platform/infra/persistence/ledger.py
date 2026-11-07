@@ -7,23 +7,29 @@ from sqlalchemy import func, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from developer_platform.application.dto import AccessContext
-from developer_platform.application.errors import (
+from developer_platform.application.project_registration.command import RegisterProjectCommand
+from developer_platform.application.project_registration.result import (
+    EnvironmentDetails,
+    ProjectRegistrationDetails,
+)
+from developer_platform.application.resource_requests.read_resources.query import (
+    OperationDetails,
+    ResourceDetails,
+)
+from developer_platform.application.shared.dto import AccessContext
+from developer_platform.application.shared.errors import (
     PlatformRequestError,
     ledger_unavailable,
     resource_not_found,
 )
-from developer_platform.application.ledger import (
-    AcceptedDatabaseRequest,
-    EnvironmentDetails,
-    OperationDetails,
-    PlatformLedgerRepository,
-    PostgresOption,
-    ProjectRegistrationDetails,
-    RegisterProjectCommand,
-    RequestDatabaseCommand,
-    ResourceDetails,
+from developer_platform.domain.aggregates.resource_lifecycle import ResourceLifecycle
+from developer_platform.domain.entities.operation import AcceptedResourceRequest
+from developer_platform.domain.errors import DomainError
+from developer_platform.domain.services.resource_admission import (
+    CapacitySnapshot,
+    ResourceAdmissionPolicy,
 )
+from developer_platform.domain.value_objects.idempotency_key import IdempotencyKey
 from developer_platform.infra.persistence.models import (
     IdempotencyRecord,
     Operation,
@@ -36,7 +42,7 @@ from developer_platform.infra.persistence.models import (
 )
 
 
-class SQLAlchemyPlatformLedgerRepository(PlatformLedgerRepository):
+class SQLAlchemyPlatformLedgerRepository:
     """Repository adapter; transaction lifecycle belongs to the request UoW."""
 
     def __init__(self, session: AsyncSession) -> None:
@@ -145,15 +151,15 @@ class SQLAlchemyPlatformLedgerRepository(PlatformLedgerRepository):
             raise ledger_unavailable() from exc
 
     async def replay_request(
-        self, access: AccessContext, key: str, request_hash: str
-    ) -> AcceptedDatabaseRequest | None:
+        self, access: AccessContext, key: IdempotencyKey, request_hash: str
+    ) -> AcceptedResourceRequest | None:
         try:
             prior = await self._session.scalar(
                 select(IdempotencyRecord).where(
                     IdempotencyRecord.user_id == access.user_id,
                     IdempotencyRecord.project_id == access.project_id,
                     IdempotencyRecord.route == "/api/v1/resources",
-                    IdempotencyRecord.key == key,
+                    IdempotencyRecord.key == key.value,
                 )
             )
             if prior is None:
@@ -164,7 +170,7 @@ class SQLAlchemyPlatformLedgerRepository(PlatformLedgerRepository):
                     "Idempotency key was already used for a different request",
                     409,
                 )
-            return AcceptedDatabaseRequest(prior.resource_id, prior.operation_id)
+            return AcceptedResourceRequest(prior.resource_id, prior.operation_id)
         except PlatformRequestError:
             raise
         except SQLAlchemyError as exc:
@@ -173,33 +179,26 @@ class SQLAlchemyPlatformLedgerRepository(PlatformLedgerRepository):
     async def accept_database_request(
         self,
         access: AccessContext,
-        command: RequestDatabaseCommand,
-        option: PostgresOption,
-        key: str,
+        lifecycle: ResourceLifecycle,
+        key: IdempotencyKey,
         request_hash: str,
-        now: datetime,
-        expires_at: datetime,
-        installation_id: UUID,
-    ) -> AcceptedDatabaseRequest:
+    ) -> AcceptedResourceRequest:
         try:
-            if access.project_id != command.project_id:
+            requested_resource = lifecycle.resource
+            if access.project_id != requested_resource.project_id:
                 raise resource_not_found()
-            if not option.requestable:
-                raise PlatformRequestError(
-                    "option_unavailable", "This database option is not currently available", 409
-                )
 
             registration = await self._session.scalar(
                 select(ProjectRegistrationRow)
-                .where(ProjectRegistrationRow.project_id == command.project_id)
+                .where(ProjectRegistrationRow.project_id == requested_resource.project_id)
                 .with_for_update(read=True)
             )
             if registration is None or not registration.configured:
                 raise resource_not_found()
             environment = await self._session.scalar(
                 select(ProjectEnvironmentRow).where(
-                    ProjectEnvironmentRow.id == command.environment_id,
-                    ProjectEnvironmentRow.project_id == command.project_id,
+                    ProjectEnvironmentRow.id == requested_resource.environment_id,
+                    ProjectEnvironmentRow.project_id == requested_resource.project_id,
                 )
             )
             if environment is None:
@@ -207,7 +206,10 @@ class SQLAlchemyPlatformLedgerRepository(PlatformLedgerRepository):
 
             # Lock both configured capacity rows in a globally deterministic order.
             quota_keys = sorted(
-                (("project", str(command.project_id)), ("target", command.target_id))
+                (
+                    ("project", str(requested_resource.project_id)),
+                    ("target", requested_resource.specification.target_id),
+                )
             )
             budgets: dict[tuple[str, str], QuotaBudget] = {}
             for scope, scope_id in quota_keys:
@@ -225,9 +227,9 @@ class SQLAlchemyPlatformLedgerRepository(PlatformLedgerRepository):
             prior = await self._session.scalar(
                 select(IdempotencyRecord).where(
                     IdempotencyRecord.user_id == access.user_id,
-                    IdempotencyRecord.project_id == command.project_id,
+                    IdempotencyRecord.project_id == requested_resource.project_id,
                     IdempotencyRecord.route == "/api/v1/resources",
-                    IdempotencyRecord.key == key,
+                    IdempotencyRecord.key == key.value,
                 )
             )
             if prior is not None:
@@ -237,14 +239,14 @@ class SQLAlchemyPlatformLedgerRepository(PlatformLedgerRepository):
                         "Idempotency key was already used for a different request",
                         409,
                     )
-                return AcceptedDatabaseRequest(prior.resource_id, prior.operation_id)
+                return AcceptedResourceRequest(prior.resource_id, prior.operation_id)
 
             usage: dict[tuple[str, str], tuple[int, int, int, int]] = {}
             for scope, scope_id in quota_keys:
                 filters = (
-                    (Resource.project_id == command.project_id,)
+                    (Resource.project_id == requested_resource.project_id,)
                     if scope == "project"
-                    else (Resource.target_id == command.target_id,)
+                    else (Resource.target_id == requested_resource.specification.target_id,)
                 )
                 totals = (
                     await self._session.execute(
@@ -260,60 +262,63 @@ class SQLAlchemyPlatformLedgerRepository(PlatformLedgerRepository):
                     )
                 ).one()
                 usage[(scope, scope_id)] = (totals[0], totals[1], totals[2], totals[3])
-            requested = (
+            requested = CapacitySnapshot(
                 1,
-                option.size.cpu_millis,
-                option.size.memory_bytes,
-                option.size.storage_bytes,
+                requested_resource.specification.cpu_millis,
+                requested_resource.specification.memory_bytes,
+                requested_resource.specification.storage_bytes,
             )
-            dimensions = (
-                "max_resources",
-                "max_cpu_millis",
-                "max_memory_bytes",
-                "max_storage_bytes",
-            )
-            if any(
-                used + add > getattr(budgets[budget_key], field)
-                for budget_key in quota_keys
-                for field, used, add in zip(dimensions, usage[budget_key], requested, strict=True)
-            ):
+            try:
+                for budget_key in quota_keys:
+                    budget = budgets[budget_key]
+                    ResourceAdmissionPolicy.require_capacity(
+                        CapacitySnapshot(*usage[budget_key]),
+                        CapacitySnapshot(
+                            budget.max_resources,
+                            budget.max_cpu_millis,
+                            budget.max_memory_bytes,
+                            budget.max_storage_bytes,
+                        ),
+                        requested,
+                    )
+            except DomainError as error:
                 raise PlatformRequestError(
                     "quota_exceeded", "Resource request exceeds configured capacity", 409
-                )
+                ) from error
 
             # Capacity locks can wait: lease/deadline start at actual acceptance,
             # not at the earlier request/authentication time. Preserve validated TTL.
-            ttl = expires_at - now
             accepted_at = await self._session.scalar(select(func.clock_timestamp()))
             if not isinstance(accepted_at, datetime) or accepted_at.tzinfo is None:
                 raise ledger_unavailable()
-            now = accepted_at.astimezone(UTC)
-            expires_at = now + ttl
-            resource_id, operation_id = uuid4(), uuid4()
+            accepted = lifecycle.accepted_at(accepted_at.astimezone(UTC))
+            state = accepted.resource
+            now = state.created_at
+            resource_id, operation_id = state.id, uuid4()
             resource = Resource(
                 id=resource_id,
-                environment_id=command.environment_id,
-                owner_id=access.user_id,
-                project_id=command.project_id,
-                display_name=command.display_name,
-                template_id=command.template_id,
-                target_id=command.target_id,
-                size_id=command.size_id,
+                environment_id=state.environment_id,
+                owner_id=state.owner_id,
+                project_id=state.project_id,
+                display_name=state.name.value,
+                template_id=state.specification.template_id,
+                target_id=state.specification.target_id,
+                size_id=state.specification.size_id,
                 configuration={
-                    "version": command.version,
-                    "max_lifetime_seconds": option.max_lifetime_seconds,
-                    "cpu_millis": option.size.cpu_millis,
-                    "memory_bytes": option.size.memory_bytes,
-                    "storage_bytes": option.size.storage_bytes,
-                    "storage_enforcement": option.size.storage_enforcement,
+                    "version": state.specification.version,
+                    "max_lifetime_seconds": state.specification.max_lifetime_seconds,
+                    "cpu_millis": state.specification.cpu_millis,
+                    "memory_bytes": state.specification.memory_bytes,
+                    "storage_bytes": state.specification.storage_bytes,
+                    "storage_enforcement": state.specification.storage_enforcement,
                 },
-                desired_state="running",
-                status="pending",
-                revision=1,
-                generation=1,
-                installation_id=installation_id,
+                desired_state=state.desired_state.value,
+                status=state.status.value,
+                revision=state.revision,
+                generation=state.generation,
+                installation_id=state.installation_id,
                 created_at=now,
-                expires_at=expires_at,
+                expires_at=state.lease.expires_at,
             )
             operation = Operation(
                 id=operation_id,
@@ -337,15 +342,15 @@ class SQLAlchemyPlatformLedgerRepository(PlatformLedgerRepository):
                 [
                     Reservation(
                         resource_id=resource_id,
-                        cpu_millis=option.size.cpu_millis,
-                        memory_bytes=option.size.memory_bytes,
-                        storage_bytes=option.size.storage_bytes,
+                        cpu_millis=state.specification.cpu_millis,
+                        memory_bytes=state.specification.memory_bytes,
+                        storage_bytes=state.specification.storage_bytes,
                     ),
                     IdempotencyRecord(
                         user_id=access.user_id,
-                        project_id=command.project_id,
+                        project_id=state.project_id,
                         route="/api/v1/resources",
-                        key=key,
+                        key=key.value,
                         request_hash=request_hash,
                         resource_id=resource_id,
                         operation_id=operation_id,
@@ -353,7 +358,7 @@ class SQLAlchemyPlatformLedgerRepository(PlatformLedgerRepository):
                     ),
                     ResourceActivityRow(
                         actor_id=access.user_id,
-                        project_id=command.project_id,
+                        project_id=state.project_id,
                         resource_id=resource_id,
                         operation_id=operation_id,
                         action="resource_requested",
@@ -362,7 +367,7 @@ class SQLAlchemyPlatformLedgerRepository(PlatformLedgerRepository):
                 ]
             )
             await self._session.flush()
-            return AcceptedDatabaseRequest(resource_id, operation_id)
+            return AcceptedResourceRequest(resource_id, operation_id)
         except PlatformRequestError:
             raise
         except SQLAlchemyError as exc:

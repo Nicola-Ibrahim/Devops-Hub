@@ -17,9 +17,9 @@ from api.middleware import request_boundary
 from api.platform.applications import router as applications_router
 from api.platform.routes import router as platform_router
 from api.schemas import ErrorResponse
-from developer_platform.application.errors import CatalogForbidden, PlatformRequestError
+from developer_platform.application.shared.errors import CatalogForbidden, PlatformRequestError
 from developer_platform.domain import DomainError
-from identity.application.errors import CredentialDeliveryError, IdentityUnavailable
+from identity.application.shared.errors import CredentialDeliveryError, IdentityUnavailable
 from identity.domain.errors import AuthenticationRejected, IdentityValidationError
 
 

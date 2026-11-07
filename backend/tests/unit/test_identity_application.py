@@ -4,10 +4,13 @@ from uuid import uuid4
 
 import pytest
 
-from identity.application.authenticate import AuthenticateApiToken
-from identity.application.dto import IssueTokenCommand, PreparedApiToken
-from identity.application.issue_token import IssueApiToken
-from identity.application.revoke_token import RevokeApiToken
+from identity.application.authenticate_api_token.handler import AuthenticateApiTokenHandler
+from identity.application.authenticate_api_token.query import AuthenticateApiTokenQuery
+from identity.application.issue_api_token.command import IssueApiTokenCommand
+from identity.application.issue_api_token.handler import IssueApiTokenHandler
+from identity.application.issue_api_token.result import PreparedApiToken
+from identity.application.revoke_api_token.command import RevokeApiTokenCommand
+from identity.application.revoke_api_token.handler import RevokeApiTokenHandler
 from identity.domain.credentials import ApiTokenAuthenticationDetails
 from identity.domain.errors import AuthenticationRejected, IdentityValidationError
 from identity.domain.records import ApiTokenStatus, ProjectMembershipStatus
@@ -62,7 +65,7 @@ class FakeGenerator:
 
 
 def issue_service(repository):
-    return IssueApiToken(
+    return IssueApiTokenHandler(
         repository=repository,
         hasher=PepperedTokenHasher("p" * 32),
         generator=FakeGenerator(),
@@ -85,7 +88,9 @@ def test_authenticate_api_token_reads_repository_and_rejects_malformed_before_qu
     )
     repository = FakeRepository(credential=snapshot)
     result = asyncio.run(
-        AuthenticateApiToken(repository, PepperedTokenHasher("p" * 32), lambda: NOW).execute(TOKEN)
+        AuthenticateApiTokenHandler(repository, PepperedTokenHasher("p" * 32), lambda: NOW).execute(
+            AuthenticateApiTokenQuery(TOKEN)
+        )
     )
     assert result.role == "developer"
     assert result.scopes == frozenset({"catalog:read"})
@@ -94,9 +99,9 @@ def test_authenticate_api_token_reads_repository_and_rejects_malformed_before_qu
     for invalid in (None, "short", "x" * 257):
         with pytest.raises(AuthenticationRejected):
             asyncio.run(
-                AuthenticateApiToken(
+                AuthenticateApiTokenHandler(
                     repository, PepperedTokenHasher("p" * 32), lambda: NOW
-                ).execute(invalid)
+                ).execute(AuthenticateApiTokenQuery(invalid))
             )
     assert len(repository.calls) == 1
 
@@ -124,12 +129,16 @@ def test_authenticate_api_token_rejects_invalid_repository_snapshot(changes):
     values.update(changes)
     repository = FakeRepository(credential=ApiTokenAuthenticationDetails(**values))
     with pytest.raises(AuthenticationRejected):
-        asyncio.run(AuthenticateApiToken(repository, FakeHasher(), lambda: NOW).execute(TOKEN))
+        asyncio.run(
+            AuthenticateApiTokenHandler(repository, FakeHasher(), lambda: NOW).execute(
+                AuthenticateApiTokenQuery(TOKEN)
+            )
+        )
 
 
 def test_issue_api_token_returns_private_completion_result_and_records_writes():
     repository = FakeRepository()
-    prepared = asyncio.run(issue_service(repository).execute(IssueTokenCommand("dev", "demo")))
+    prepared = asyncio.run(issue_service(repository).execute(IssueApiTokenCommand("dev", "demo")))
     assert isinstance(prepared, PreparedApiToken)
     assert prepared.token_id == repository.issue_id
     assert prepared.secret == TOKEN
@@ -151,9 +160,9 @@ def test_issue_api_token_returns_private_completion_result_and_records_writes():
 @pytest.mark.parametrize(
     "command",
     [
-        IssueTokenCommand("bad name", "demo"),
-        IssueTokenCommand("dev", "demo", hours=0),
-        IssueTokenCommand("dev", "demo", scopes=("admin:*",)),
+        IssueApiTokenCommand("bad name", "demo"),
+        IssueApiTokenCommand("dev", "demo", hours=0),
+        IssueApiTokenCommand("dev", "demo", scopes=("admin:*",)),
     ],
 )
 def test_issue_api_token_validates_before_repository_calls(command):
@@ -166,19 +175,29 @@ def test_issue_api_token_validates_before_repository_calls(command):
 def test_issue_api_token_rejects_disabled_user_before_token_or_audit():
     repository = FakeRepository(identity_active=False)
     with pytest.raises(IdentityValidationError):
-        asyncio.run(issue_service(repository).execute(IssueTokenCommand("dev", "demo")))
+        asyncio.run(issue_service(repository).execute(IssueApiTokenCommand("dev", "demo")))
     assert [call[0] for call in repository.calls] == ["ensure_developer_membership"]
 
 
 def test_revoke_api_token_is_idempotent_and_audits_only_first_revoke():
     token_id = uuid4()
     missing = FakeRepository(token=None)
-    assert asyncio.run(RevokeApiToken(missing, lambda: NOW).execute(token_id)) is False
+    assert (
+        asyncio.run(
+            RevokeApiTokenHandler(missing, lambda: NOW).execute(RevokeApiTokenCommand(token_id))
+        )
+        is False
+    )
     assert [call[0] for call in missing.calls] == ["find_api_token"]
 
     existing = ApiTokenStatus(token_id, uuid4(), uuid4(), None)
     repository = FakeRepository(token=existing)
-    assert asyncio.run(RevokeApiToken(repository, lambda: NOW).execute(token_id)) is True
+    assert (
+        asyncio.run(
+            RevokeApiTokenHandler(repository, lambda: NOW).execute(RevokeApiTokenCommand(token_id))
+        )
+        is True
+    )
     assert [call[0] for call in repository.calls] == [
         "find_api_token",
         "revoke_api_token",
@@ -188,7 +207,12 @@ def test_revoke_api_token_is_idempotent_and_audits_only_first_revoke():
 
     repository.calls.clear()
     repository.token = ApiTokenStatus(token_id, existing.user_id, existing.project_id, NOW)
-    assert asyncio.run(RevokeApiToken(repository, lambda: NOW).execute(token_id)) is True
+    assert (
+        asyncio.run(
+            RevokeApiTokenHandler(repository, lambda: NOW).execute(RevokeApiTokenCommand(token_id))
+        )
+        is True
+    )
     assert [call[0] for call in repository.calls] == ["find_api_token"]
 
 

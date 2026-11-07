@@ -1,9 +1,13 @@
 """Host-side transaction joining identity references and platform registration."""
 
-from developer_platform.application.errors import ledger_unavailable
-from developer_platform.application.ledger import ProjectRegistrationDetails, RegisterProjectCommand
-from developer_platform.application.requests import RegisterProject, validate_registration
-from identity.application.project_directory import ProjectAccessDirectory
+from developer_platform.application.project_registration.command import RegisterProjectCommand
+from developer_platform.application.project_registration.handler import (
+    RegisterProjectHandler,
+    validate_registration,
+)
+from developer_platform.application.project_registration.result import ProjectRegistrationDetails
+from developer_platform.application.shared.errors import ledger_unavailable
+from identity.domain.project_access import ProjectAccessDirectory
 from shared.infra.persistence.unit_of_work import DatabaseUnavailable, SqlAlchemyUnitOfWork
 
 
@@ -11,7 +15,7 @@ class RegisterProjectCommandHandler:
     def __init__(
         self,
         directory: ProjectAccessDirectory,
-        register: RegisterProject,
+        register: RegisterProjectHandler,
         unit: SqlAlchemyUnitOfWork,
     ) -> None:
         self.directory = directory

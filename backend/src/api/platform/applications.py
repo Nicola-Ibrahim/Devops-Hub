@@ -10,13 +10,19 @@ from pydantic import Field
 
 from api.credentials import RequestIdentity, request_identity
 from api.schemas import Contract
-from developer_platform.application.delivery import (
+from developer_platform.application.application_delivery.attach_resource.command import (
+    ResourceAttachmentCommand,
+)
+from developer_platform.application.application_delivery.create_application.command import (
     ApplicationCommand,
+)
+from developer_platform.application.application_delivery.deploy_application.command import (
+    DeploymentCommand,
+)
+from developer_platform.application.application_delivery.shared.models import (
     ApplicationDetails,
     DeliveryStepDetails,
-    DeploymentCommand,
     DeploymentDetails,
-    ResourceAttachmentCommand,
     TemplateVersion,
     WebhookResult,
 )

@@ -20,7 +20,7 @@ from api.platform.schemas import (
     ResourceView,
 )
 from containers.http import create_app
-from developer_platform.application.errors import PlatformRequestError
+from developer_platform.application.shared.errors import PlatformRequestError
 from identity.domain.errors import AuthenticationRejected
 
 PROJECT_ID = UUID("11111111-1111-4111-8111-111111111111")

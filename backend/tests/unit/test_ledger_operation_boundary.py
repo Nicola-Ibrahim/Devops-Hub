@@ -11,9 +11,12 @@ from api.platform.capabilities import PlatformRequestQueries
 from containers.factory import create_container
 from containers.http import create_app
 from containers.platform_http_operations import PlatformHttpOperations
-from developer_platform.application.dto import AccessContext
-from developer_platform.application.errors import PlatformRequestError
-from developer_platform.application.ledger import AcceptedDatabaseRequest
+from developer_platform.application.resource_requests.submit_database_request.result import (
+    AcceptedDatabaseRequest,
+)
+from developer_platform.application.shared.dto import AccessContext
+from developer_platform.application.shared.errors import PlatformRequestError
+from identity.application.authenticate_api_token.query import AuthenticateApiTokenQuery
 from identity.contracts import AuthenticatedPrincipal
 from shared.infra.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from shared.infra.settings import Settings
@@ -51,9 +54,9 @@ def test_http_ledger_authentication_and_commit_precede_success(outcome):
     captured = []
 
     class Auth:
-        async def execute(self, token):
+        async def execute(self, query):
             assert session.events == ["begin"]
-            assert token == "synthetic-raw-bearer-token-for-operation"
+            assert query == AuthenticateApiTokenQuery("synthetic-raw-bearer-token-for-operation")
             events.append("authenticate")
             return AuthenticatedPrincipal(
                 user, project, token_id, "developer", frozenset({"resources:write"})

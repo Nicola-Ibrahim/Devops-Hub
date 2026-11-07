@@ -10,31 +10,40 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from api.credentials import RequestIdentity
-from developer_platform.application.delivery import (
+from developer_platform.application.application_delivery.attach_resource.command import (
+    ResourceAttachmentCommand,
+)
+from developer_platform.application.application_delivery.create_application.command import (
     ApplicationCommand,
-    ApplicationDelivery,
-    ApplicationDeliveryFailure,
-    ApplicationDeliveryRepository,
-    ApplicationDeployer,
+)
+from developer_platform.application.application_delivery.deploy_application.command import (
+    DeploymentCommand,
+)
+from developer_platform.application.application_delivery.execute_delivery_step.handler import (
+    ExecuteDeliveryStepHandler,
+)
+from developer_platform.application.application_delivery.shared.models import (
     ApplicationDetails,
-    ApprovedImageCatalog,
     DeliveryClaim,
     DeliveryResult,
     DeliveryStepDetails,
-    DeploymentCommand,
     DeploymentDetails,
-    RepositoryProvisioner,
-    RequestFingerprint,
-    ResourceAttachmentCommand,
-    ResourceProvisioner,
-    TemplateCatalog,
     TemplateVersion,
     WebhookResult,
+)
+from developer_platform.application.application_delivery.shared.ports import (
+    ApplicationDeliveryFailure,
+    ApplicationDeliveryService,
+    ApplicationDeployer,
+    ApprovedImageCatalog,
+    RepositoryProvisioner,
+    RequestFingerprint,
+    ResourceProvisioner,
+    TemplateCatalog,
     WebhookSignatureVerifier,
 )
-from developer_platform.application.delivery_effects import ExecuteDeliveryStep
-from developer_platform.application.dto import AccessContext
-from developer_platform.application.errors import PlatformRequestError
+from developer_platform.application.shared.dto import AccessContext
+from developer_platform.application.shared.errors import PlatformRequestError
 from developer_platform.infra.persistence.delivery import SQLAlchemyApplicationDeliveryRepository
 from shared.infra.persistence.unit_of_work import DatabaseUnavailable, SqlAlchemyUnitOfWork
 
@@ -84,7 +93,7 @@ class ApplicationDeliveryHost:
     async def _run(
         self,
         identity: RequestIdentity,
-        action: Callable[[ApplicationDelivery, AccessContext], Awaitable[T]],
+        action: Callable[[ApplicationDeliveryService, AccessContext], Awaitable[T]],
         present: Callable[[T], R],
     ) -> R:
         try:
@@ -277,8 +286,15 @@ class ApplicationDeliveryHost:
                 "delivery_unavailable", "Application delivery database is unavailable", 503
             ) from error
 
-    def _use_case(self, repository: ApplicationDeliveryRepository) -> ApplicationDelivery:
-        return ApplicationDelivery(
+    def _use_case(
+        self, repository: SQLAlchemyApplicationDeliveryRepository
+    ) -> ApplicationDeliveryService:
+        return ApplicationDeliveryService(
+            repository,
+            repository,
+            repository,
+            repository,
+            repository,
             repository,
             self.template_catalog,
             self.clock,
@@ -290,8 +306,8 @@ class ApplicationDeliveryHost:
             preview_ttl_seconds=self.preview_ttl_seconds,
         )
 
-    def _effect_executor(self) -> ExecuteDeliveryStep:
-        return ExecuteDeliveryStep(
+    def _effect_executor(self) -> ExecuteDeliveryStepHandler:
+        return ExecuteDeliveryStepHandler(
             self.template_catalog,
             self.images,
             self.repositories,

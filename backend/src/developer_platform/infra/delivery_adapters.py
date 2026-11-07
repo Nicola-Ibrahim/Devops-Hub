@@ -9,13 +9,15 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from developer_platform.application.delivery import (
+from developer_platform.application.application_delivery.shared.models import (
+    GeneratedFile,
+    TemplateVersion,
+)
+from developer_platform.application.application_delivery.shared.ports import (
     ApplicationDeliveryFailure,
     ApprovedImageCatalog,
-    GeneratedFile,
     RequestFingerprint,
     TemplateCatalog,
-    TemplateVersion,
     WebhookSignatureVerifier,
 )
 from developer_platform.infra.application_runtime import (

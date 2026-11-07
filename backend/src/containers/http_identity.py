@@ -6,9 +6,10 @@ from api.credentials import BrowserRequestCredentials, RequestIdentity
 from api.dependencies import ReadCurrentIdentity
 from api.identity.schemas import PrincipalView
 from containers.authentication import authenticate_request
-from developer_platform.application.dto import AccessContext
-from identity.application.authenticate import AuthenticateApiToken
-from identity.application.errors import IdentityUnavailable
+from developer_platform.application.shared.dto import AccessContext
+from identity.application.authenticate_api_token.handler import AuthenticateApiTokenHandler
+from identity.application.authenticate_api_token.query import AuthenticateApiTokenQuery
+from identity.application.shared.errors import IdentityUnavailable
 from identity.contracts import AuthenticatedPrincipal
 from shared.infra.persistence.unit_of_work import DatabaseUnavailable, SqlAlchemyUnitOfWork
 from shared.infra.settings import Settings
@@ -19,7 +20,7 @@ class CurrentIdentityQuery(ReadCurrentIdentity):
 
     def __init__(
         self,
-        inner: AuthenticateApiToken,
+        inner: AuthenticateApiTokenHandler,
         unit: SqlAlchemyUnitOfWork,
         settings: Settings | None = None,
     ) -> None:
@@ -42,7 +43,7 @@ class CurrentIdentityQuery(ReadCurrentIdentity):
                 return await authenticate_request(
                     self.unit.session, token, self.settings, lambda: datetime.now(UTC)
                 )
-            return await self.inner.execute(token)
+            return await self.inner.execute(AuthenticateApiTokenQuery(token))
 
         try:
             return await self.unit.run(authenticate, present)

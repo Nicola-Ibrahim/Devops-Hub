@@ -10,7 +10,7 @@ import docker
 import pytest
 
 import developer_platform.infra.docker_provider as docker_provider
-from developer_platform.application.lifecycle import (
+from developer_platform.application.resource_lifecycle.ports import (
     DatabaseCredentials,
     DatabaseEndpoint,
     ProviderFailure,

@@ -203,10 +203,11 @@ class DenyIO(importlib.abc.MetaPathFinder):
             raise AssertionError('Forbidden dependency: '+fullname)
 sys.meta_path.insert(0,DenyIO())
 if sys.argv[2]=='identity':
-    import identity.application.authenticate
-    import identity.application.issue_token,identity.application.revoke_token
+    import identity.application.authenticate_api_token.handler
+    import identity.application.issue_api_token.handler
+    import identity.application.revoke_api_token.handler
 else:
-    import developer_platform.application.catalog,developer_platform.domain
+    import developer_platform.application.resource_catalog.handler,developer_platform.domain
 """
         denied = IO_LIBRARIES | (CONTEXTS - {context})
         subprocess.run(

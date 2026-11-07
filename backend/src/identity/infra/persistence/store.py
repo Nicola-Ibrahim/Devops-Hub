@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from identity.application.errors import IdentityUnavailable
+from identity.application.shared.errors import IdentityUnavailable
 from identity.domain.credentials import ApiTokenAuthenticationDetails
 from identity.domain.errors import IdentityValidationError
 from identity.domain.records import ApiTokenAuditEvent, ApiTokenStatus, ProjectMembershipStatus

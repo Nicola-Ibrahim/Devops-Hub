@@ -20,11 +20,11 @@ from containers.factory import create_container
 from containers.http import create_app
 from containers.project_registration import RegisterProjectCommandHandler
 from containers.schema import registered_metadata
-from developer_platform.application.ledger import RegisterProjectCommand
+from developer_platform.application.project_registration.command import RegisterProjectCommand
 from developer_platform.infra.persistence.models import Resource
-from identity.application.dto import IssueTokenCommand
-from identity.application.errors import CredentialDeliveryError
-from identity.containers.operations import IssueApiTokenToFile, RevokeApiTokenCommand
+from identity.application.issue_api_token.command import IssueApiTokenCommand
+from identity.application.shared.errors import CredentialDeliveryError
+from identity.containers.operations import IssueApiTokenToFile, RevokeApiTokenOperation
 from identity.infra.credential_file import PrivateCredentialFile
 from identity.infra.persistence.models import (
     ApiAccessTokenRow,
@@ -75,7 +75,7 @@ async def issue_with_container(database: AsyncEngine, path, config, user, projec
         async with container() as scope:
             service = await scope.get(IssueApiTokenToFile)
             return await service.execute(
-                IssueTokenCommand(user_name=user, project_name=project, **kwargs),
+                IssueApiTokenCommand(user_name=user, project_name=project, **kwargs),
                 PrivateCredentialFile(path),
             )
     finally:
@@ -123,7 +123,7 @@ async def revoke_with_container(database: AsyncEngine, token_id, config):
     container = create_container(config, engine=database)
     try:
         async with container() as scope:
-            service = await scope.get(RevokeApiTokenCommand)
+            service = await scope.get(RevokeApiTokenOperation)
             return await service.execute(token_id)
     finally:
         await container.close()

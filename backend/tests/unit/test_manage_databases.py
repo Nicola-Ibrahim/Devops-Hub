@@ -5,10 +5,10 @@ from uuid import uuid4
 
 import pytest
 
-from developer_platform.application.dto import AccessContext
-from developer_platform.application.errors import CatalogForbidden, PlatformRequestError
-from developer_platform.application.lifecycle import DatabaseCredentials
-from developer_platform.application.manage_databases import ManageDatabases
+from developer_platform.application.resource_lifecycle.ports import DatabaseCredentials
+from developer_platform.application.resource_lifecycle.service import ManageDatabaseLifecycleHandler
+from developer_platform.application.shared.dto import AccessContext
+from developer_platform.application.shared.errors import CatalogForbidden, PlatformRequestError
 from developer_platform.domain.resource_lifecycle_repository import ResourceConnectionSecret
 
 
@@ -22,9 +22,13 @@ def test_connection_requires_scope_and_cipher_before_sensitive_read():
     allowed = AccessContext(user_id, project_id, "developer", frozenset({"connections:read"}))
 
     with pytest.raises(CatalogForbidden):
-        asyncio.run(ManageDatabases(Repository(), None).connection(forbidden, resource_id))
+        asyncio.run(
+            ManageDatabaseLifecycleHandler(Repository(), None).connection(forbidden, resource_id)
+        )
     with pytest.raises(PlatformRequestError) as error:
-        asyncio.run(ManageDatabases(Repository(), None).connection(allowed, resource_id))
+        asyncio.run(
+            ManageDatabaseLifecycleHandler(Repository(), None).connection(allowed, resource_id)
+        )
     assert error.value.code == "credentials_unavailable"
 
 
@@ -48,6 +52,8 @@ def test_connection_encodes_credential_components_without_exposing_repr():
             )
 
     access = AccessContext(user_id, project_id, "developer", frozenset({"connections:read"}))
-    result = asyncio.run(ManageDatabases(Repository(), Cipher()).connection(access, resource_id))
+    result = asyncio.run(
+        ManageDatabaseLifecycleHandler(Repository(), Cipher()).connection(access, resource_id)
+    )
     assert result.connection_string == ("postgresql://user%40name:pass%3Aword@[::1]:5432/db%2Fname")
     assert "pass:word" not in repr(result)

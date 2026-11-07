@@ -8,18 +8,18 @@ from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from identity.application.browser_identity import principal_for_project
+from identity.application.browser_principal.mapper import principal_for_project
 from identity.domain.browser_credentials import session_is_valid
 from identity.domain.browser_errors import BrowserAuthenticationRejected
 from identity.domain.browser_identity import (
     BrowserAccount,
-    BrowserIdentityRepository,
     BrowserMembership,
     BrowserPrincipal,
     BrowserProjectMember,
     BrowserSession,
 )
 from identity.domain.errors import IdentityValidationError
+from identity.domain.interfaces.browser_identity_repository import BrowserIdentityRepository
 from identity.infra.persistence.models import (
     BrowserLoginThrottleRow,
     BrowserSessionRow,

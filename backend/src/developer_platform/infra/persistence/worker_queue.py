@@ -10,7 +10,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import and_, delete, exists, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from developer_platform.application.lifecycle import (
+from developer_platform.application.resource_lifecycle.ports import (
     DatabaseCredentials,
     DatabaseEndpoint,
     DeletionObservation,

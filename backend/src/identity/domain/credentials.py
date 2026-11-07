@@ -2,9 +2,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from identity.contracts import AuthenticatedPrincipal
-from identity.domain.errors import AuthenticationRejected, IdentityValidationError
+from identity.domain.errors import IdentityValidationError
 from identity.domain.records import ProjectMembershipStatus
+from identity.domain.services.token_authentication import AuthenticatedIdentity, authenticate_token
 
 
 @dataclass(frozen=True)
@@ -21,21 +21,17 @@ class ApiTokenAuthenticationDetails:
 
 def authenticate_api_token_credentials(
     snapshot: ApiTokenAuthenticationDetails | None, now: datetime
-) -> AuthenticatedPrincipal:
-    if (
-        snapshot is None
-        or not snapshot.user_active
-        or snapshot.revoked_at is not None
-        or snapshot.expires_at <= now
-        or snapshot.role not in {"developer", "admin"}
-    ):
-        raise AuthenticationRejected()
-    return AuthenticatedPrincipal(
-        user_id=snapshot.user_id,
-        project_id=snapshot.project_id,
-        token_id=snapshot.token_id,
-        role=snapshot.role,  # type: ignore[arg-type]
-        scopes=frozenset(snapshot.scopes),
+) -> AuthenticatedIdentity:
+    return authenticate_token(
+        token_id=snapshot.token_id if snapshot else None,
+        user_id=snapshot.user_id if snapshot else None,
+        project_id=snapshot.project_id if snapshot else None,
+        role=snapshot.role if snapshot else None,
+        scopes=snapshot.scopes if snapshot else (),
+        user_active=snapshot.user_active if snapshot else False,
+        expires_at=snapshot.expires_at if snapshot else None,
+        revoked_at=snapshot.revoked_at if snapshot else None,
+        now=now,
     )
 
 

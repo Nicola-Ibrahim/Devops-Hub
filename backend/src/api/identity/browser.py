@@ -9,7 +9,7 @@ from fastapi import APIRouter, Header, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from api.errors import APIError
-from identity.application.browser_contracts import (
+from identity.domain.browser_identity import (
     BrowserLogin,
     BrowserPrincipal,
     BrowserProjectMember,

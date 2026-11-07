@@ -21,8 +21,8 @@ from api.platform.schemas import (
     ResourceRequest,
     ResourceView,
 )
-from developer_platform.application.catalog import ReadCatalog
-from developer_platform.application.dto import AccessContext
+from developer_platform.application.resource_catalog.handler import ReadCatalogQueryHandler
+from developer_platform.application.shared.dto import AccessContext
 
 router = APIRouter()
 
@@ -31,7 +31,7 @@ router = APIRouter()
 @inject
 async def catalog(
     access: Annotated[AccessContext, Depends(platform_access)],
-    read_catalog: FromDishka[ReadCatalog],
+    read_catalog: FromDishka[ReadCatalogQueryHandler],
 ) -> CatalogResponse:
     result = read_catalog.execute(access)
     return CatalogResponse(

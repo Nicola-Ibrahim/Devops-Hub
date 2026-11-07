@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import pytest
 
-from developer_platform.application.delivery import (
+from developer_platform.application.application_delivery.shared.ports import (
     ApplicationDeliveryFailure,
     TemplateVersion,
 )
@@ -112,7 +112,7 @@ def test_template_update_pr_preserves_user_changes_and_uses_owned_branch(monkeyp
 
     import httpx
 
-    from developer_platform.application.delivery import GeneratedFile
+    from developer_platform.application.application_delivery.shared.ports import GeneratedFile
     from developer_platform.infra.delivery_adapters import GitHubRepositoryAdapter
 
     def digest(value):

@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from containers.http_providers import HttpCompositionProvider
 from containers.schema import registered_metadata
-from developer_platform.application.permissions import ALL_SCOPES
+from developer_platform.application.shared.permissions import ALL_SCOPES
 from developer_platform.containers.providers import ApplicationDeliveryProvider, PlatformProvider
 from identity.containers.providers import IdentityProvider, IdentityTokenScopePolicy
 from shared.infra.providers import DatabaseProvider, ExternalDatabase, RuntimeClockProvider

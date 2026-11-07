@@ -7,11 +7,13 @@ from sqlalchemy import func, select
 from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from developer_platform.application.database_binding import (
+from developer_platform.application.application_delivery.shared.database_binding import (
     ApplicationDatabaseBinding,
     ApplicationDatabaseBindingResolver,
 )
-from developer_platform.application.delivery import ApplicationDeliveryFailure
+from developer_platform.application.application_delivery.shared.ports import (
+    ApplicationDeliveryFailure,
+)
 from developer_platform.infra.application_runtime import managed_resource_container_name
 from developer_platform.infra.credentials import FernetResourceCredentialCipher
 from developer_platform.infra.persistence.delivery import ApplicationRow

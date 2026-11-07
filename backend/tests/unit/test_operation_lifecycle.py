@@ -14,9 +14,10 @@ from sqlalchemy.pool import NullPool
 from api.dependencies import ReadCurrentIdentity
 from containers.factory import create_container
 from containers.http import create_app
-from identity.application.dto import IssueTokenCommand, PreparedApiToken
-from identity.application.errors import IdentityUnavailable
-from identity.application.ports import ApiTokenRepository
+from identity.application.issue_api_token.command import IssueApiTokenCommand
+from identity.application.issue_api_token.result import PreparedApiToken
+from identity.application.shared.errors import IdentityUnavailable
+from identity.application.shared.ports import ApiTokenRepository
 from identity.containers.operations import IssueApiTokenToFile
 from identity.domain.credentials import ApiTokenAuthenticationDetails
 from identity.domain.records import ApiTokenStatus, ProjectMembershipStatus
@@ -91,7 +92,7 @@ class FakeInnerIssue:
         self.secret = secret
         self.calls = 0
 
-    async def execute(self, command: IssueTokenCommand) -> PreparedApiToken:
+    async def execute(self, command: IssueApiTokenCommand) -> PreparedApiToken:
         self.calls += 1
         return PreparedApiToken(uuid4(), self.secret)
 
@@ -313,7 +314,7 @@ def test_uow_rejects_concurrent_reuse_while_first_operation_is_active():
 
 
 def test_issue_to_file_rolls_back_write_failure_and_sql_commit_failure(tmp_path):
-    command = IssueTokenCommand("developer", "demo")
+    command = IssueApiTokenCommand("developer", "demo")
     session = FakeSession()
     unit = SqlAlchemyUnitOfWork(cast(AsyncSession, session))
     inner = FakeInnerIssue()
@@ -341,7 +342,7 @@ def test_issue_to_file_rolls_back_write_failure_and_sql_commit_failure(tmp_path)
 
 
 def test_issue_to_file_preserves_replacement_and_cleanup_failure_note(tmp_path):
-    command = IssueTokenCommand("developer", "demo")
+    command = IssueApiTokenCommand("developer", "demo")
     output = tmp_path / "replacement"
     delivery = PrivateCredentialFile(output)
     session = FakeSession(fail_commit=RuntimeError("commit failed"))
@@ -386,7 +387,7 @@ def test_issue_to_file_keeps_credential_after_commit_then_close_failure(tmp_path
     with pytest.raises(RuntimeError, match="close failed after commit"):
         asyncio.run(
             IssueApiTokenToFile(FakeInnerIssue(), unit).execute(
-                IssueTokenCommand("developer", "demo"),
+                IssueApiTokenCommand("developer", "demo"),
                 PrivateCredentialFile(output),
             )
         )

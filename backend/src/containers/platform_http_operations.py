@@ -20,18 +20,26 @@ from api.platform.schemas import (
     ResourceView,
 )
 from containers.authentication import authenticate_request
-from developer_platform.application.dto import AccessContext
-from developer_platform.application.errors import ledger_unavailable
-from developer_platform.application.ledger import (
-    ProjectRegistrationDetails,
+from developer_platform.application.project_registration.result import ProjectRegistrationDetails
+from developer_platform.application.resource_lifecycle.renew_lease.command import (
+    RenewDatabaseLease,
+)
+from developer_platform.application.resource_lifecycle.service import (
+    ManageDatabaseLifecycleHandler,
+)
+from developer_platform.application.resource_requests.read_resources.handler import (
+    ReadPlatformResourcesQueryHandler,
+)
+from developer_platform.application.resource_requests.submit_database_request.command import (
     RequestDatabaseCommand,
 )
-from developer_platform.application.manage_databases import ManageDatabases, RenewDatabaseLease
-from developer_platform.application.requests import (
-    ReadPlatformLedger,
-    RequestTestDatabase,
+from developer_platform.application.resource_requests.submit_database_request.handler import (
+    RequestTemporaryDatabaseHandler,
 )
-from identity.application.authenticate import AuthenticateApiToken
+from developer_platform.application.shared.dto import AccessContext
+from developer_platform.application.shared.errors import ledger_unavailable
+from identity.application.authenticate_api_token.handler import AuthenticateApiTokenHandler
+from identity.application.authenticate_api_token.query import AuthenticateApiTokenQuery
 from shared.infra.persistence.unit_of_work import DatabaseUnavailable, SqlAlchemyUnitOfWork
 from shared.infra.settings import Settings
 
@@ -42,10 +50,10 @@ R = TypeVar("R")
 class PlatformHttpOperations:
     def __init__(
         self,
-        authenticate: AuthenticateApiToken,
-        request: RequestTestDatabase,
-        read: ReadPlatformLedger,
-        databases: ManageDatabases,
+        authenticate: AuthenticateApiTokenHandler,
+        request: RequestTemporaryDatabaseHandler,
+        read: ReadPlatformResourcesQueryHandler,
+        databases: ManageDatabaseLifecycleHandler,
         unit: SqlAlchemyUnitOfWork,
         settings: Settings | None = None,
     ) -> None:
@@ -70,7 +78,7 @@ class PlatformHttpOperations:
                     self.unit.session, token, self.settings, lambda: datetime.now(UTC)
                 )
             else:
-                principal = await self.authenticate.execute(token)
+                principal = await self.authenticate.execute(AuthenticateApiTokenQuery(token))
                 access = AccessContext(
                     principal.user_id, principal.project_id, principal.role, principal.scopes
                 )
@@ -95,7 +103,7 @@ class PlatformHttpOperations:
         if isinstance(token, BrowserRequestCredentials):
 
             async def all_projects() -> list[ProjectRegistrationDetails]:
-                from developer_platform.application.permissions import ALL_SCOPES
+                from developer_platform.application.shared.permissions import ALL_SCOPES
                 from identity.containers.browser_operations import authenticate_browser_operation
 
                 assert self.settings is not None

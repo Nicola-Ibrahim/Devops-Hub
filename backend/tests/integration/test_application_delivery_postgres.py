@@ -10,8 +10,10 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import Session
 from test_foundation_postgres import async_engine_for
 
-from developer_platform.application.delivery import ApplicationCommand
-from developer_platform.application.dto import AccessContext
+from developer_platform.application.application_delivery.create_application.command import (
+    ApplicationCommand,
+)
+from developer_platform.application.shared.dto import AccessContext
 from developer_platform.infra.persistence.delivery import (
     ApplicationDeliveryIdempotencyRow,
     ApplicationDeliveryStepRow,
@@ -108,7 +110,7 @@ def test_duplicate_creation_and_expired_worker_claim_recover(postgres_engine) ->
 def test_preview_close_waits_for_claimed_resource_and_carries_late_resource_id(
     postgres_engine,
 ) -> None:
-    from developer_platform.application.delivery import DeliveryResult
+    from developer_platform.application.application_delivery.shared.ports import DeliveryResult
     from developer_platform.infra.persistence.models import Resource
 
     user_id, project_id, team_id, environment_id = uuid4(), uuid4(), uuid4(), uuid4()
@@ -423,7 +425,7 @@ def test_reopened_preview_reuses_cleanup_and_keeps_failed_deployment_removal_int
             assert cleanup.status == "pending"
             assert cleanup.request_payload["remove_deployments"] is True
         async with sessions() as session, session.begin():
-            from developer_platform.application.errors import PlatformRequestError
+            from developer_platform.application.shared.errors import PlatformRequestError
 
             app = await session.get(ApplicationRow, app_id)
             failed = await session.scalar(

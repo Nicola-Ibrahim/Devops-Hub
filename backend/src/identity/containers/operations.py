@@ -2,20 +2,22 @@
 
 from uuid import UUID
 
-from identity.application.dto import IssueTokenCommand, PreparedApiToken
-from identity.application.errors import IdentityUnavailable
-from identity.application.issue_token import IssueApiToken
-from identity.application.ports import CredentialDelivery, CredentialReceipt
-from identity.application.revoke_token import RevokeApiToken
+from identity.application.issue_api_token.command import IssueApiTokenCommand
+from identity.application.issue_api_token.handler import IssueApiTokenHandler
+from identity.application.issue_api_token.result import PreparedApiToken
+from identity.application.revoke_api_token.command import RevokeApiTokenCommand
+from identity.application.revoke_api_token.handler import RevokeApiTokenHandler
+from identity.application.shared.errors import IdentityUnavailable
+from identity.application.shared.ports import CredentialDelivery, CredentialReceipt
 from shared.infra.persistence.unit_of_work import DatabaseUnavailable, SqlAlchemyUnitOfWork
 
 
 class IssueApiTokenToFile:
-    def __init__(self, inner: IssueApiToken, unit: SqlAlchemyUnitOfWork) -> None:
+    def __init__(self, inner: IssueApiTokenHandler, unit: SqlAlchemyUnitOfWork) -> None:
         self.inner = inner
         self.unit = unit
 
-    async def execute(self, command: IssueTokenCommand, delivery: CredentialDelivery) -> UUID:
+    async def execute(self, command: IssueApiTokenCommand, delivery: CredentialDelivery) -> UUID:
         receipt: CredentialReceipt | None = None
 
         def deliver(prepared: PreparedApiToken) -> UUID:
@@ -38,13 +40,15 @@ class IssueApiTokenToFile:
             raise
 
 
-class RevokeApiTokenCommand:
-    def __init__(self, inner: RevokeApiToken, unit: SqlAlchemyUnitOfWork) -> None:
+class RevokeApiTokenOperation:
+    def __init__(self, inner: RevokeApiTokenHandler, unit: SqlAlchemyUnitOfWork) -> None:
         self.inner = inner
         self.unit = unit
 
     async def execute(self, token_id: UUID) -> bool:
         try:
-            return await self.unit.run(lambda: self.inner.execute(token_id), lambda value: value)
+            return await self.unit.run(
+                lambda: self.inner.execute(RevokeApiTokenCommand(token_id)), lambda value: value
+            )
         except DatabaseUnavailable as error:
             raise IdentityUnavailable() from error

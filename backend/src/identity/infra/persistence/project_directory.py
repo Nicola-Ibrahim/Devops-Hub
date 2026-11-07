@@ -5,7 +5,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from identity.application.errors import IdentityUnavailable
+from identity.application.shared.errors import IdentityUnavailable
 from identity.domain.project_access import ProjectAccessReferences
 from identity.infra.persistence.models import ProjectRow, TeamRow
 

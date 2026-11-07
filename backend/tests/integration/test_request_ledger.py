@@ -10,14 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from test_foundation_postgres import async_engine_for
 
-from developer_platform.application.dto import AccessContext
-from developer_platform.application.errors import PlatformRequestError
-from developer_platform.application.ledger import (
-    PostgresOption,
-    RegisterProjectCommand,
+from developer_platform.application.project_registration.command import RegisterProjectCommand
+from developer_platform.application.resource_catalog.models import PostgresOption, ResourceSize
+from developer_platform.application.resource_requests.submit_database_request.command import (
     RequestDatabaseCommand,
-    ResourceSize,
 )
+from developer_platform.application.shared.dto import AccessContext
+from developer_platform.application.shared.errors import PlatformRequestError
 from developer_platform.infra.persistence.ledger import SQLAlchemyPlatformLedgerRepository
 from developer_platform.infra.persistence.models import (
     IdempotencyRecord,

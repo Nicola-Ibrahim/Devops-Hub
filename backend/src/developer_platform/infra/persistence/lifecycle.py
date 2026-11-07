@@ -7,19 +7,22 @@ from uuid import UUID, uuid4
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from developer_platform.application.dto import AccessContext
-from developer_platform.application.errors import PlatformRequestError, resource_not_found
-from developer_platform.domain.leases import LeasePolicy
+from developer_platform.application.shared.dto import AccessContext
+from developer_platform.application.shared.errors import PlatformRequestError, resource_not_found
+from developer_platform.domain.aggregates.resource_lifecycle import ResourceLifecycle
+from developer_platform.domain.entities.resource import TemporaryResource
+from developer_platform.domain.errors import DomainError
 from developer_platform.domain.resource_lifecycle_repository import (
     ResourceActivity,
     ResourceConnectionSecret,
     ResourceSnapshot,
 )
-from developer_platform.domain.resources import (
-    DesiredState,
-    ResourceStatus,
-    resource_action_authorized,
-)
+from developer_platform.domain.services.resource_access import ResourceAccessPolicy, ResourceActor
+from developer_platform.domain.value_objects.lease import ResourceLease
+from developer_platform.domain.value_objects.resource_name import ResourceName
+from developer_platform.domain.value_objects.resource_spec import ResourceSpec
+from developer_platform.domain.value_objects.revision import ResourceRevision
+from developer_platform.domain.value_objects.statuses import DesiredState, ResourceStatus
 from developer_platform.infra.persistence.models import (
     Operation,
     Resource,
@@ -31,16 +34,59 @@ from developer_platform.infra.persistence.models import (
 def require_owner(access: AccessContext, resource: Resource, scope: str) -> None:
     if resource.project_id != access.project_id:
         raise resource_not_found()
-    if not resource_action_authorized(
-        project_id=resource.project_id,
-        owner_id=resource.owner_id,
-        actor_project_id=access.project_id,
-        actor_id=access.user_id,
-        actor_role=access.role,
-        scopes=access.scopes,
-        required_scope=scope,
-    ):
-        raise PlatformRequestError("forbidden", "This action is not permitted", 403)
+    try:
+        ResourceAccessPolicy.require(
+            _to_lifecycle(resource).resource,
+            ResourceActor(access.user_id, access.project_id, access.role, access.scopes),
+            scope,
+        )
+    except DomainError as error:
+        raise PlatformRequestError("forbidden", "This action is not permitted", 403) from error
+
+
+def _to_lifecycle(resource: Resource) -> ResourceLifecycle:
+    maximum = int(resource.configuration.get("max_lifetime_seconds", 86400))
+    return ResourceLifecycle(
+        TemporaryResource(
+            id=resource.id,
+            project_id=resource.project_id,
+            environment_id=resource.environment_id,
+            owner_id=resource.owner_id,
+            installation_id=resource.installation_id,
+            name=ResourceName(resource.display_name),
+            specification=ResourceSpec(
+                resource.template_id,
+                str(resource.configuration.get("version", "unknown")),
+                resource.target_id,
+                resource.size_id,
+                int(resource.configuration.get("cpu_millis", 0)),
+                int(resource.configuration.get("memory_bytes", 0)),
+                int(resource.configuration.get("storage_bytes", 0)),
+                maximum,
+                str(resource.configuration.get("storage_enforcement", "reservation_only")),
+            ),
+            lease=ResourceLease(
+                resource.created_at.astimezone(UTC),
+                resource.expires_at.astimezone(UTC),
+                maximum,
+            ),
+            desired_state=DesiredState(resource.desired_state),
+            status=ResourceStatus(resource.status),
+            revision=resource.revision,
+            generation=resource.generation,
+            created_at=resource.created_at.astimezone(UTC),
+            failure_code=resource.failure_code,
+        )
+    )
+
+
+def _apply_lifecycle(resource: Resource, lifecycle: ResourceLifecycle) -> None:
+    state = lifecycle.resource
+    resource.desired_state = state.desired_state.value
+    resource.status = state.status.value
+    resource.revision = state.revision
+    resource.generation = state.generation
+    resource.expires_at = state.lease.expires_at
 
 
 async def mark_for_deletion(
@@ -109,17 +155,12 @@ class SQLAlchemyResourceLifecycle:
             )
         now = await self.session.scalar(select(func.clock_timestamp()))
         assert isinstance(now, datetime)
-        resource.expires_at = LeasePolicy(
-            max_lifetime_seconds=int(resource.configuration.get("max_lifetime_seconds", 86400))
-        ).renewal_expiry(
-            created_at=resource.created_at.astimezone(UTC),
-            current_expiry=resource.expires_at.astimezone(UTC),
+        lifecycle = _to_lifecycle(resource).renew(
+            expected_revision=ResourceRevision(revision),
             requested_expiry=expiry,
             now=now.astimezone(UTC),
-            desired_state=DesiredState(resource.desired_state),
-            status=ResourceStatus(resource.status),
         )
-        resource.revision += 1
+        _apply_lifecycle(resource, lifecycle)
         operation = await self.session.scalar(
             select(Operation)
             .where(Operation.resource_id == resource.id)
@@ -150,6 +191,9 @@ class SQLAlchemyResourceLifecycle:
         require_owner(access, resource, "resources:write")
         now = await self.session.scalar(select(func.clock_timestamp()))
         assert isinstance(now, datetime)
+        lifecycle = _to_lifecycle(resource).request_deletion()
+        _apply_lifecycle(resource, lifecycle)
+        resource.deletion_reason = "requested"
         return await mark_for_deletion(self.session, resource, "requested", access.user_id, now)
 
     async def connection(
@@ -165,14 +209,12 @@ class SQLAlchemyResourceLifecycle:
         require_owner(access, resource, "connections:read")
         now = await self.session.scalar(select(func.clock_timestamp()))
         assert isinstance(now, datetime)
-        if (
-            resource.status != "ready"
-            or resource.desired_state != "running"
-            or resource.expires_at <= now
-        ):
+        try:
+            _to_lifecycle(resource).require_connection(now.astimezone(UTC))
+        except DomainError as error:
             raise PlatformRequestError(
                 "resource_not_ready", "Resource access is not available", 409
-            )
+            ) from error
         secret = await self.session.get(ResourceSecret, resource.id)
         if secret is None or resource.endpoint is None:
             raise PlatformRequestError(

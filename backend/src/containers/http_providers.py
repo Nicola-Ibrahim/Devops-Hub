@@ -10,17 +10,19 @@ from containers.authentication import authenticate_request
 from containers.http_identity import CurrentIdentityQuery
 from containers.platform_http_operations import PlatformHttpOperations
 from containers.project_registration import RegisterProjectCommandHandler
-from developer_platform.application.delivery import ResourceProvisioner
-from developer_platform.application.manage_databases import ManageDatabases
-from developer_platform.application.requests import (
-    ApprovedPostgresCatalog,
-    ReadPlatformLedger,
-    RegisterProject,
-    RequestTestDatabase,
+from developer_platform.application.application_delivery.shared.ports import ResourceProvisioner
+from developer_platform.application.project_registration.handler import RegisterProjectHandler
+from developer_platform.application.resource_catalog.catalog import ApprovedPostgresCatalog
+from developer_platform.application.resource_lifecycle.service import ManageDatabaseLifecycleHandler
+from developer_platform.application.resource_requests.read_resources.handler import (
+    ReadPlatformResourcesQueryHandler,
+)
+from developer_platform.application.resource_requests.submit_database_request.handler import (
+    RequestTemporaryDatabaseHandler,
 )
 from developer_platform.containers.ports import PlatformRequestAuthenticator
-from identity.application.authenticate import AuthenticateApiToken
-from identity.application.project_directory import ProjectAccessDirectory
+from identity.application.authenticate_api_token.handler import AuthenticateApiTokenHandler
+from identity.domain.project_access import ProjectAccessDirectory
 from shared.infra.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from shared.infra.settings import Settings
 
@@ -43,17 +45,17 @@ class HttpCompositionProvider(Provider):
 
     @provide(scope=Scope.REQUEST)
     def current_identity(
-        self, inner: AuthenticateApiToken, unit: SqlAlchemyUnitOfWork, settings: Settings
+        self, inner: AuthenticateApiTokenHandler, unit: SqlAlchemyUnitOfWork, settings: Settings
     ) -> ReadCurrentIdentity:
         return CurrentIdentityQuery(inner, unit, settings)
 
     @provide(scope=Scope.REQUEST)
     def platform_queries(
         self,
-        authenticate: AuthenticateApiToken,
-        request: RequestTestDatabase,
-        read: ReadPlatformLedger,
-        databases: ManageDatabases,
+        authenticate: AuthenticateApiTokenHandler,
+        request: RequestTemporaryDatabaseHandler,
+        read: ReadPlatformResourcesQueryHandler,
+        databases: ManageDatabaseLifecycleHandler,
         unit: SqlAlchemyUnitOfWork,
         settings: Settings,
     ) -> PlatformRequestQueries:
@@ -63,7 +65,7 @@ class HttpCompositionProvider(Provider):
     def register_project(
         self,
         directory: ProjectAccessDirectory,
-        register: RegisterProject,
+        register: RegisterProjectHandler,
         unit: SqlAlchemyUnitOfWork,
     ) -> RegisterProjectCommandHandler:
         return RegisterProjectCommandHandler(directory, register, unit)

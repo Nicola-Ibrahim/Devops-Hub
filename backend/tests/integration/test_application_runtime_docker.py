@@ -16,8 +16,13 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import Session
 from test_foundation_postgres import async_engine_for
 
-from developer_platform.application.delivery import ApplicationDeliveryFailure
-from developer_platform.application.lifecycle import DatabaseCredentials, ProvisioningJob
+from developer_platform.application.application_delivery.shared.ports import (
+    ApplicationDeliveryFailure,
+)
+from developer_platform.application.resource_lifecycle.ports import (
+    DatabaseCredentials,
+    ProvisioningJob,
+)
 from developer_platform.containers.application_bindings import SQLAlchemyApplicationDatabaseBindings
 from developer_platform.infra.application_runtime import (
     DockerApplicationRuntime,

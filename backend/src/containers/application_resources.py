@@ -9,14 +9,21 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from developer_platform.application.delivery import (
-    ApplicationDeliveryFailure,
+from developer_platform.application.application_delivery.attach_resource.command import (
     ResourceAttachmentCommand,
 )
-from developer_platform.application.dto import AccessContext
-from developer_platform.application.ledger import RequestDatabaseCommand
-from developer_platform.application.permissions import ALL_SCOPES
-from developer_platform.application.requests import ApprovedPostgresCatalog, RequestTestDatabase
+from developer_platform.application.application_delivery.shared.ports import (
+    ApplicationDeliveryFailure,
+)
+from developer_platform.application.resource_catalog.catalog import ApprovedPostgresCatalog
+from developer_platform.application.resource_requests.submit_database_request.command import (
+    RequestDatabaseCommand,
+)
+from developer_platform.application.resource_requests.submit_database_request.handler import (
+    RequestTemporaryDatabaseHandler,
+)
+from developer_platform.application.shared.dto import AccessContext
+from developer_platform.application.shared.permissions import ALL_SCOPES
 from developer_platform.infra.persistence.ledger import SQLAlchemyPlatformLedgerRepository
 from developer_platform.infra.persistence.lifecycle import mark_for_deletion
 from developer_platform.infra.persistence.models import Resource
@@ -56,7 +63,7 @@ class LedgerApplicationResources:
                 command.size_id,
                 command.ttl_seconds,
             )
-            usecase = RequestTestDatabase(
+            usecase = RequestTemporaryDatabaseHandler(
                 SQLAlchemyPlatformLedgerRepository(session),
                 self.catalog,
                 lambda: datetime.now(UTC),

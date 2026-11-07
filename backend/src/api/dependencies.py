@@ -7,7 +7,7 @@ from fastapi import Depends
 
 from api.credentials import RequestIdentity, request_identity
 from api.identity.schemas import PrincipalView
-from developer_platform.application.dto import AccessContext
+from developer_platform.application.shared.dto import AccessContext
 
 
 class ReadCurrentIdentity(Protocol):

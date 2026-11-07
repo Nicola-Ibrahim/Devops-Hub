@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 
-from identity.application.errors import CredentialDeliveryError
+from identity.application.shared.errors import CredentialDeliveryError
 
 
 class _FileOwnershipReceipt:

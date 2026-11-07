@@ -4,14 +4,14 @@ import asyncio
 from contextlib import asynccontextmanager
 from uuid import uuid4
 
-from developer_platform.application.lifecycle import (
+from developer_platform.application.resource_lifecycle.ports import (
     DatabaseCredentials,
     DatabaseEndpoint,
     DeletionObservation,
     ProviderFailure,
     ProvisioningJob,
 )
-from developer_platform.application.worker import ResourceWorker
+from developer_platform.application.resource_worker.handler import ResourceWorkerHandler
 
 
 def job(action: str = "provision") -> ProvisioningJob:
@@ -97,7 +97,7 @@ def test_tick_sweeps_and_provisions_only_after_claim_and_fence():
     queue = Queue(claimed)
     provider = Provider()
 
-    assert asyncio.run(ResourceWorker(queue, provider, allow_guard()).tick())
+    assert asyncio.run(ResourceWorkerHandler(queue, provider, allow_guard()).tick())
     assert [call[0] for call in queue.calls] == [
         "sweep",
         "claim",
@@ -112,7 +112,7 @@ def test_reconcile_is_observational_and_delete_records_provider_observation():
     reconcile = job("reconcile")
     queue = Queue(reconcile)
     provider = Provider()
-    worker = ResourceWorker(queue, provider, allow_guard())
+    worker = ResourceWorkerHandler(queue, provider, allow_guard())
 
     assert asyncio.run(worker.tick())
     assert [call[0] for call in provider.calls] == ["inspect"]
@@ -121,7 +121,7 @@ def test_reconcile_is_observational_and_delete_records_provider_observation():
     deletion = job("delete")
     queue = Queue(deletion)
     provider = Provider()
-    assert asyncio.run(ResourceWorker(queue, provider, allow_guard()).tick())
+    assert asyncio.run(ResourceWorkerHandler(queue, provider, allow_guard()).tick())
     assert [call[0] for call in provider.calls] == ["delete"]
     assert queue.calls[-1] == ("deleted", deletion, provider.observation)
 
@@ -135,7 +135,7 @@ def test_busy_guard_and_provider_errors_are_persisted_without_leaking_details():
     async def busy_guard(_resource_id):
         yield False
 
-    assert asyncio.run(ResourceWorker(queue, provider, busy_guard).tick())
+    assert asyncio.run(ResourceWorkerHandler(queue, provider, busy_guard).tick())
     assert provider.calls == []
     failed = queue.calls[-1]
     assert failed[0] == "failed"
@@ -145,7 +145,7 @@ def test_busy_guard_and_provider_errors_are_persisted_without_leaking_details():
     queue = Queue(claimed)
     provider = Provider()
     provider.error = ProviderFailure("sanitized", uncertain=True)
-    assert asyncio.run(ResourceWorker(queue, provider, allow_guard()).tick())
+    assert asyncio.run(ResourceWorkerHandler(queue, provider, allow_guard()).tick())
     assert queue.calls[-1][0] == "failed"
     assert queue.calls[-1][2].code == "sanitized"
 
@@ -153,6 +153,6 @@ def test_busy_guard_and_provider_errors_are_persisted_without_leaking_details():
 def test_empty_queue_still_sweeps_and_does_not_start_provider():
     queue = Queue(None)
     provider = Provider()
-    assert not asyncio.run(ResourceWorker(queue, provider, allow_guard()).tick())
+    assert not asyncio.run(ResourceWorkerHandler(queue, provider, allow_guard()).tick())
     assert [call[0] for call in queue.calls] == ["sweep", "claim"]
     assert provider.calls == []

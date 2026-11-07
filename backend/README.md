@@ -15,13 +15,13 @@ See [operations](../docs/operations.md) for packaging, release and recovery asse
 src/
   api/                       HTTP routes, schemas, injected query ports and errors
   identity/
-    domain/                  Identity records, repository contracts and policies
-    application/             Login, session, account, membership and token actions
+    domain/                  Identity entities, value objects, aggregates, repository interfaces and policies
+    application/             Identity use-case packages with command/query handlers
     infra/persistence/       Identity-owned ORM rows and async token repository
     infra/                   SQL transaction adapter, hashing and private file delivery
   developer_platform/
-    domain/                  Project/resource/application records and repository contracts
-    application/             Resource lifecycle, catalog and delivery use cases
+    domain/                  Platform entities, value objects, aggregates, repository interfaces and policies
+    application/             Capability-owned command/query handlers for catalog, requests, lifecycle and delivery
     infra/persistence/       Platform-owned ORM rows and SQL adapters
     infra/                   Docker, GitHub and credential adapters
   shared/infra/              Technical engine/session/UoW, metadata and readiness
@@ -33,6 +33,17 @@ src/
 
 Application services receive repositories, clocks and domain-facing interfaces.
 They never receive a unit of work, SQLAlchemy session, DI container or HTTP request.
+Each identity capability owns its `command.py` or `query.py` and `handler.py`;
+handlers translate inputs into domain value objects/policies and return application
+results. Read handlers use repository projections without inventing write-domain
+behavior. Transaction completion remains in the identity host/composition layer.
+
+The developer-platform application follows the same convention: `resource_requests/`,
+`resource_lifecycle/`, `project_registration/`, and `application_delivery/` are
+capability boundaries. Each write action keeps its command beside its handler, each
+read action keeps its query beside its handler, and `shared/` contains only technical
+ports, projections, policies, and transport-independent values—not a general command
+catalog.
 `ApiTokenRepository` supplies both token queries and writes through the same
 operation-scoped adapter. `SqlAlchemyUnitOfWork` owns begin/commit/rollback/close
 outside application code. The API receives ready query capabilities from Dishka;

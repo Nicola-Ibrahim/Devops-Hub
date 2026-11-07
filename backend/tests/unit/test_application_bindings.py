@@ -9,8 +9,10 @@ import pytest
 from psycopg.conninfo import conninfo_to_dict
 from sqlalchemy import Select
 
-from developer_platform.application.delivery import ApplicationDeliveryFailure
-from developer_platform.application.lifecycle import DatabaseCredentials
+from developer_platform.application.application_delivery.shared.ports import (
+    ApplicationDeliveryFailure,
+)
+from developer_platform.application.resource_lifecycle.ports import DatabaseCredentials
 from developer_platform.containers.application_bindings import SQLAlchemyApplicationDatabaseBindings
 from developer_platform.infra.application_runtime import managed_resource_container_name
 from developer_platform.infra.persistence.delivery import ApplicationRow
