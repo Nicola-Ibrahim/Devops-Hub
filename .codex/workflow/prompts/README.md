@@ -1,6 +1,17 @@
 # Codex prompts
 
-These are copy-and-edit entry points. Substantial cross-component prompts use `$system-design`; also use the relevant backend, API or frontend skill for implementation. Name a task record when you want one created or continued; otherwise keep progress in the conversation.
+These are copy-and-edit entry points. Each prompt tells Codex to select the
+smallest matching skill set from the table below; you provide the outcome,
+component and optional task name. Cross-component work also uses `$system-design`.
+Name a task record when you want one created or continued; otherwise keep progress
+in the conversation.
+
+| Component | Relevant skill |
+| --- | --- |
+| Domain, application, persistence, workers and resource providers | `$backend-development` |
+| FastAPI routes and HTTP contracts | `$api-development` |
+| Next.js dashboard | `$frontend-development` |
+| Docker, CI/CD, Ansible, Terraform and release operations | `$delivery-engineering` |
 
 | Need | Prompt |
 | --- | --- |

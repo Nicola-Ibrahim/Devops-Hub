@@ -1,8 +1,10 @@
 # Resume a task
 
 ```text
-Use $system-design to continue .codex/workflow/tasks/<task-name>.md within its recorded authorized
-phase and the user's latest instructions. Follow AGENTS.md. Check the current
+Select and use the skills mapped to the affected components in AGENTS.md. Also
+use $system-design when the task crosses component or bounded-context boundaries.
+Continue .codex/workflow/tasks/<task-name>.md within its recorded authorized phase
+and the user's latest instructions. Follow AGENTS.md. Check the current
 branch, HEAD, staged/unstaged changes, and implementation before trusting the
 task summary. Preserve unrelated work.
 

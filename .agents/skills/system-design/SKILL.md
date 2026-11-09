@@ -1,38 +1,40 @@
 ---
 name: system-design
-description: Trace and plan substantial DevOps Hub architecture, bounded context, delivery or cross-component changes; coordinate an authorized implementation and its handoff. Excludes routine local fixes.
+description: Design and coordinate substantial DevOps Hub changes spanning multiple components or bounded contexts. Use for cross-component contracts, ownership and sequencing; use a component skill alone for local work.
 ---
 
-# Design and coordinate platform changes
+# Coordinate cross-component design
 
-Follow the root and affected directory `AGENTS.md` files. Check branch, HEAD,
-staged/unstaged work, current callers and any named task record before trusting
-documentation. Use [workflow guidance](../../../.codex/workflow/README.md) and
-create a task record from its template only when the user requests one. Planning
-records do not authorize implementation, deployments or provisioning.
+Use this sequence when a change crosses component or bounded-context boundaries:
 
-Trace a representative API/worker path through composition, application, domain
-and adapters. Inspect imports, SQL access, DI lifetimes, provider effects, error
-paths and restart recovery. Treat identity and developer_platform as separate
-contexts. Model behavior with specific business names and the smallest useful
-abstraction; do not add DDD layers or generic wrappers solely for symmetry.
+1. **Establish scope and routing.** Follow root and affected directory
+   `AGENTS.md` files. Identify the components involved and load only their skills:
+   backend-development for domain/application/workers, api-development for HTTP,
+   frontend-development for Next.js, and delivery-engineering for CI and hosting.
+   Check branch, HEAD, staged/unstaged changes, current callers and any named
+   task record. Use [workflow guidance](../../../.codex/workflow/README.md);
+   create a task record only when requested. Preserve unrelated work.
+2. **Trace the end-to-end behavior.** Follow one representative path across the
+   affected components, including state transitions, ownership, errors and
+   recovery. Record facts separately from hypotheses; documentation and present
+   files are not proof that an integration works.
+3. **Choose boundaries and contracts.** Assign each rule and side effect to one
+   component. Keep identity and developer_platform independent. Define data,
+   API, event, artifact or deployment contracts at their boundary. Compare
+   alternatives only when they materially change ownership, compatibility,
+   concurrency, failure propagation or recovery.
+4. **Define the result.** State observable acceptance criteria, preserved
+   behavior, contracts, dependencies, file ownership, an ordered plan and only
+   material decisions that need user input. A planning record does not authorize
+   implementation, deployments or provisioning.
+5. **Implement only when authorized.** Resolve shared contracts first, then use
+   the relevant component skills for bounded edits. Integrate and verify the full flow;
+   obtain a separate read-only review for substantial diffs when available.
+   Report actual agent activity, commands, results and unresolved limits. Label
+   self-review accurately and reuse valid prior evidence.
 
-For proposals, separate observed facts from hypotheses. Define acceptance
-criteria, preserved behavior, contracts, dependencies, file ownership, ordered
-steps and material user decisions. Compare alternatives when meaningful;
-identify API/schema compatibility, transaction boundaries, concurrency, failure
-propagation and rollback limits. Terraform provisions hosting; Ansible configures
-hosts; CI/CD delivers releases; API/workers manage requested developer resources.
-
-For authorized implementation, resolve shared contracts first; delegate bounded
-independent files when useful. The coordinator integrates and verifies. Request
-an independent read-only review of substantial diffs when available. Report
-actual agent activity, commands, results and unresolved limits. If no separate
-review ran, identify a self-review. Preserve previous evidence when its code and
-assumptions remain valid; update the requested task record or report in chat.
-
-For changes to delivery scripts, providers, CI, Ansible or Terraform, inspect
-the exact assets before selecting validators. Distinguish syntax from host
-convergence, actual deployment/readiness and rollback. Do not equate published
-images or queued ledger rows with a completed release or ready database. Code
-changes alone do not authorize live infrastructure, shared migrations or secrets.
+Keep responsibility explicit: Terraform provisions hosting, Ansible configures
+hosts, CI/CD delivers releases, and API/workers manage developer-requested
+resources. Use delivery-engineering for the implementation details of the first
+three. Code changes alone do not authorize live infrastructure, shared migrations,
+resource provisioning or secret changes.

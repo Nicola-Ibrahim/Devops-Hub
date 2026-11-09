@@ -5,11 +5,19 @@ description: Design and implement DevOps Hub's Next.js dashboard, styles, access
 
 # Next.js developer dashboard
 
-Follow [frontend guidance](../../../frontend/AGENTS.md). Read affected components,
-`frontend/src/app/globals.css`, package scripts and API contracts. Identify the
-developer's primary action and the screen's information hierarchy before coding.
-Extend the existing visual system when it fits; substantial changes need a
-coherent direction rather than isolated decorative components.
+Follow [frontend guidance](../../../frontend/AGENTS.md). For a dashboard change:
+
+1. Trace the developer action and API contract. Read affected components,
+   `frontend/src/app/globals.css` and package scripts; identify the screen's
+   information hierarchy and current visual conventions.
+2. Design the states and actions before coding: project/environment context,
+   status, expiry, connection access, cleanup, loading, empty, error, pending,
+   expired and denied. Decide how real operation status refreshes.
+3. Implement within the existing Next.js server/client boundaries. Extend the
+   visual system when it fits; substantial changes need a coherent direction.
+   Preserve form values on errors and make narrow screens and keyboard use work.
+4. Run focused type/build checks and inspect desktop/mobile layout and keyboard
+   behavior when a browser is available. Report visual and integration limits.
 
 Prioritize project/environment context, resource status, lease expiry,
 connection access and cleanup actions. Use a consistent type scale, spacing,

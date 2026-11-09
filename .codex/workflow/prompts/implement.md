@@ -3,8 +3,9 @@
 ## Small fix
 
 ```text
-Fix <specific behavior> in <component>. Follow AGENTS.md. Inspect the working
-tree, current implementation, and affected callers. Preserve unrelated work.
+Select and use the skill mapped to <component> in AGENTS.md. Fix <specific
+behavior>. Follow AGENTS.md. Inspect the working tree, current implementation,
+and affected callers. Preserve unrelated work.
 Make the bounded change, run focused checks, and report actual results and limits.
 If the work changes a cross-component contract, clarify scope and dependencies
 first. Create a task record only if I request one.
@@ -13,8 +14,9 @@ first. Create a task record only if I request one.
 ## Agreed substantial task
 
 ```text
-Use $system-design to implement the authorized scope in
-.codex/workflow/tasks/<task-name>.md.
+Select and use the skills mapped to the affected components in AGENTS.md. Also
+use $system-design when the task crosses component or bounded-context boundaries.
+Implement the authorized scope in .codex/workflow/tasks/<task-name>.md.
 Follow AGENTS.md and .codex/workflow/README.md. Inspect the working tree and
 reconcile the task record with current code before editing. Preserve unrelated
 changes and the task's resource and secret safeguards.

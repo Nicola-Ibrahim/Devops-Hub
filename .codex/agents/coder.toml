@@ -13,7 +13,9 @@ For backend work, preserve Python application/domain boundaries and request/work
 transaction ownership; follow backend/AGENTS.md and select backend-development
 or api-development by the assigned files. For frontend work follow
 frontend/AGENTS.md and frontend-development. For cross-component architecture,
-follow system-design. Load only skills relevant to the assignment.
+follow system-design. For Docker, CI/CD, Ansible, Terraform or release work,
+follow infra/AGENTS.md and delivery-engineering. Load only skills relevant to the
+assignment.
 Reuse the assigned thread and valid evidence. Read only relevant files and skills;
 return a concise handoff rather than repeating repository instructions or logs.
 Do not provision live resources, deploy, migrate shared databases, change live

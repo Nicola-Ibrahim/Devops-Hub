@@ -41,10 +41,11 @@ defines delegated actors. Small fixes need no task record or automatic agent seq
 
 | Task | Skill |
 | --- | --- |
-| Cross-component architecture, substantial planning/coordination or delivery design | [system-design](.agents/skills/system-design/SKILL.md) |
+| Cross-component architecture, substantial planning and coordination | [system-design](.agents/skills/system-design/SKILL.md) |
 | DDD, persistence, workers, resource lifecycle and backend checks | [backend-development](.agents/skills/backend-development/SKILL.md) |
 | FastAPI routes, schemas, permissions and HTTP contracts | [api-development](.agents/skills/api-development/SKILL.md) |
 | Next.js dashboard design, integration and checks | [frontend-development](.agents/skills/frontend-development/SKILL.md) |
+| Docker, Compose, CI/CD, Ansible, Terraform, deployment and rollback | [delivery-engineering](.agents/skills/delivery-engineering/SKILL.md) |
 | Create or revise a skill | Use skill-creator when available |
 
 For cross-cutting work, load the relevant skills together. Use
@@ -62,7 +63,7 @@ For cross-cutting work, load the relevant skills together. Use
 - Use focused tests for lifecycle and failure behavior. Run relevant checks and report what was verified.
 - Update the affected docs when developer commands, API contracts, or operational behavior change.
 - Do not claim an image publish is a deployment; identify the actual deploy and rollback path.
-- For substantial cross-component work, use `.agents/skills/system-design/SKILL.md`. Create task records only when the user requests them, using `.codex/workflow/templates/task.md`. Otherwise keep scope and progress in the conversation. Follow `.codex/workflow/README.md`; a planning request does not authorize implementation.
+- For substantial cross-component work, use `.agents/skills/system-design/SKILL.md` with the affected component skills. Delivery-only work uses `.agents/skills/delivery-engineering/SKILL.md`. Create task records only when the user requests them, using `.codex/workflow/templates/task.md`. Otherwise keep scope and progress in the conversation. Follow `.codex/workflow/README.md`; a planning request does not authorize implementation.
 
 ## Agent roles
 

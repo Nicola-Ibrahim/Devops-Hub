@@ -16,7 +16,8 @@ Start with the [prompt library](prompts/README.md). Substantial cross-component 
 
 System-design owns substantial phase, scope, cross-component boundaries and handoff.
 Backend-development owns DDD, workers, resource safety and isolated backend checks;
-api-development owns HTTP; frontend-development owns Next.js UI and its checks.
+api-development owns HTTP; frontend-development owns Next.js UI and its checks;
+delivery-engineering owns Docker, CI/CD and hosting delivery.
 See the skill links in [AGENTS.md](../../AGENTS.md).
 No skill automatically starts another task or grants permission for external effects.
 

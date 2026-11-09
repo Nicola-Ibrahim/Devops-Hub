@@ -3,7 +3,9 @@
 Replace the placeholders and send this prompt to Codex.
 
 ```text
-Use $system-design to investigate and plan <desired developer outcome>.
+Select and use the skills mapped to the affected components in AGENTS.md. Also
+use $system-design when the outcome crosses component or bounded-context
+boundaries. Investigate and plan <desired developer outcome>.
 Create or update the task record I request at
 .codex/workflow/tasks/<task-name>.md.
 
