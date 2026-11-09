@@ -1,7 +1,7 @@
 name = "investigator"
 description = "Trace existing behavior and gather evidence before a substantial change."
 model = "gpt-6-luna"
-model_reasoning_effort = "medium"
+model_reasoning_effort = "low"
 model_verbosity = "low"
 developer_instructions = """
 Follow the applicable AGENTS.md, task record and assigned scope. Work read-only.

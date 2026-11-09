@@ -6,9 +6,9 @@ SQLAlchemy and Alembic over PostgreSQL. See [README.md](README.md) for commands.
 ## Dependency direction
 
 ```text
-api / containers  ->  application  ->  domain
-          |                ^             ^
-          +----------->  infra  ----------+
+api  ->  context module contract  ->  application  ->  domain
+infra  ->  implements application/domain ports
+containers  ->  wires API, module implementations and infra adapters
 ```
 
 - `domain` is pure Python business language. It imports no FastAPI, Dishka,
@@ -20,9 +20,8 @@ api / containers  ->  application  ->  domain
 - `api` authenticates requests, checks project/role permissions, translates HTTP
   to application commands/queries and maps results to responses. It contains no
   domain state transitions or direct ORM access.
-- `containers` constructs handlers/adapters and owns request or worker transaction
-  completion. Providers must not define application services. A context may expose
-  a module facade for API and worker callers.
+- `containers` constructs handlers, module implementations and adapters. Providers
+  contain no use-case logic.
 - `shared/infra` contains technical primitives only. Business rules remain in the
   context that owns them.
 
@@ -77,13 +76,19 @@ over generic `service`, `manager` or `utils`.
   caller-supplied ownership fields. Domain rules still enforce resource ownership,
   valid state transitions, quotas and lease limits, including for worker callers.
 - Each bounded context may expose a typed module facade with `send_command` and
-  `send_query` entry points. Define its contract with the context's application
-  types; implement the module in context `infra/` and bind it through that
-  context's `containers/` providers. It selects explicitly registered handlers
-  and owns transaction completion. The module holds no business rules, HTTP
-  schemas or hidden service locator; callers retain typed command/query inputs
-  and outputs. A successful command commits once; a raised failure rolls back.
-  External effects run after durable intent commits.
+  `send_query` entry points. Define its contract with application types, implement
+  it in context `infra/`, and bind it in context `containers/`. It dispatches to
+  explicitly registered handlers. The module has no business rules, HTTP schemas
+  or hidden service locator.
+
+## Transaction ownership
+
+The outer HTTP or worker operation host owns exactly one transaction boundary. It
+invokes `SqlAlchemyUnitOfWork.run()` around the context module call. The unit of
+work alone begins, commits, rolls back and closes the transaction: success commits;
+a raised failure rolls back. Modules, handlers, repositories and DI providers
+never receive or complete the unit of work. External effects run only after durable
+intent has committed.
 
 Organize `src/api/` by HTTP-facing capability:
 
@@ -105,8 +110,7 @@ callers together when changing an existing contract.
 
 ## Invariants
 
-- Application handlers receive repositories and ports, never a unit of work.
-  The HTTP/worker host owns one outer commit or rollback boundary.
+- Application handlers receive repositories and ports defined by their context.
 - Record intent, idempotency identity and quota reservation atomically. Perform
   Docker/cloud effects outside SQL transactions and persist enough state to
   recover after duplicate delivery, timeout, crash or late completion.

@@ -36,20 +36,19 @@ for every task. Keep the three existing roles rather than duplicating them per s
 
 | Role | Default model | Reasoning | Use |
 | --- | --- | --- | --- |
-| [Coder](../agents/coder.toml) | `gpt-6.1-sol` | medium | Backend and Next.js implementation, including design decisions |
-| [Investigator](../agents/investigator.toml) | `gpt-6-luna` | medium | Bounded read-only tracing and evidence gathering |
-| [Reviewer](../agents/reviewer.toml) | `gpt-6.1-sol` | medium | Independent review of substantial or risky changes |
+| [Coder](../agents/coder.toml) | `gpt-6-luna` | medium | Focused backend and Next.js implementation within agreed contracts |
+| [Investigator](../agents/investigator.toml) | `gpt-6-luna` | low | Bounded read-only tracing and evidence gathering |
+| [Reviewer](../agents/reviewer.toml) | `gpt-6-luna` | medium | Independent review of the assigned diff and affected callers |
 
 All roles use low verbosity. These are starting choices, not measured guarantees
 of cost or quality. Keep the three roles; frontend/backend are scoped assignments
 to coder rather than duplicate actors. For frontend design use
-[frontend-development](../../.agents/skills/frontend-development/SKILL.md). Terra
-(`gpt-6.1-terra`, medium) is an optional choice for screenshot-based UI inspection
-when a model-selectable role is available. Luna with low reasoning can handle
-routine mechanical edits when explicitly selected by the coordinator; Sol owns
-ambiguous contracts and security/lifecycle decisions. Raise reasoning only for a
-specific unresolved problem. Report unavailable configurations rather than silently
-substituting. Role files configure future agents; report actual runtime models
+[frontend-development](../../.agents/skills/frontend-development/SKILL.md).
+Use Terra for visual inspection or dashboard design when the assigned work needs it.
+The coordinator owns ambiguous contracts and security/lifecycle decisions; request
+a Sol review only when a concrete finding needs deeper analysis. Raise reasoning
+only for a specific unresolved problem. Role files configure future agents but
+the running agent system may impose its own model; report the actual runtime model
 when exposed. All agents inherit parent tools and permissions.
 
 ## Context reuse and cost

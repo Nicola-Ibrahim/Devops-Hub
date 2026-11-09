@@ -10,10 +10,10 @@ Follow [backend architecture](../../../backend/AGENTS.md).
 1. Trace the use case from its host through application, domain, repository port
    and adapter. Identify its invariant, transaction boundary and failure paths.
 2. Put each decision in its owning layer and keep the command/query beside its
-   handler. Define typed success data, typed failures and host rollback
-   before changing adapters and callers.
-3. Wire the use case through its context module and DI, preserving API permission boundaries,
-   domain ownership checks, idempotency, recovery and secret rules from
+   handler. Define typed success data and typed failures before changing adapters
+   and callers.
+3. Wire the use case through its context module and DI, preserving the transaction,
+   permission, ownership, idempotency, recovery and secret rules in
    `backend/AGENTS.md`.
 4. Verify the changed invariant and its failure path. Report simulated and real
    provider evidence separately.
