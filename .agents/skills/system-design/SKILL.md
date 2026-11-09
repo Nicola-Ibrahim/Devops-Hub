@@ -1,40 +1,20 @@
 ---
 name: system-design
-description: Design and coordinate substantial DevOps Hub changes spanning multiple components or bounded contexts. Use for cross-component contracts, ownership and sequencing; use a component skill alone for local work.
+description: Coordinate DevOps Hub changes spanning components or bounded contexts. Use for cross-component contracts, ownership, sequencing and acceptance; use a component skill alone for local work.
 ---
 
-# Coordinate cross-component design
+# Cross-component design
 
-Use this sequence when a change crosses component or bounded-context boundaries:
+1. Identify affected components and load only their skills. Inspect current code,
+   callers, working-tree changes and any requested task record.
+2. Trace one end-to-end path, including ownership, state transitions, failures and
+   recovery. Separate observed behavior from assumptions.
+3. Assign every rule and side effect to one component. Define boundary contracts
+   and resolve compatibility, concurrency and recovery decisions.
+4. Record observable acceptance criteria, dependencies, file ownership and ordered
+   implementation. Planning does not authorize implementation or live operations.
+5. Implement contracts before dependents, integrate the complete flow and report
+   actual checks, review activity and remaining limits.
 
-1. **Establish scope and routing.** Follow root and affected directory
-   `AGENTS.md` files. Identify the components involved and load only their skills:
-   backend-development for domain/application/workers, api-development for HTTP,
-   frontend-development for Next.js, and delivery-engineering for CI and hosting.
-   Check branch, HEAD, staged/unstaged changes, current callers and any named
-   task record. Use [workflow guidance](../../../.codex/workflow/README.md);
-   create a task record only when requested. Preserve unrelated work.
-2. **Trace the end-to-end behavior.** Follow one representative path across the
-   affected components, including state transitions, ownership, errors and
-   recovery. Record facts separately from hypotheses; documentation and present
-   files are not proof that an integration works.
-3. **Choose boundaries and contracts.** Assign each rule and side effect to one
-   component. Keep identity and developer_platform independent. Define data,
-   API, event, artifact or deployment contracts at their boundary. Compare
-   alternatives only when they materially change ownership, compatibility,
-   concurrency, failure propagation or recovery.
-4. **Define the result.** State observable acceptance criteria, preserved
-   behavior, contracts, dependencies, file ownership, an ordered plan and only
-   material decisions that need user input. A planning record does not authorize
-   implementation, deployments or provisioning.
-5. **Implement only when authorized.** Resolve shared contracts first, then use
-   the relevant component skills for bounded edits. Integrate and verify the full flow;
-   obtain a separate read-only review for substantial diffs when available.
-   Report actual agent activity, commands, results and unresolved limits. Label
-   self-review accurately and reuse valid prior evidence.
-
-Keep responsibility explicit: Terraform provisions hosting, Ansible configures
-hosts, CI/CD delivers releases, and API/workers manage developer-requested
-resources. Use delivery-engineering for the implementation details of the first
-three. Code changes alone do not authorize live infrastructure, shared migrations,
-resource provisioning or secret changes.
+Follow [workflow guidance](../../../.codex/workflow/README.md). Create a task record
+only when requested. The coordinator owns shared contracts and final integration.

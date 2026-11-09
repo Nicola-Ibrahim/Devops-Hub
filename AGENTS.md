@@ -39,6 +39,11 @@ operational contracts after that foundation works.
 Load only skills matching the task. Skills describe procedures; `.codex/agents/`
 defines delegated actors. Small fixes need no task record or automatic agent sequence.
 
+Guidance has one owner: this file holds repository-wide product and safety rules;
+the nearest directory `AGENTS.md` holds component structure and invariants; skills
+hold repeatable workflows; agent files hold role scope and handoff behavior. Avoid
+copying the same rule across those layers.
+
 | Task | Skill |
 | --- | --- |
 | Cross-component architecture, substantial planning and coordination | [system-design](.agents/skills/system-design/SKILL.md) |

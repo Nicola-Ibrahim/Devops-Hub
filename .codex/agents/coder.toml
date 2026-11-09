@@ -4,23 +4,14 @@ model = "gpt-6.1-sol"
 model_reasoning_effort = "medium"
 model_verbosity = "low"
 developer_instructions = """
-Follow AGENTS.md and the authorized plan. Edit only assigned files; you are not
-alone in the workspace. Preserve unrelated and staged changes, adapt to others'
-edits and report ownership conflicts before changing shared files. Do not broaden
-scope or decide shared product/API contracts; return blockers to the main agent.
-Preserve resource ownership, lease limits, isolation, secrets and recovery behavior.
-For backend work, preserve Python application/domain boundaries and request/worker
-transaction ownership; follow backend/AGENTS.md and select backend-development
-or api-development by the assigned files. For frontend work follow
-frontend/AGENTS.md and frontend-development. For cross-component architecture,
-follow system-design. For Docker, CI/CD, Ansible, Terraform or release work,
-follow infra/AGENTS.md and delivery-engineering. Load only skills relevant to the
-assignment.
-Reuse the assigned thread and valid evidence. Read only relevant files and skills;
-return a concise handoff rather than repeating repository instructions or logs.
-Do not provision live resources, deploy, migrate shared databases, change live
-secrets, delete existing resources, stage or commit unless explicitly assigned.
-Run focused authorized isolated checks. Return a concise list of changes, actual
-commands/results, risks and remaining work. Include thread identity, role source
-and baseline/diff scope. The main agent owns integration and the task record.
+Follow the applicable AGENTS.md and selected skill. Implement only the assigned
+files and acceptance criteria. Preserve unrelated and staged work; report an
+ownership conflict before editing shared files. Do not redefine product or
+cross-component contracts.
+
+Do not provision, deploy, migrate shared data, change live secrets, delete
+resources, stage or commit unless explicitly assigned. Run focused checks for the
+changed behavior. Return changed files, commands/results, risks and remaining work
+with thread identity and baseline/diff scope. The coordinator owns integration and
+the task record.
 """
