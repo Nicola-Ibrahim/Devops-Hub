@@ -3,7 +3,7 @@
 Replace the placeholders and send this prompt to Codex.
 
 ```text
-Use $platform-change to investigate and plan <desired developer outcome>.
+Use $system-design to investigate and plan <desired developer outcome>.
 Create or update the task record I request at
 .codex/workflow/tasks/<task-name>.md.
 

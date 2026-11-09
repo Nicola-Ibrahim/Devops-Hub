@@ -10,25 +10,25 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from api.health.metrics import OperationalMetrics
 from api.platform.applications import ApplicationDeliveryOperations
-from developer_platform.application.application_delivery.shared.ports import ResourceProvisioner
-from developer_platform.application.project_registration.handler import RegisterProjectHandler
-from developer_platform.application.project_registration.port import ProjectRegistrationRepository
-from developer_platform.application.resource_catalog.catalog import ApprovedPostgresCatalog
-from developer_platform.application.resource_catalog.handler import ReadCatalogQueryHandler
-from developer_platform.application.resource_lifecycle.ports import ResourceCredentialCipher
-from developer_platform.application.resource_lifecycle.service import ManageDatabaseLifecycleHandler
-from developer_platform.application.resource_requests.read_resources.handler import (
+from developer_platform.application.database_lifecycle.ports import ResourceCredentialCipher
+from developer_platform.application.database_lifecycle.service import ManageDatabaseLifecycleHandler
+from developer_platform.application.database_provisioning.read_resources.handler import (
     ReadPlatformResourcesQueryHandler,
 )
-from developer_platform.application.resource_requests.read_resources.port import (
+from developer_platform.application.database_provisioning.read_resources.port import (
     PlatformResourceReadRepository,
 )
-from developer_platform.application.resource_requests.submit_database_request.command import (
+from developer_platform.application.database_provisioning.submit_database_request.command import (
     RequestDatabaseCommand,
 )
-from developer_platform.application.resource_requests.submit_database_request.handler import (
+from developer_platform.application.database_provisioning.submit_database_request.handler import (
     RequestTemporaryDatabaseHandler,
 )
+from developer_platform.application.projects.handler import RegisterProjectHandler
+from developer_platform.application.projects.port import ProjectRegistrationRepository
+from developer_platform.application.resource_catalog.catalog import ApprovedPostgresCatalog
+from developer_platform.application.resource_catalog.handler import ReadCatalogQueryHandler
+from developer_platform.application.workload_delivery.shared.ports import ResourceProvisioner
 from developer_platform.containers.application_host import ApplicationDeliveryHost
 from developer_platform.containers.metrics_operations import DatabaseOperationalMetrics
 from developer_platform.containers.ports import PlatformRequestAuthenticator

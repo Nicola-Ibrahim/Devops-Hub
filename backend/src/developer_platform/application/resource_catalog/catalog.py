@@ -1,9 +1,9 @@
 """Approved PostgreSQL options and availability policy."""
 
-from developer_platform.application.resource_catalog.models import PostgresOption
-from developer_platform.application.resource_requests.submit_database_request.command import (
+from developer_platform.application.database_provisioning.submit_database_request.command import (
     RequestDatabaseCommand,
 )
+from developer_platform.application.resource_catalog.models import PostgresOption
 from developer_platform.application.shared.errors import PlatformRequestError
 
 

@@ -1,6 +1,6 @@
 # Codex prompts
 
-These are copy-and-edit entry points. Substantial prompts use `$platform-change`. Name a task record when you want one created or continued; otherwise keep progress in the conversation.
+These are copy-and-edit entry points. Substantial cross-component prompts use `$system-design`; also use the relevant backend, API or frontend skill for implementation. Name a task record when you want one created or continued; otherwise keep progress in the conversation.
 
 | Need | Prompt |
 | --- | --- |

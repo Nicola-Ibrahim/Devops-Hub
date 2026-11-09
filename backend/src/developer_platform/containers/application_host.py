@@ -10,19 +10,21 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from api.credentials import RequestIdentity
-from developer_platform.application.application_delivery.attach_resource.command import (
+from developer_platform.application.shared.dto import AccessContext
+from developer_platform.application.shared.errors import PlatformRequestError
+from developer_platform.application.workload_delivery.attach_database.command import (
     ResourceAttachmentCommand,
 )
-from developer_platform.application.application_delivery.create_application.command import (
+from developer_platform.application.workload_delivery.create_workload.command import (
     ApplicationCommand,
 )
-from developer_platform.application.application_delivery.deploy_application.command import (
+from developer_platform.application.workload_delivery.deploy_workload.command import (
     DeploymentCommand,
 )
-from developer_platform.application.application_delivery.execute_delivery_step.handler import (
+from developer_platform.application.workload_delivery.execute_delivery_step.handler import (
     ExecuteDeliveryStepHandler,
 )
-from developer_platform.application.application_delivery.shared.models import (
+from developer_platform.application.workload_delivery.shared.models import (
     ApplicationDetails,
     DeliveryClaim,
     DeliveryResult,
@@ -31,7 +33,7 @@ from developer_platform.application.application_delivery.shared.models import (
     TemplateVersion,
     WebhookResult,
 )
-from developer_platform.application.application_delivery.shared.ports import (
+from developer_platform.application.workload_delivery.shared.ports import (
     ApplicationDeliveryFailure,
     ApplicationDeliveryService,
     ApplicationDeployer,
@@ -42,8 +44,6 @@ from developer_platform.application.application_delivery.shared.ports import (
     TemplateCatalog,
     WebhookSignatureVerifier,
 )
-from developer_platform.application.shared.dto import AccessContext
-from developer_platform.application.shared.errors import PlatformRequestError
 from developer_platform.infra.persistence.delivery import SQLAlchemyApplicationDeliveryRepository
 from shared.infra.persistence.unit_of_work import DatabaseUnavailable, SqlAlchemyUnitOfWork
 
@@ -117,14 +117,14 @@ class ApplicationDeliveryHost:
     ) -> tuple[ApplicationDetails, bool]:
         return await self._run(
             identity,
-            lambda usecase, access: usecase.create_application(access, command, key),
+            lambda usecase, access: usecase.create_workload(access, command, key),
             lambda result: result,
         )
 
     async def list_applications(self, identity: RequestIdentity) -> tuple[ApplicationDetails, ...]:
         return await self._run(
             identity,
-            lambda usecase, access: usecase.list_applications(access),
+            lambda usecase, access: usecase.list_workloads(access),
             tuple,
         )
 
@@ -133,7 +133,7 @@ class ApplicationDeliveryHost:
     ) -> tuple[ApplicationDetails, tuple[DeliveryStepDetails, ...]]:
         return await self._run(
             identity,
-            lambda usecase, access: usecase.application(access, application_id),
+            lambda usecase, access: usecase.workload(access, application_id),
             lambda result: result,
         )
 
@@ -146,7 +146,7 @@ class ApplicationDeliveryHost:
     ) -> DeliveryStepDetails:
         return await self._run(
             identity,
-            lambda usecase, access: usecase.attach_resource(access, application_id, command, key),
+            lambda usecase, access: usecase.attach_database(access, application_id, command, key),
             lambda result: result,
         )
 

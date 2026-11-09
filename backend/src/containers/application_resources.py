@@ -9,21 +9,21 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from developer_platform.application.application_delivery.attach_resource.command import (
-    ResourceAttachmentCommand,
-)
-from developer_platform.application.application_delivery.shared.ports import (
-    ApplicationDeliveryFailure,
-)
-from developer_platform.application.resource_catalog.catalog import ApprovedPostgresCatalog
-from developer_platform.application.resource_requests.submit_database_request.command import (
+from developer_platform.application.database_provisioning.submit_database_request.command import (
     RequestDatabaseCommand,
 )
-from developer_platform.application.resource_requests.submit_database_request.handler import (
+from developer_platform.application.database_provisioning.submit_database_request.handler import (
     RequestTemporaryDatabaseHandler,
 )
+from developer_platform.application.resource_catalog.catalog import ApprovedPostgresCatalog
 from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.shared.permissions import ALL_SCOPES
+from developer_platform.application.workload_delivery.attach_database.command import (
+    ResourceAttachmentCommand,
+)
+from developer_platform.application.workload_delivery.shared.ports import (
+    ApplicationDeliveryFailure,
+)
 from developer_platform.infra.persistence.ledger import SQLAlchemyPlatformLedgerRepository
 from developer_platform.infra.persistence.lifecycle import mark_for_deletion
 from developer_platform.infra.persistence.models import Resource

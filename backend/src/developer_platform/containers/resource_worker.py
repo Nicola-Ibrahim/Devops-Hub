@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from containers.schema import registered_metadata
-from developer_platform.application.resource_worker.handler import ResourceWorkerHandler
+from developer_platform.application.workers.resource_operations.handler import ResourceWorkerHandler
 from developer_platform.infra.credentials import FernetResourceCredentialCipher
 from developer_platform.infra.docker_provider import DockerPostgresProvider
 from developer_platform.infra.persistence.worker_queue import (

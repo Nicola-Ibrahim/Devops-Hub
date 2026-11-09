@@ -2,22 +2,22 @@
 
 [Shared guidance](../../AGENTS.md) · [Task template](templates/task.md)
 
-Start with the [prompt library](prompts/README.md). The reusable procedure lives in the [platform-change skill](../../.agents/skills/platform-change/SKILL.md). Create task records only when the user requests them; otherwise keep scope, decisions and progress in the conversation. This folder does not run automatically.
+Start with the [prompt library](prompts/README.md). Substantial cross-component work uses [system-design](../../.agents/skills/system-design/SKILL.md). Create task records only when the user requests them; otherwise keep scope, decisions and progress in the conversation. This folder does not run automatically.
 
 ## Where guidance lives
 
 | Location | Responsibility |
 | --- | --- |
-| `AGENTS.md` | Product goal, durable boundaries and skill routing |
+| `AGENTS.md`; `backend/`, `frontend/` and `infra/AGENTS.md` | Shared and directory-specific rules |
 | `.agents/skills/` | Focused reusable procedures, loaded only as needed |
 | `.codex/agents/` | Investigator, coder and reviewer role definitions |
 | `.codex/workflow/prompts/` | Human-directed plan, implement and resume prompts |
 | `.codex/workflow/tasks/` | User-requested requirements, decisions and evidence |
 
-Platform-change owns phase, scope, delegation and handoff. Architecture-review
-owns boundary tracing and design alternatives. Resource-lifecycle owns lifecycle,
-persistence and provider recovery invariants. Platform-verification owns check
-selection and isolated execution. See the skill links in [AGENTS.md](../../AGENTS.md).
+System-design owns substantial phase, scope, cross-component boundaries and handoff.
+Backend-development owns DDD, workers, resource safety and isolated backend checks;
+api-development owns HTTP; frontend-development owns Next.js UI and its checks.
+See the skill links in [AGENTS.md](../../AGENTS.md).
 No skill automatically starts another task or grants permission for external effects.
 
 ## Roles and sequence
@@ -33,7 +33,44 @@ for every task. Keep the three existing roles rather than duplicating them per s
 5. `reviewer` independently checks the actual diff against acceptance criteria when the change is substantial.
 6. The coordinating agent addresses findings, verifies the full flow, and records actual results and limits.
 
-[Coder](../agents/coder.toml) uses `gpt-6-luna`, medium reasoning and low verbosity. [Investigator](../agents/investigator.toml) and [reviewer](../agents/reviewer.toml) inherit parent model settings. Report unavailable model configurations rather than silently substituting. All agents inherit parent tools and permissions. These definitions configure future agents; they do not start agents or prove a review occurred.
+| Role | Default model | Reasoning | Use |
+| --- | --- | --- | --- |
+| [Coder](../agents/coder.toml) | `gpt-6.1-sol` | medium | Backend and Next.js implementation, including design decisions |
+| [Investigator](../agents/investigator.toml) | `gpt-6-luna` | medium | Bounded read-only tracing and evidence gathering |
+| [Reviewer](../agents/reviewer.toml) | `gpt-6.1-sol` | medium | Independent review of substantial or risky changes |
+
+All roles use low verbosity. These are starting choices, not measured guarantees
+of cost or quality. Keep the three roles; frontend/backend are scoped assignments
+to coder rather than duplicate actors. For frontend design use
+[frontend-development](../../.agents/skills/frontend-development/SKILL.md). Terra
+(`gpt-6.1-terra`, medium) is an optional choice for screenshot-based UI inspection
+when a model-selectable role is available. Luna with low reasoning can handle
+routine mechanical edits when explicitly selected by the coordinator; Sol owns
+ambiguous contracts and security/lifecycle decisions. Raise reasoning only for a
+specific unresolved problem. Report unavailable configurations rather than silently
+substituting. Role files configure future agents; report actual runtime models
+when exposed. All agents inherit parent tools and permissions.
+
+## Context reuse and cost
+
+- Keep stable role instructions and repository guidance stable. Put changing task
+  details, owned paths and acceptance criteria in the assignment. Avoid copying
+  the entire conversation or unrelated files into each agent.
+- Reuse the same agent thread for related follow-ups. Give new agents a compact,
+  self-contained brief and relevant evidence instead of full history when feasible.
+- Reuse investigation results and passing checks while their code and assumptions
+  remain valid. Review changed files and affected callers before expanding scope.
+- Parallelize independent work only. Avoid agents repeating the same investigation,
+  repeated polling, full logs in handoffs, and mandatory delegation for small edits.
+- Exact reusable prompt prefixes can support caching; caches do not transfer
+  between different models. Sharing a model alone does not guarantee cache hits.
+  Codex controls request construction and cache retention: do not invent cache
+  settings in these role files or claim savings without usage evidence. If usage
+  data exposes cached input tokens and total usage, compare cost per completed task,
+  including retries. API pricing is not a promise about subscription allowance.
+
+Source: [model selection](https://developers.openai.com/api/docs/guides/model-selection)
+and [prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching).
 
 ## Task records
 

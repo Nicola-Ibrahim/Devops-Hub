@@ -20,22 +20,22 @@ from api.platform.schemas import (
     ResourceView,
 )
 from containers.authentication import authenticate_request
-from developer_platform.application.project_registration.result import ProjectRegistrationDetails
-from developer_platform.application.resource_lifecycle.renew_lease.command import (
+from developer_platform.application.database_lifecycle.renew_lease.command import (
     RenewDatabaseLease,
 )
-from developer_platform.application.resource_lifecycle.service import (
+from developer_platform.application.database_lifecycle.service import (
     ManageDatabaseLifecycleHandler,
 )
-from developer_platform.application.resource_requests.read_resources.handler import (
+from developer_platform.application.database_provisioning.read_resources.handler import (
     ReadPlatformResourcesQueryHandler,
 )
-from developer_platform.application.resource_requests.submit_database_request.command import (
+from developer_platform.application.database_provisioning.submit_database_request.command import (
     RequestDatabaseCommand,
 )
-from developer_platform.application.resource_requests.submit_database_request.handler import (
+from developer_platform.application.database_provisioning.submit_database_request.handler import (
     RequestTemporaryDatabaseHandler,
 )
+from developer_platform.application.projects.result import ProjectRegistrationDetails
 from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.shared.errors import ledger_unavailable
 from identity.application.authenticate_api_token.handler import AuthenticateApiTokenHandler

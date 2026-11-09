@@ -23,16 +23,18 @@ from sqlalchemy.dialects.postgresql import JSONB, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
-from developer_platform.application.application_delivery.attach_resource.command import (
+from developer_platform.application.shared.dto import AccessContext
+from developer_platform.application.shared.errors import PlatformRequestError
+from developer_platform.application.workload_delivery.attach_database.command import (
     ResourceAttachmentCommand,
 )
-from developer_platform.application.application_delivery.create_application.command import (
+from developer_platform.application.workload_delivery.create_workload.command import (
     ApplicationCommand,
 )
-from developer_platform.application.application_delivery.deploy_application.command import (
+from developer_platform.application.workload_delivery.deploy_workload.command import (
     DeploymentCommand,
 )
-from developer_platform.application.application_delivery.shared.models import (
+from developer_platform.application.workload_delivery.shared.models import (
     ApplicationDetails,
     DeliveryClaim,
     DeliveryResult,
@@ -40,8 +42,6 @@ from developer_platform.application.application_delivery.shared.models import (
     DeploymentDetails,
     RegisteredRepository,
 )
-from developer_platform.application.shared.dto import AccessContext
-from developer_platform.application.shared.errors import PlatformRequestError
 from developer_platform.infra.persistence.models import (
     ProjectEnvironmentRow,
     ProjectRegistrationRow,

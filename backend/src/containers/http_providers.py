@@ -10,16 +10,16 @@ from containers.authentication import authenticate_request
 from containers.http_identity import CurrentIdentityQuery
 from containers.platform_http_operations import PlatformHttpOperations
 from containers.project_registration import RegisterProjectCommandHandler
-from developer_platform.application.application_delivery.shared.ports import ResourceProvisioner
-from developer_platform.application.project_registration.handler import RegisterProjectHandler
-from developer_platform.application.resource_catalog.catalog import ApprovedPostgresCatalog
-from developer_platform.application.resource_lifecycle.service import ManageDatabaseLifecycleHandler
-from developer_platform.application.resource_requests.read_resources.handler import (
+from developer_platform.application.database_lifecycle.service import ManageDatabaseLifecycleHandler
+from developer_platform.application.database_provisioning.read_resources.handler import (
     ReadPlatformResourcesQueryHandler,
 )
-from developer_platform.application.resource_requests.submit_database_request.handler import (
+from developer_platform.application.database_provisioning.submit_database_request.handler import (
     RequestTemporaryDatabaseHandler,
 )
+from developer_platform.application.projects.handler import RegisterProjectHandler
+from developer_platform.application.resource_catalog.catalog import ApprovedPostgresCatalog
+from developer_platform.application.workload_delivery.shared.ports import ResourceProvisioner
 from developer_platform.containers.ports import PlatformRequestAuthenticator
 from identity.application.authenticate_api_token.handler import AuthenticateApiTokenHandler
 from identity.domain.project_access import ProjectAccessDirectory

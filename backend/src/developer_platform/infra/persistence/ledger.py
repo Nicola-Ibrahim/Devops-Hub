@@ -7,14 +7,14 @@ from sqlalchemy import func, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from developer_platform.application.project_registration.command import RegisterProjectCommand
-from developer_platform.application.project_registration.result import (
-    EnvironmentDetails,
-    ProjectRegistrationDetails,
-)
-from developer_platform.application.resource_requests.read_resources.query import (
+from developer_platform.application.database_provisioning.read_resources.query import (
     OperationDetails,
     ResourceDetails,
+)
+from developer_platform.application.projects.command import RegisterProjectCommand
+from developer_platform.application.projects.result import (
+    EnvironmentDetails,
+    ProjectRegistrationDetails,
 )
 from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.shared.errors import (

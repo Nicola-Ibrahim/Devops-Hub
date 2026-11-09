@@ -10,16 +10,16 @@ from pydantic import Field
 
 from api.credentials import RequestIdentity, request_identity
 from api.schemas import Contract
-from developer_platform.application.application_delivery.attach_resource.command import (
+from developer_platform.application.workload_delivery.attach_database.command import (
     ResourceAttachmentCommand,
 )
-from developer_platform.application.application_delivery.create_application.command import (
+from developer_platform.application.workload_delivery.create_workload.command import (
     ApplicationCommand,
 )
-from developer_platform.application.application_delivery.deploy_application.command import (
+from developer_platform.application.workload_delivery.deploy_workload.command import (
     DeploymentCommand,
 )
-from developer_platform.application.application_delivery.shared.models import (
+from developer_platform.application.workload_delivery.shared.models import (
     ApplicationDetails,
     DeliveryStepDetails,
     DeploymentDetails,

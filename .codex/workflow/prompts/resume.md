@@ -1,7 +1,7 @@
 # Resume a task
 
 ```text
-Use $platform-change to continue .codex/workflow/tasks/<task-name>.md within its recorded authorized
+Use $system-design to continue .codex/workflow/tasks/<task-name>.md within its recorded authorized
 phase and the user's latest instructions. Follow AGENTS.md. Check the current
 branch, HEAD, staged/unstaged changes, and implementation before trusting the
 task summary. Preserve unrelated work.

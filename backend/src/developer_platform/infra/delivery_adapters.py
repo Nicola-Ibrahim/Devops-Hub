@@ -9,11 +9,11 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from developer_platform.application.application_delivery.shared.models import (
+from developer_platform.application.workload_delivery.shared.models import (
     GeneratedFile,
     TemplateVersion,
 )
-from developer_platform.application.application_delivery.shared.ports import (
+from developer_platform.application.workload_delivery.shared.ports import (
     ApplicationDeliveryFailure,
     ApprovedImageCatalog,
     RequestFingerprint,

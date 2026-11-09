@@ -13,7 +13,7 @@ first. Create a task record only if I request one.
 ## Agreed substantial task
 
 ```text
-Use $platform-change to implement the authorized scope in
+Use $system-design to implement the authorized scope in
 .codex/workflow/tasks/<task-name>.md.
 Follow AGENTS.md and .codex/workflow/README.md. Inspect the working tree and
 reconcile the task record with current code before editing. Preserve unrelated

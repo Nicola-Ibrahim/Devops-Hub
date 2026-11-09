@@ -10,13 +10,13 @@ from collections.abc import Callable
 from typing import Any, TypeVar
 from uuid import UUID
 
-from developer_platform.application.application_delivery.shared.database_binding import (
+from developer_platform.application.workload_delivery.shared.database_binding import (
     ApplicationDatabaseBinding as ApplicationDatabaseBinding,
 )
-from developer_platform.application.application_delivery.shared.database_binding import (
+from developer_platform.application.workload_delivery.shared.database_binding import (
     ApplicationDatabaseBindingResolver as ApplicationDatabaseBindingResolver,
 )
-from developer_platform.application.application_delivery.shared.ports import (
+from developer_platform.application.workload_delivery.shared.ports import (
     ApplicationDeliveryFailure,
 )
 
