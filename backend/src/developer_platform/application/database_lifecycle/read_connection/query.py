@@ -1,10 +1,8 @@
 from dataclasses import dataclass, field
 from uuid import UUID
 
-
-@dataclass(frozen=True)
-class GetDatabaseConnectionQuery:
-    resource_id: UUID
+from developer_platform.domain.access import AccessContext
+from shared.dispatch import Query
 
 
 @dataclass(frozen=True)
@@ -15,3 +13,9 @@ class DatabaseConnection:
     database: str
     user: str
     instructions: str
+
+
+@dataclass(frozen=True, slots=True)
+class ReadDatabaseConnection(Query[DatabaseConnection]):
+    access: AccessContext
+    resource_id: UUID

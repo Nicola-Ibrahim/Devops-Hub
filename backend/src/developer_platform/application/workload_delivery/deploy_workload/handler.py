@@ -2,12 +2,10 @@
 
 from collections.abc import Callable
 from datetime import datetime
-from uuid import UUID
 
-from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.shared.errors import PlatformRequestError
 from developer_platform.application.workload_delivery.deploy_workload.command import (
-    DeploymentCommand,
+    DeployApplication,
 )
 from developer_platform.application.workload_delivery.deploy_workload.port import (
     ApplicationDeploymentRepository,
@@ -35,14 +33,9 @@ class DeployApplicationHandler:
         self.repository, self.images = repository, images
         self.fingerprint, self.clock = fingerprint, clock
 
-    async def execute(
-        self,
-        access: AccessContext,
-        application_id: UUID,
-        command: DeploymentCommand,
-        idempotency_key: str,
-    ) -> DeploymentDetails:
-        validate_delivery_key(idempotency_key)
+    async def execute(self, message: DeployApplication) -> DeploymentDetails:
+        access, application_id, command = message.access, message.application_id, message.request
+        validate_delivery_key(message.idempotency_key)
         try:
             image = ImageDigest(command.image_digest)
         except DomainError as error:
@@ -59,10 +52,7 @@ class DeployApplicationHandler:
             access,
             application_id,
             command,
-            idempotency_key,
+            message.idempotency_key,
             self.fingerprint.for_value(command),
             self.clock(),
         )
-
-
-DeployWorkloadHandler = DeployApplicationHandler

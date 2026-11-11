@@ -12,7 +12,7 @@ from identity.application.project_memberships.command import (
     ManageProjectMembershipCommand,
     SetProjectMembershipCommand,
 )
-from identity.application.project_memberships.query import ListProjectMembersQuery
+from identity.application.project_memberships.query import ListProjectMembersByActorQuery
 from identity.domain.browser_identity import BrowserProjectMember
 from identity.domain.interfaces.membership_repository import ProjectMembershipRepository
 from identity.domain.interfaces.membership_session_repository import MembershipSessionRepository
@@ -41,7 +41,9 @@ class ListProjectMembersHandler:
     def __init__(self, repository: ProjectMembershipRepository) -> None:
         self.repository = repository
 
-    async def execute(self, query: ListProjectMembersQuery) -> tuple[BrowserProjectMember, ...]:
+    async def execute(
+        self, query: ListProjectMembersByActorQuery
+    ) -> tuple[BrowserProjectMember, ...]:
         return await self.repository.list_project_members(
             actor_id=query.actor_id, project_id=query.project_id
         )

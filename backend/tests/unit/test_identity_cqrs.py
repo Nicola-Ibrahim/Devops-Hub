@@ -13,7 +13,7 @@ from identity.application.project_memberships.handler import (
     ListProjectMembersHandler,
     SetProjectMembershipHandler,
 )
-from identity.application.project_memberships.query import ListProjectMembersQuery
+from identity.application.project_memberships.query import ListProjectMembersByActorQuery
 from identity.domain.browser_identity import BrowserPrincipal
 from identity.domain.errors import IdentityValidationError
 
@@ -67,7 +67,9 @@ def test_project_member_query_is_read_only_and_receives_authorized_actor() -> No
 
     repository = ReadRepository()
     result = asyncio.run(
-        ListProjectMembersHandler(repository).execute(ListProjectMembersQuery(actor_id, project_id))
+        ListProjectMembersHandler(repository).execute(
+            ListProjectMembersByActorQuery(actor_id, project_id)
+        )
     )
 
     assert result == ()

@@ -3,10 +3,9 @@
 from collections.abc import Callable
 from datetime import datetime
 
-from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.shared.errors import PlatformRequestError
 from developer_platform.application.workload_delivery.create_workload.command import (
-    ApplicationCommand,
+    CreateApplication,
 )
 from developer_platform.application.workload_delivery.create_workload.port import (
     ApplicationCreationRepository,
@@ -34,18 +33,18 @@ class CreateApplicationHandler:
         self.repository, self.templates = repository, templates
         self.fingerprint, self.clock = fingerprint, clock
 
-    async def execute(
-        self, access: AccessContext, command: ApplicationCommand, idempotency_key: str
-    ) -> tuple[WorkloadDetails, bool]:
-        validate_delivery_key(idempotency_key)
-        if not APP_NAME.fullmatch(command.name):
+    async def execute(self, message: CreateApplication) -> tuple[WorkloadDetails, bool]:
+        access, request = message.access, message.request
+        validate_delivery_key(message.idempotency_key)
+        if not APP_NAME.fullmatch(request.name):
             raise PlatformRequestError("invalid_workload_name", "Workload name is invalid", 422)
-        if not IDENTIFIER.fullmatch(command.template_id):
+        if not IDENTIFIER.fullmatch(request.template_id):
             raise PlatformRequestError("invalid_template", "Template identifier is invalid", 422)
-        self.templates.get(command.template_id, command.template_version)
+        self.templates.get(request.template_id, request.template_version)
         return await self.repository.create_application(
-            access, command, idempotency_key, self.fingerprint.for_value(command), self.clock()
+            access,
+            request,
+            message.idempotency_key,
+            self.fingerprint.for_value(request),
+            self.clock(),
         )
-
-
-CreateWorkloadHandler = CreateApplicationHandler

@@ -19,7 +19,6 @@ from identity.application.browser_login.handler import (
     VerifyBrowserPasswordChangeHandler,
 )
 from identity.application.browser_sessions.command import (
-    ListBrowserSessionsCommand,
     LogoutAllBrowserSessionsCommand,
     LogoutBrowserSessionCommand,
     RefreshBrowserSessionCommand,
@@ -37,6 +36,9 @@ from identity.application.browser_sessions.handler import (
     RotateBrowserCsrfHandler,
     SelectBrowserProjectHandler,
     require_browser_origin,
+)
+from identity.application.browser_sessions.query import (
+    ListBrowserSessionsQuery,
 )
 from identity.application.internal_users.command import (
     BootstrapFirstProjectAdminCommand,
@@ -61,7 +63,7 @@ from identity.application.project_memberships.handler import (
     ManageProjectMembershipHandler,
     SetProjectMembershipHandler,
 )
-from identity.application.project_memberships.query import ListProjectMembersQuery
+from identity.application.project_memberships.query import ListProjectMembersByActorQuery
 from identity.application.shared.errors import IdentityUnavailable
 from identity.domain.browser_errors import BrowserAuthenticationRejected
 from identity.domain.browser_identity import (
@@ -213,7 +215,14 @@ class BrowserIdentityService:
                 self._digest,
                 self._tokens.generate,
                 tuple(self.allowed_origins),
-            ).execute(SelectBrowserProjectCommand(session_token, csrf_token, origin, project_id)),
+            ).execute(
+                SelectBrowserProjectCommand(
+                    session_token=session_token,
+                    project_id=project_id,
+                    csrf_token=csrf_token,
+                    origin=origin,
+                )
+            ),
             lambda value: value,
         )
 
@@ -237,7 +246,7 @@ class BrowserIdentityService:
         return await self._run(
             lambda repo: ListBrowserSessionsHandler(
                 RefreshBrowserSessionHandler(repo, self.clock, self._digest)
-            ).execute(ListBrowserSessionsCommand(session_token)),
+            ).execute(ListBrowserSessionsQuery(session_token)),
             tuple,
         )
 
@@ -246,7 +255,12 @@ class BrowserIdentityService:
     ) -> bool:
         return await self._run(
             lambda repo: RevokeBrowserSessionHandler(self._session_authorizer(repo)).execute(
-                RevokeBrowserSessionCommand(session_token, csrf_token, origin, session_id)
+                RevokeBrowserSessionCommand(
+                    session_token=session_token,
+                    session_id=session_id,
+                    csrf_token=csrf_token,
+                    origin=origin,
+                )
             ),
             bool,
         )
@@ -319,7 +333,7 @@ class BrowserIdentityService:
                 RefreshBrowserSessionCommand(session_token, project_id)
             )
             return await ListProjectMembersHandler(repo).execute(
-                ListProjectMembersQuery(principal.user_id, project_id)
+                ListProjectMembersByActorQuery(principal.user_id, project_id)
             )
 
         return await self._run(

@@ -1,10 +1,11 @@
 """Unit tests for the provisioning catalog use case."""
 
+import asyncio
 import unittest
 from uuid import UUID
 
-from developer_platform.application.module import ReadCatalog
 from developer_platform.application.resource_catalog.handler import ReadCatalogQueryHandler
+from developer_platform.application.resource_catalog.query import ReadCatalog
 from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.shared.errors import CatalogForbidden
 from developer_platform.authorization import ALL_SCOPES, authorize_platform_action
@@ -21,7 +22,7 @@ class ReadCatalogTests(unittest.TestCase):
         )
 
     def test_returns_disabled_option_for_authorized_project(self) -> None:
-        result = ReadCatalogQueryHandler().execute(self.access)
+        result = asyncio.run(ReadCatalogQueryHandler().execute(ReadCatalog(self.access)))
 
         self.assertEqual(result.project_id, self.project_id)
         self.assertEqual(len(result.templates), 1)
@@ -60,4 +61,7 @@ class ReadCatalogTests(unittest.TestCase):
             scopes=frozenset({"catalog:read"}),
         )
 
-        self.assertEqual(ReadCatalogQueryHandler().execute(access).project_id, other_project)
+        self.assertEqual(
+            asyncio.run(ReadCatalogQueryHandler().execute(ReadCatalog(access))).project_id,
+            other_project,
+        )

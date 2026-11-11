@@ -5,16 +5,16 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
+from developer_platform.application.project_registration.command import RegisterProjectCommand
+from developer_platform.application.resource_requests.submit_database_request.command import (
+    DatabaseRequest,
+)
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from test_foundation_postgres import async_engine_for
 
-from developer_platform.application.project_registration.command import RegisterProjectCommand
 from developer_platform.application.resource_catalog.models import PostgresOption, ResourceSize
-from developer_platform.application.resource_requests.submit_database_request.command import (
-    RequestDatabaseCommand,
-)
 from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.shared.errors import PlatformRequestError
 from developer_platform.infra.persistence.ledger import SQLAlchemyPlatformLedgerRepository
@@ -50,7 +50,7 @@ def access(user_id, project_id):
 
 
 def command_for(project_id, environment_id, *, display_name="test-db"):
-    return RequestDatabaseCommand(
+    return DatabaseRequest(
         project_id, environment_id, display_name, "postgres", "16", "local", "small", 3600
     )
 

@@ -7,8 +7,8 @@ SQLAlchemy and Alembic over PostgreSQL. See [README.md](README.md) for commands.
 
 ```text
 api  ->  context module contract  ->  application  ->  domain
-infra  ->  implements application/domain ports
-containers  ->  wires API, module implementations and infra adapters
+context infra  ->  implements application/domain ports and owns context DI
+root infra  ->  composes HTTP/worker hosts and both bounded contexts
 ```
 
 - `domain` is pure Python business language. It imports no FastAPI, Dishka,
@@ -20,8 +20,10 @@ containers  ->  wires API, module implementations and infra adapters
 - `api` authenticates requests, checks project/role permissions, translates HTTP
   to application commands/queries and maps results to responses. It contains no
   domain state transitions or direct ORM access.
-- `containers` constructs handlers, module implementations and adapters. Providers
-  contain no use-case logic.
+- Context `infra/composition` registers handlers, ports and concrete module
+  dispatchers. Root `infra` assembles cross-context HTTP and worker hosts.
+  Dishka constructs the selected handler lazily; providers contain no use-case
+  or transaction logic.
 - `shared/infra` contains technical primitives only. Business rules remain in the
   context that owns them.
 
@@ -54,7 +56,7 @@ Use this shape when the concepts exist; do not create empty DDD wrappers:
   infra/
     persistence/       ORM mappings and SQL repository implementations
     <adapter>.py        provider, security or external-system adapters
-  containers/          context DI providers and host adapters
+    composition/       context DI providers and explicit module dispatch
 ```
 
 Each use-case folder represents one developer action. Commands may change state
@@ -83,7 +85,7 @@ over generic `service`, `manager` or `utils`.
   by domain and persistence rules within the operation transaction.
 - Each bounded context exposes a typed module contract with async `execute(command)`
   and `query(query)` entry points. The context owns an explicit message-to-handler
-  registry and adapters under `containers/`; a request-scoped dispatcher resolves
+  registry and adapters under context `infra/composition/`; a request-scoped dispatcher resolves
   only the selected handler. The composition root binds an HTTP host wrapper to the
   module contract. Routes do not select or construct handlers. Application messages
   and results contain no FastAPI/Pydantic types, and unknown messages fail closed.
@@ -113,7 +115,7 @@ api/
 
 Within a capability, group routes and request/response schemas by resource or
 workflow when files grow; avoid one giant router or schema module. Keep common
-API plumbing at the API root. DI bindings remain in context/host containers, not
+API plumbing at the API root. DI bindings remain in context/root infrastructure, not
 in route modules. API routes call the context module contract; migrate affected
 callers together when changing an existing contract.
 

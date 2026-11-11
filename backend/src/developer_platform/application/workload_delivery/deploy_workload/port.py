@@ -6,7 +6,7 @@ from uuid import UUID
 
 from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.workload_delivery.deploy_workload.command import (
-    DeploymentCommand,
+    DeploymentSpec,
 )
 from developer_platform.application.workload_delivery.shared.models import DeploymentDetails
 
@@ -16,7 +16,7 @@ class ApplicationDeploymentRepository(Protocol):
         self,
         access: AccessContext,
         application_id: UUID,
-        command: DeploymentCommand,
+        command: DeploymentSpec,
         idempotency_key: str,
         request_hash: str,
         now: datetime,

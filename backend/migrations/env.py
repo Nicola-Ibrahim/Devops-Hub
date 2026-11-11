@@ -3,7 +3,7 @@
 from alembic import context
 from sqlalchemy import Connection
 
-from containers.schema import registered_metadata
+from infra.composition.schema import registered_metadata
 from shared.infra.persistence.database import create_database_engine
 from shared.infra.settings import DatabaseSettings
 

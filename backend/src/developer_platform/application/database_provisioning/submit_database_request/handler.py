@@ -5,10 +5,10 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 from developer_platform.application.database_provisioning.submit_database_request.command import (
-    RequestDatabaseCommand,
+    DatabaseRequest,
+    RequestTemporaryDatabase,
 )
 from developer_platform.application.resource_catalog.catalog import ApprovedPostgresCatalog
-from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.shared.errors import PlatformRequestError
 from developer_platform.domain.aggregates.resource_lifecycle import ResourceLifecycle
 from developer_platform.domain.entities.operation import AcceptedResourceRequest
@@ -27,7 +27,7 @@ class RequestTemporaryDatabaseHandler:
         repository: ResourceRequestRepository,
         catalog: ApprovedPostgresCatalog,
         clock: Callable[[], datetime],
-        fingerprint: Callable[[RequestDatabaseCommand], str],
+        fingerprint: Callable[[DatabaseRequest], str],
         installation_id: UUID | None,
     ) -> None:
         self.repository = repository
@@ -36,9 +36,8 @@ class RequestTemporaryDatabaseHandler:
         self.fingerprint = fingerprint
         self.installation_id = installation_id
 
-    async def execute(
-        self, access: AccessContext, command: RequestDatabaseCommand, key: str
-    ) -> AcceptedResourceRequest:
+    async def execute(self, message: RequestTemporaryDatabase) -> AcceptedResourceRequest:
+        access, command, key = message.access, message.request, message.idempotency_key
         try:
             idempotency_key = IdempotencyKey(key)
             name = ResourceName(command.display_name)

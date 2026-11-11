@@ -11,11 +11,6 @@ from uuid import uuid4
 import docker
 import pytest
 from cryptography.fernet import Fernet
-from sqlalchemy.engine import URL
-from sqlalchemy.ext.asyncio import async_sessionmaker
-from sqlalchemy.orm import Session
-from test_foundation_postgres import async_engine_for
-
 from developer_platform.application.application_delivery.shared.ports import (
     ApplicationDeliveryFailure,
 )
@@ -23,7 +18,11 @@ from developer_platform.application.resource_lifecycle.ports import (
     DatabaseCredentials,
     ProvisioningJob,
 )
-from developer_platform.containers.application_bindings import SQLAlchemyApplicationDatabaseBindings
+from sqlalchemy.engine import URL
+from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.orm import Session
+from test_foundation_postgres import async_engine_for
+
 from developer_platform.infra.application_runtime import (
     DockerApplicationRuntime,
     managed_resource_container_name,
@@ -31,6 +30,9 @@ from developer_platform.infra.application_runtime import (
 from developer_platform.infra.credentials import FernetResourceCredentialCipher
 from developer_platform.infra.delivery_adapters import DockerApplicationAdapter
 from developer_platform.infra.docker_provider import DockerPostgresProvider
+from developer_platform.infra.persistence.application_bindings import (
+    SQLAlchemyApplicationDatabaseBindings,
+)
 from developer_platform.infra.persistence.delivery import ApplicationRow
 from developer_platform.infra.persistence.models import (
     ProjectEnvironmentRow,

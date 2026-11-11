@@ -6,10 +6,10 @@ from uuid import uuid4
 import pytest
 from starlette.requests import Request
 
-from containers.platform_module import PlatformHttpModule
-from developer_platform.application.module import ReadResource
+from developer_platform.application.database_provisioning.read_resources.query import ReadResource
 from developer_platform.application.shared.errors import CatalogForbidden
 from developer_platform.domain.access import AccessContext
+from infra.http.platform_module import PlatformHttpModule
 from shared.infra.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 
@@ -45,7 +45,7 @@ def test_http_host_rechecks_trusted_access_and_rolls_back_denial(monkeypatch) ->
         events.append("authenticate")
         return trusted
 
-    monkeypatch.setattr("containers.platform_module.authenticate_request", authenticate)
+    monkeypatch.setattr("infra.http.platform_module.authenticate_request", authenticate)
     request = Request({"type": "http", "method": "GET", "path": "/"})
     request.state.request_identity = "private-token"
     host = PlatformHttpModule(Container(), request, object(), lambda: None)
@@ -84,7 +84,7 @@ def test_http_host_dispatches_with_authenticated_actor_not_message_claims(monkey
         events.append("authenticate")
         return trusted
 
-    monkeypatch.setattr("containers.platform_module.authenticate_request", authenticate)
+    monkeypatch.setattr("infra.http.platform_module.authenticate_request", authenticate)
     request = Request({"type": "http", "method": "GET", "path": "/"})
     request.state.request_identity = "private-token"
     host = PlatformHttpModule(Container(), request, object(), lambda: None)

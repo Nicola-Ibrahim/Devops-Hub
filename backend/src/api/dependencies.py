@@ -9,11 +9,11 @@ from api.credentials import BrowserRequestCredentials, RequestIdentity, request_
 from api.identity.schemas import PrincipalView
 from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.shared.errors import PlatformRequestError
-from identity.application.module import IdentityModule
-from identity.application.module_messages import (
-    AuthenticateBrowserSessionQuery,
-    AuthenticateIdentityTokenQuery,
+from identity.application.authenticate_api_token.query import (
+    AuthenticateApiTokenQuery,
 )
+from identity.application.browser_sessions.query import AuthenticateBrowserSessionQuery
+from identity.application.module import IdentityModule
 
 
 @inject
@@ -33,7 +33,7 @@ async def current_principal(
             role=cast(Literal["developer", "admin"], principal.role),
             scopes=list(principal.scopes),
         )
-    token_principal = await identity.query(AuthenticateIdentityTokenQuery(credentials))
+    token_principal = await identity.query(AuthenticateApiTokenQuery(credentials))
     return PrincipalView(
         user_id=token_principal.user_id,
         project_id=token_principal.project_id,

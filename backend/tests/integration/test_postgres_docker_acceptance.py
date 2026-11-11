@@ -9,6 +9,7 @@ import docker
 import psycopg
 import pytest
 from cryptography.fernet import Fernet
+from developer_platform.application.resource_worker.handler import ResourceWorkerHandler
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import Session
 from test_foundation_postgres import (
@@ -18,11 +19,6 @@ from test_foundation_postgres import (
     issue,
 )
 
-from developer_platform.application.resource_worker.handler import ResourceWorkerHandler
-from developer_platform.containers.worker_queue import (
-    PostgresResourceEffectGuard,
-    SqlAlchemyProvisioningQueue,
-)
 from developer_platform.infra.credentials import FernetResourceCredentialCipher
 from developer_platform.infra.docker_provider import DockerPostgresProvider
 from developer_platform.infra.persistence.models import (
@@ -31,6 +27,10 @@ from developer_platform.infra.persistence.models import (
     Reservation,
     Resource,
     ResourceSecret,
+)
+from developer_platform.infra.persistence.worker_queue import (
+    PostgresResourceEffectGuard,
+    SqlAlchemyProvisioningQueue,
 )
 from shared.infra.settings import Settings
 

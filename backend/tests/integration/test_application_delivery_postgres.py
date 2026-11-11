@@ -5,14 +5,14 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
+from developer_platform.application.application_delivery.create_application.command import (
+    ApplicationRegistration,
+)
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import Session
 from test_foundation_postgres import async_engine_for
 
-from developer_platform.application.application_delivery.create_application.command import (
-    ApplicationCommand,
-)
 from developer_platform.application.shared.dto import AccessContext
 from developer_platform.infra.persistence.delivery import (
     ApplicationDeliveryIdempotencyRow,
@@ -60,7 +60,9 @@ def test_duplicate_creation_and_expired_worker_claim_recover(postgres_engine) ->
         sessions = async_sessionmaker(engine, expire_on_commit=False)
         try:
             access = AccessContext(user_id, project_id, "developer", frozenset({"resources:write"}))
-            command = ApplicationCommand(environment_id, "delivery-demo", "python-fastapi", "1.0.0")
+            command = ApplicationRegistration(
+                environment_id, "delivery-demo", "python-fastapi", "1.0.0"
+            )
             async with sessions() as session, session.begin():
                 repository = SQLAlchemyApplicationDeliveryRepository(session)
                 first, replayed_first = await repository.create_application(
@@ -111,6 +113,7 @@ def test_preview_close_waits_for_claimed_resource_and_carries_late_resource_id(
     postgres_engine,
 ) -> None:
     from developer_platform.application.application_delivery.shared.ports import DeliveryResult
+
     from developer_platform.infra.persistence.models import Resource
 
     user_id, project_id, team_id, environment_id = uuid4(), uuid4(), uuid4(), uuid4()
@@ -146,7 +149,9 @@ def test_preview_close_waits_for_claimed_resource_and_carries_late_resource_id(
         cleanup_claim = None
         try:
             access = AccessContext(user_id, project_id, "developer", frozenset({"resources:write"}))
-            command = ApplicationCommand(environment_id, "preview-demo", "python-fastapi", "1.0.0")
+            command = ApplicationRegistration(
+                environment_id, "preview-demo", "python-fastapi", "1.0.0"
+            )
             async with sessions() as session, session.begin():
                 repository = SQLAlchemyApplicationDeliveryRepository(session)
                 app, _ = await repository.create_application(
@@ -311,7 +316,9 @@ def test_preview_close_and_worker_claim_use_consistent_lock_order(postgres_engin
         sessions = async_sessionmaker(engine, expire_on_commit=False)
         try:
             access = AccessContext(user_id, project_id, "developer", frozenset({"resources:write"}))
-            command = ApplicationCommand(environment_id, "preview-lock", "python-fastapi", "1.0.0")
+            command = ApplicationRegistration(
+                environment_id, "preview-lock", "python-fastapi", "1.0.0"
+            )
             async with sessions() as session, session.begin():
                 repository = SQLAlchemyApplicationDeliveryRepository(session)
                 app, _ = await repository.create_application(

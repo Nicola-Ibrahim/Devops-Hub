@@ -5,7 +5,7 @@ from typing import Protocol
 
 from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.workload_delivery.create_workload.command import (
-    CreateWorkloadCommand,
+    ApplicationRegistration,
 )
 from developer_platform.application.workload_delivery.shared.models import WorkloadDetails
 
@@ -14,7 +14,7 @@ class ApplicationCreationRepository(Protocol):
     async def create_application(
         self,
         access: AccessContext,
-        command: CreateWorkloadCommand,
+        command: ApplicationRegistration,
         idempotency_key: str,
         request_hash: str,
         now: datetime,

@@ -5,9 +5,13 @@ from uuid import uuid4
 
 import pytest
 from developer_platform.application.resource_lifecycle.ports import DatabaseCredentials
-from developer_platform.application.resource_lifecycle.service import ManageDatabaseLifecycleHandler
 
-from developer_platform.application.module import ReadDatabaseConnection
+from developer_platform.application.database_lifecycle.read_connection.handler import (
+    GetDatabaseConnectionQueryHandler,
+)
+from developer_platform.application.database_lifecycle.read_connection.query import (
+    ReadDatabaseConnection,
+)
 from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.shared.errors import CatalogForbidden, PlatformRequestError
 from developer_platform.authorization import authorize_platform_action
@@ -27,7 +31,9 @@ def test_connection_requires_scope_and_cipher_before_sensitive_read():
         authorize_platform_action(ReadDatabaseConnection(forbidden, resource_id))
     with pytest.raises(PlatformRequestError) as error:
         asyncio.run(
-            ManageDatabaseLifecycleHandler(Repository(), None).connection(allowed, resource_id)
+            GetDatabaseConnectionQueryHandler(Repository(), None).execute(
+                ReadDatabaseConnection(allowed, resource_id)
+            )
         )
     assert error.value.code == "credentials_unavailable"
 
@@ -53,7 +59,9 @@ def test_connection_encodes_credential_components_without_exposing_repr():
 
     access = AccessContext(user_id, project_id, "developer", frozenset({"connections:read"}))
     result = asyncio.run(
-        ManageDatabaseLifecycleHandler(Repository(), Cipher()).connection(access, resource_id)
+        GetDatabaseConnectionQueryHandler(Repository(), Cipher()).execute(
+            ReadDatabaseConnection(access, resource_id)
+        )
     )
     assert result.connection_string == ("postgresql://user%40name:pass%3Aword@[::1]:5432/db%2Fname")
     assert "pass:word" not in repr(result)

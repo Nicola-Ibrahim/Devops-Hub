@@ -14,34 +14,32 @@ from api.platform.schemas import (
     AcceptedOperation,
     ResourceRequest,
 )
-from containers.http import create_app
 from developer_platform.application.database_provisioning.read_resources.query import (
     OperationDetails,
-    ResourceDetails,
-)
-from developer_platform.application.module import (
-    DeveloperPlatformModule,
     ReadOperation,
     ReadProject,
     ReadProjects,
     ReadResource,
     ReadResources,
+    ResourceDetails,
+)
+from developer_platform.application.database_provisioning.submit_database_request.command import (
     RequestTemporaryDatabase,
 )
+from developer_platform.application.module import DeveloperPlatformModule
 from developer_platform.application.projects.result import (
     EnvironmentDetails,
     ProjectRegistrationDetails,
 )
 from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.shared.errors import PlatformRequestError
+from identity.application.authenticate_api_token.query import AuthenticateApiTokenQuery
+from identity.application.browser_sessions.query import AuthenticateBrowserSessionQuery
 from identity.application.module import IdentityModule
-from identity.application.module_messages import (
-    AuthenticateBrowserSessionQuery,
-    AuthenticateIdentityTokenQuery,
-)
 from identity.contracts import AuthenticatedPrincipal
 from identity.domain.browser_identity import BrowserMembership, BrowserPrincipal
 from identity.domain.errors import AuthenticationRejected
+from infra.http.app import create_app
 
 PROJECT_ID = UUID("11111111-1111-4111-8111-111111111111")
 ENVIRONMENT_ID = UUID("22222222-2222-4222-8222-222222222222")
@@ -188,7 +186,7 @@ class FakeIdentityModule:
                 ),
                 "csrf",
             )
-        assert isinstance(query, AuthenticateIdentityTokenQuery)
+        assert isinstance(query, AuthenticateApiTokenQuery)
         if query.token != TOKEN:
             raise AuthenticationRejected()
         return AuthenticatedPrincipal(

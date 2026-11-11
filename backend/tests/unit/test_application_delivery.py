@@ -6,11 +6,11 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-
 from developer_platform.application.application_delivery.shared.ports import (
     ApplicationDeliveryFailure,
     TemplateVersion,
 )
+
 from developer_platform.infra.delivery_adapters import (
     FilesystemTemplateCatalog,
     HmacGitHubWebhookVerifier,
@@ -111,8 +111,8 @@ def test_template_update_pr_preserves_user_changes_and_uses_owned_branch(monkeyp
     import base64
 
     import httpx
-
     from developer_platform.application.application_delivery.shared.ports import GeneratedFile
+
     from developer_platform.infra.delivery_adapters import GitHubRepositoryAdapter
 
     def digest(value):

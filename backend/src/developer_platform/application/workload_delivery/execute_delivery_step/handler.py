@@ -3,7 +3,7 @@
 from uuid import UUID
 
 from developer_platform.application.workload_delivery.attach_database.command import (
-    ResourceAttachmentCommand,
+    ResourceAttachmentSpec,
 )
 from developer_platform.application.workload_delivery.shared.models import (
     DeliveryClaim,
@@ -62,7 +62,7 @@ class ExecuteDeliveryStepHandler:
             ttl_raw = claim.payload.get("ttl_seconds", 0)
             if not isinstance(ttl_raw, int) or isinstance(ttl_raw, bool):
                 raise ApplicationDeliveryFailure("resource_request_invalid", retryable=False)
-            command = ResourceAttachmentCommand(
+            command = ResourceAttachmentSpec(
                 template_id=str(claim.payload.get("template_id", "")),
                 version=str(claim.payload.get("version", "")),
                 target_id=str(claim.payload.get("target_id", "")),

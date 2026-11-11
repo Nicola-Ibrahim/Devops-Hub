@@ -10,15 +10,15 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from api.platform.schemas import RenewRequest, ResourceRequest, ResourceView
-from containers.http import create_app
-from developer_platform.application.module import DeveloperPlatformModule, ReadCatalog
+from developer_platform.application.module import DeveloperPlatformModule
 from developer_platform.application.resource_catalog.handler import ReadCatalogQueryHandler
+from developer_platform.application.resource_catalog.query import ReadCatalog
 from identity.application.authenticate_api_token.handler import AuthenticateApiTokenHandler
 from identity.application.authenticate_api_token.query import AuthenticateApiTokenQuery
 from identity.application.module import IdentityModule
-from identity.application.module_messages import AuthenticateIdentityTokenQuery
 from identity.domain.credentials import ApiTokenAuthenticationDetails
 from identity.infra.tokens import token_digest
+from infra.http.app import create_app
 from shared.infra.readiness import ReadinessProbe
 from shared.infra.settings import Settings
 
@@ -160,7 +160,7 @@ def test_http_transport_works_with_fake_application_ports():
 
     class FakeIdentityQuery:
         async def query(self, message):
-            assert isinstance(message, AuthenticateIdentityTokenQuery)
+            assert isinstance(message, AuthenticateApiTokenQuery)
             return await AuthenticateApiTokenHandler(Reader(), Hasher(), lambda: now).execute(
                 AuthenticateApiTokenQuery(message.token)
             )
@@ -168,7 +168,7 @@ def test_http_transport_works_with_fake_application_ports():
     class FakePlatformModule:
         async def query(self, message):
             assert isinstance(message, ReadCatalog)
-            return ReadCatalogQueryHandler().execute(message.access)
+            return await ReadCatalogQueryHandler().execute(message)
 
     class FakeCapabilities(Provider):
         @provide(scope=Scope.REQUEST)

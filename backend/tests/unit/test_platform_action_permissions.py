@@ -6,23 +6,27 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from developer_platform.application.module import (
-    ProcessGithubPreviewWebhook,
-    ReadCatalog,
+from developer_platform.application.database_lifecycle.read_connection.query import (
     ReadDatabaseConnection,
+)
+from developer_platform.application.database_provisioning.read_resources.query import (
     ReadProject,
     ReadProjects,
-    ReadTemplates,
 )
+from developer_platform.application.resource_catalog.query import ReadCatalog
 from developer_platform.application.shared.errors import CatalogForbidden, PlatformRequestError
-from developer_platform.authorization import ACTION_PERMISSIONS, authorize_platform_action
-from developer_platform.containers.module import (
-    PLATFORM_HANDLER_REGISTRY,
-    _DeveloperPlatformDispatcher,
+from developer_platform.application.workload_delivery.handle_preview_webhook.command import (
+    ProcessGithubPreviewWebhook,
 )
+from developer_platform.application.workload_delivery.read_templates.query import ReadTemplates
+from developer_platform.authorization import ACTION_PERMISSIONS, authorize_platform_action
 from developer_platform.domain.access import AccessContext
 from developer_platform.domain.errors import DomainError
 from developer_platform.domain.services.resource_access import ResourceAccessPolicy, ResourceActor
+from developer_platform.infra.composition.module import (
+    PLATFORM_HANDLER_REGISTRY,
+    _DeveloperPlatformDispatcher,
+)
 
 
 def test_every_registered_message_has_an_explicit_policy() -> None:

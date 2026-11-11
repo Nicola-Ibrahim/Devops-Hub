@@ -6,13 +6,15 @@ from datetime import datetime
 
 from identity.application.browser_sessions.command import (
     AuthorizeBrowserMutationCommand,
-    ListBrowserSessionsCommand,
     LogoutAllBrowserSessionsCommand,
     LogoutBrowserSessionCommand,
     RefreshBrowserSessionCommand,
     RevokeBrowserSessionCommand,
     RotateBrowserCsrfCommand,
     SelectBrowserProjectCommand,
+)
+from identity.application.browser_sessions.query import (
+    ListBrowserSessionsQuery,
 )
 from identity.domain.browser_errors import BrowserAuthenticationRejected
 from identity.domain.browser_identity import BrowserPrincipal, BrowserSession
@@ -118,7 +120,11 @@ class SelectBrowserProjectHandler:
         )
 
     async def execute(self, command: SelectBrowserProjectCommand) -> BrowserPrincipal:
-        await self.authorize.execute(command)
+        await self.authorize.execute(
+            AuthorizeBrowserMutationCommand(
+                command.session_token, command.csrf_token, command.origin
+            )
+        )
         csrf = self.generate_secret()
         token_digest = self.digest_secret(command.session_token)
         principal = await self.repository.select_project(
@@ -136,7 +142,11 @@ class LogoutBrowserSessionHandler:
         self.authorizer = authorizer
 
     async def execute(self, command: LogoutBrowserSessionCommand) -> None:
-        await self.authorizer.execute(command)
+        await self.authorizer.execute(
+            AuthorizeBrowserMutationCommand(
+                command.session_token, command.csrf_token, command.origin
+            )
+        )
         await self.authorizer.repository.logout(
             self.authorizer.digest_secret(command.session_token), self.authorizer.clock()
         )
@@ -147,7 +157,11 @@ class LogoutAllBrowserSessionsHandler:
         self.authorizer = authorizer
 
     async def execute(self, command: LogoutAllBrowserSessionsCommand) -> int:
-        principal = await self.authorizer.execute(command)
+        principal = await self.authorizer.execute(
+            AuthorizeBrowserMutationCommand(
+                command.session_token, command.csrf_token, command.origin
+            )
+        )
         return await self.authorizer.repository.logout_all(
             principal.user_id, self.authorizer.clock()
         )
@@ -157,7 +171,7 @@ class ListBrowserSessionsHandler:
     def __init__(self, authenticate: RefreshBrowserSessionHandler) -> None:
         self.authenticate = authenticate
 
-    async def execute(self, command: ListBrowserSessionsCommand) -> tuple[BrowserSession, ...]:
+    async def execute(self, command: ListBrowserSessionsQuery) -> tuple[BrowserSession, ...]:
         principal = await self.authenticate.execute(
             RefreshBrowserSessionCommand(command.session_token)
         )
@@ -171,7 +185,11 @@ class RevokeBrowserSessionHandler:
         self.authorizer = authorizer
 
     async def execute(self, command: RevokeBrowserSessionCommand) -> bool:
-        principal = await self.authorizer.execute(command)
+        principal = await self.authorizer.execute(
+            AuthorizeBrowserMutationCommand(
+                command.session_token, command.csrf_token, command.origin
+            )
+        )
         return await self.authorizer.repository.revoke_session(
             principal.user_id, command.session_id, self.authorizer.clock()
         )

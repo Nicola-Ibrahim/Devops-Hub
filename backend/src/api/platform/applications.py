@@ -10,27 +10,31 @@ from pydantic import Field
 
 from api.dependencies import platform_access
 from api.schemas import Contract
-from developer_platform.application.module import (
+from developer_platform.application.module import DeveloperPlatformModule
+from developer_platform.application.shared.dto import AccessContext
+from developer_platform.application.workload_delivery.attach_database.command import (
     AttachDatabase,
+    ResourceAttachmentSpec,
+)
+from developer_platform.application.workload_delivery.create_workload.command import (
+    ApplicationRegistration,
     CreateApplication,
+)
+from developer_platform.application.workload_delivery.deploy_workload.command import (
     DeployApplication,
-    DeveloperPlatformModule,
+    DeploymentSpec,
+)
+from developer_platform.application.workload_delivery.handle_preview_webhook.command import (
     ProcessGithubPreviewWebhook,
+)
+from developer_platform.application.workload_delivery.read_templates.query import ReadTemplates
+from developer_platform.application.workload_delivery.read_workloads.query import (
     ReadApplication,
     ReadApplications,
     ReadDeploymentHistory,
-    ReadTemplates,
+)
+from developer_platform.application.workload_delivery.retry_delivery_step.command import (
     RetryDeliveryStep,
-)
-from developer_platform.application.shared.dto import AccessContext
-from developer_platform.application.workload_delivery.attach_database.command import (
-    ResourceAttachmentCommand,
-)
-from developer_platform.application.workload_delivery.create_workload.command import (
-    ApplicationCommand,
-)
-from developer_platform.application.workload_delivery.deploy_workload.command import (
-    DeploymentCommand,
 )
 from developer_platform.application.workload_delivery.shared.models import (
     ApplicationDetails,
@@ -173,7 +177,9 @@ async def create_application(
     module: FromDishka[DeveloperPlatformModule],
     idempotency_key: IdempotencyKey,
 ) -> ApplicationAccepted:
-    message = CreateApplication(access, ApplicationCommand(**body.model_dump()), idempotency_key)
+    message = CreateApplication(
+        access, ApplicationRegistration(**body.model_dump()), idempotency_key
+    )
     authorize_platform_action(message)
     application, replayed = await module.execute(message)
     return ApplicationAccepted(application=_application(application), replayed=replayed)
@@ -222,7 +228,7 @@ async def attach_resource(
     idempotency_key: IdempotencyKey,
 ) -> DeliveryStepView:
     message = AttachDatabase(
-        access, application_id, ResourceAttachmentCommand(**body.model_dump()), idempotency_key
+        access, application_id, ResourceAttachmentSpec(**body.model_dump()), idempotency_key
     )
     authorize_platform_action(message)
     step = await module.execute(message)
@@ -244,7 +250,7 @@ async def deploy(
     idempotency_key: IdempotencyKey,
 ) -> DeploymentView:
     message = DeployApplication(
-        access, application_id, DeploymentCommand(**body.model_dump()), idempotency_key
+        access, application_id, DeploymentSpec(**body.model_dump()), idempotency_key
     )
     authorize_platform_action(message)
     deployment = await module.execute(message)

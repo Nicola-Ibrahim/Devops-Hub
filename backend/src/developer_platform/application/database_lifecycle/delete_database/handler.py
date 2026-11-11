@@ -1,9 +1,8 @@
 from uuid import UUID
 
 from developer_platform.application.database_lifecycle.delete_database.command import (
-    DeleteTemporaryDatabaseCommand,
+    DeleteDatabase,
 )
-from developer_platform.application.shared.dto import AccessContext
 from developer_platform.domain.resource_lifecycle_repository import ResourceLifecycleRepository
 
 
@@ -11,7 +10,8 @@ class DeleteTemporaryDatabaseHandler:
     def __init__(self, repository: ResourceLifecycleRepository) -> None:
         self.repository = repository
 
-    async def execute(self, access: AccessContext, command: DeleteTemporaryDatabaseCommand) -> UUID:
+    async def execute(self, command: DeleteDatabase) -> UUID:
+        access = command.access
         return await self.repository.delete(
             project_id=access.project_id,
             actor_id=access.user_id,

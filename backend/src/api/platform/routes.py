@@ -23,31 +23,34 @@ from api.platform.schemas import (
     ResourceRequest,
     ResourceView,
 )
-from developer_platform.application.database_lifecycle.renew_lease.command import RenewDatabaseLease
-from developer_platform.application.database_provisioning.submit_database_request.command import (
-    RequestDatabaseCommand,
+from developer_platform.application.database_lifecycle.delete_database.command import DeleteDatabase
+from developer_platform.application.database_lifecycle.read_activity.query import (
+    ReadResourceActivity,
 )
-from developer_platform.application.module import (
-    DeleteDatabase,
-    DeveloperPlatformModule,
-    ReadCatalog,
+from developer_platform.application.database_lifecycle.read_connection.query import (
     ReadDatabaseConnection,
+)
+from developer_platform.application.database_lifecycle.renew_lease.command import (
+    RenewDatabase,
+)
+from developer_platform.application.database_provisioning.read_resources.query import (
     ReadOperation,
     ReadProject,
     ReadProjects,
     ReadResource,
-    ReadResourceActivity,
     ReadResources,
-    RenewDatabase,
+)
+from developer_platform.application.database_provisioning.submit_database_request.command import (
+    DatabaseRequest,
     RequestTemporaryDatabase,
 )
+from developer_platform.application.module import DeveloperPlatformModule
+from developer_platform.application.resource_catalog.query import ReadCatalog
 from developer_platform.application.shared.dto import AccessContext
 from developer_platform.authorization import ALL_SCOPES, authorize_platform_action
+from identity.application.authenticate_api_token.query import AuthenticateApiTokenQuery
+from identity.application.browser_sessions.query import AuthenticateBrowserSessionQuery
 from identity.application.module import IdentityModule
-from identity.application.module_messages import (
-    AuthenticateBrowserSessionQuery,
-    AuthenticateIdentityTokenQuery,
-)
 
 router = APIRouter()
 Access = Annotated[AccessContext, Depends(platform_access)]
@@ -83,7 +86,7 @@ async def request_database(
     ],
 ) -> AcceptedOperation:
     message = RequestTemporaryDatabase(
-        access, RequestDatabaseCommand(**command.model_dump()), idempotency_key
+        access, DatabaseRequest(**command.model_dump()), idempotency_key
     )
     authorize_platform_action(message)
     result = await module.execute(message)
@@ -165,7 +168,7 @@ async def projects(
             for member in principal.memberships
         )
     else:
-        token_principal = await identity.query(AuthenticateIdentityTokenQuery(credentials))
+        token_principal = await identity.query(AuthenticateApiTokenQuery(credentials))
         accesses = (
             AccessContext(
                 token_principal.user_id,
@@ -190,10 +193,7 @@ async def renew(
     access: Access,
     module: FromDishka[DeveloperPlatformModule],
 ) -> ResourceView:
-    message = RenewDatabase(
-        access,
-        RenewDatabaseLease(resource_id, command.expected_revision, command.expires_at),
-    )
+    message = RenewDatabase(access, resource_id, command.expected_revision, command.expires_at)
     authorize_platform_action(message)
     row = await module.execute(message)
     return ResourceView.model_validate(asdict(row))

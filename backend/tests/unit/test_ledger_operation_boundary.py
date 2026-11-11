@@ -10,14 +10,19 @@ from fastapi.testclient import TestClient
 from sqlalchemy.exc import SQLAlchemyError
 from test_operation_lifecycle import CapturedResponses, FakeSession
 
-from containers.factory import create_container
-from containers.http import create_app
+from developer_platform.application.database_provisioning.read_resources.handler import (
+    ReadResourcesHandler,
+)
+from developer_platform.application.database_provisioning.submit_database_request.handler import (
+    RequestTemporaryDatabaseHandler,
+)
 from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.shared.errors import PlatformRequestError
-from developer_platform.containers.module import RequestDatabaseAdapter, ResourcesAdapter
+from identity.application.authenticate_api_token.query import AuthenticateApiTokenQuery
 from identity.application.module import IdentityModule
-from identity.application.module_messages import AuthenticateIdentityTokenQuery
 from identity.contracts import AuthenticatedPrincipal
+from infra.composition.factory import create_container
+from infra.http.app import create_app
 from shared.infra.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from shared.infra.settings import Settings
 
@@ -31,11 +36,11 @@ def test_platform_di_binds_both_context_repositories_to_one_operation_session():
     async def run():
         try:
             async with container() as scope:
-                request = await scope.get(RequestDatabaseAdapter)
-                read = await scope.get(ResourcesAdapter)
+                request = await scope.get(RequestTemporaryDatabaseHandler)
+                read = await scope.get(ReadResourcesHandler)
                 unit = await scope.get(SqlAlchemyUnitOfWork)
-                assert request.handler.repository._session is read.handler.repository._session
-                assert read.handler.repository._session is unit.session
+                assert request.repository._session is read.repository._session
+                assert read.repository._session is unit.session
                 await unit.session.close()
         finally:
             await container.close()
@@ -56,9 +61,7 @@ def test_http_ledger_authentication_and_commit_precede_success(outcome, monkeypa
 
     class Identity:
         async def query(self, query):
-            assert query == AuthenticateIdentityTokenQuery(
-                "synthetic-raw-bearer-token-for-operation"
-            )
+            assert query == AuthenticateApiTokenQuery("synthetic-raw-bearer-token-for-operation")
             return AuthenticatedPrincipal(
                 user, project, token_id, "developer", frozenset({"resources:write"})
             )
@@ -70,7 +73,7 @@ def test_http_ledger_authentication_and_commit_precede_success(outcome, monkeypa
         events.append("authenticate")
         return AccessContext(user, project, "developer", frozenset({"resources:write"}))
 
-    monkeypatch.setattr("containers.platform_module.authenticate_request", authenticate)
+    monkeypatch.setattr("infra.http.platform_module.authenticate_request", authenticate)
 
     class Requester:
         async def execute(self, message):
@@ -97,7 +100,7 @@ def test_http_ledger_authentication_and_commit_precede_success(outcome, monkeypa
             return unit
 
         @provide(scope=Scope.REQUEST, override=True)
-        def request_adapter(self) -> RequestDatabaseAdapter:
+        def request_handler(self) -> RequestTemporaryDatabaseHandler:
             return requester
 
     config = Settings(

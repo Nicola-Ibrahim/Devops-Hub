@@ -2,12 +2,10 @@
 
 from collections.abc import Callable
 from datetime import datetime
-from uuid import UUID
 
-from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.shared.errors import PlatformRequestError
 from developer_platform.application.workload_delivery.attach_database.command import (
-    ResourceAttachmentCommand,
+    AttachDatabase,
 )
 from developer_platform.application.workload_delivery.attach_database.port import (
     ApplicationResourceAttachmentRepository,
@@ -30,14 +28,9 @@ class AttachApplicationResourceHandler:
     ) -> None:
         self.repository, self.fingerprint, self.clock = repository, fingerprint, clock
 
-    async def execute(
-        self,
-        access: AccessContext,
-        application_id: UUID,
-        command: ResourceAttachmentCommand,
-        idempotency_key: str,
-    ) -> DeliveryStepDetails:
-        validate_delivery_key(idempotency_key)
+    async def execute(self, message: AttachDatabase) -> DeliveryStepDetails:
+        access, application_id, command = message.access, message.application_id, message.request
+        validate_delivery_key(message.idempotency_key)
         try:
             ResourceSpec(
                 command.template_id,
@@ -56,10 +49,7 @@ class AttachApplicationResourceHandler:
             access,
             application_id,
             command,
-            idempotency_key,
+            message.idempotency_key,
             self.fingerprint.for_value(command),
             self.clock(),
         )
-
-
-AttachWorkloadDatabaseHandler = AttachApplicationResourceHandler

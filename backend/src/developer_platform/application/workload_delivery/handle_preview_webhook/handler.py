@@ -7,7 +7,7 @@ from uuid import UUID
 
 from developer_platform.application.shared.errors import PlatformRequestError
 from developer_platform.application.workload_delivery.handle_preview_webhook.command import (
-    ProcessGithubPreviewWebhookCommand,
+    ProcessGithubPreviewWebhook,
 )
 from developer_platform.application.workload_delivery.handle_preview_webhook.port import (
     PreviewWebhookRepository,
@@ -45,9 +45,13 @@ class ProcessGithubPreviewWebhookHandler:
         self.preview_owner_id = preview_owner_id
         self.preview_ttl_seconds = preview_ttl_seconds
 
-    async def execute(self, command: ProcessGithubPreviewWebhookCommand) -> WebhookResult:
+    async def execute(self, command: ProcessGithubPreviewWebhook) -> WebhookResult:
         raw_body, signature = command.raw_body, command.signature
         delivery_id, event = command.delivery_id, command.event
+        if delivery_id is None or event is None:
+            raise PlatformRequestError(
+                "webhook_invalid", "GitHub delivery headers are required", 400
+            )
         if self.webhook_verifier is None or self.allowed_repository_owner is None:
             raise PlatformRequestError(
                 "webhooks_disabled", "GitHub preview events are not configured", 503

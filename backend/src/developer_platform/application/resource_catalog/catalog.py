@@ -1,7 +1,7 @@
 """Approved PostgreSQL options and availability policy."""
 
 from developer_platform.application.database_provisioning.submit_database_request.command import (
-    RequestDatabaseCommand,
+    DatabaseRequest,
 )
 from developer_platform.application.resource_catalog.models import PostgresOption
 from developer_platform.application.shared.errors import PlatformRequestError
@@ -11,7 +11,7 @@ class ApprovedPostgresCatalog:
     def __init__(self, options: tuple[PostgresOption, ...] = (PostgresOption(),)) -> None:
         self.options = options
 
-    def require_option(self, command: RequestDatabaseCommand) -> PostgresOption:
+    def require_option(self, command: DatabaseRequest) -> PostgresOption:
         for option in self.options:
             if (option.template_id, option.version, option.target_id, option.size.id) == (
                 command.template_id,

@@ -10,14 +10,15 @@ from pathlib import Path
 
 import pytest
 
-from containers.http import create_app
+from infra.http.app import create_app
 from shared.infra.settings import Settings
 
 BACKEND = Path(__file__).parents[2]
 SRC = BACKEND / "src"
-ROOTS = {"api", "identity", "developer_platform", "shared", "containers"}
+ROOTS = {"api", "identity", "developer_platform", "shared", "infra"}
 CONTEXTS = {"identity", "developer_platform"}
 RETIRED_ROOTS = {
+    "containers",
     "entrypoints",
     "bootstrap",
     "provisioning",
@@ -67,19 +68,7 @@ def violation(module, target):
     if root in CONTEXTS:
         if target == "shared.dispatch" or target.startswith("shared.dispatch."):
             return False  # Pure cross-context message/handler contract.
-        layer = module_parts[1:2]
-        if layer == ["containers"]:
-            if other in CONTEXTS - {root}:
-                return True
-            if other == "containers":
-                return not any(
-                    target == allowed or target.startswith(allowed + ".")
-                    for allowed in ("containers.factory", "containers.schema")
-                )
-            if other == "shared":
-                return len(target_parts) < 2 or target_parts[1] != "infra"
-            return False
-        if other in CONTEXTS - {root} or other in {"api", "containers", "entrypoints"}:
+        if other in CONTEXTS - {root} or other in {"api", "infra", "containers", "entrypoints"}:
             return True
         if module_parts[1:2] in (["domain"], ["application"]) or module == "identity.contracts":
             if other == "shared" or "infra" in target_parts[1:]:
@@ -87,19 +76,20 @@ def violation(module, target):
             if other in IO_LIBRARIES:
                 return True
         if module_parts[1:2] == ["infra"]:
-            if other in CONTEXTS - {root} or other in {"api", "containers", "entrypoints"}:
+            if other in CONTEXTS - {root} or other in {"api", "infra", "containers", "entrypoints"}:
                 return True
             if other == "shared":
                 return len(target_parts) > 1 and target_parts[1] != "infra"
             return False
         return False
     if root == "shared":
-        return other in CONTEXTS | {"api", "containers", "entrypoints"}
+        return other in CONTEXTS | {"api", "infra", "containers", "entrypoints"}
     if root == "api":
         if target.startswith("shared.infra.readiness"):
             return False
         return (
-            other in {"shared", "containers", "entrypoints", "sqlalchemy", "psycopg", "docker"}
+            other
+            in {"shared", "infra", "containers", "entrypoints", "sqlalchemy", "psycopg", "docker"}
             or "infra" in target_parts[1:]
         )
     return False

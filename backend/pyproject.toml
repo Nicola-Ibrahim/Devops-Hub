@@ -25,7 +25,7 @@ requires = ["hatchling>=1.27,<2"]
 build-backend = "hatchling.build"
 
 [tool.fastapi]
-entrypoint = "containers.asgi:app"
+entrypoint = "infra.http.asgi:app"
 
 [tool.hatch.build.targets.wheel]
 packages = [
@@ -33,12 +33,14 @@ packages = [
     "src/identity",
     "src/developer_platform",
     "src/shared",
-    "src/containers",
+    "src/infra",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["postgres: requires an explicitly configured disposable PostgreSQL test database"]
+markers = [
+    "postgres: requires an explicitly configured disposable PostgreSQL test database",
+]
 
 [tool.ruff]
 target-version = "py312"
@@ -52,3 +54,39 @@ python_version = "3.12"
 files = ["src"]
 strict = true
 
+
+# ====================================================================================
+# Poe tasks
+# ====================================================================================
+
+[tool.poe.tasks.test]
+cmd = "pytest"
+help = "TEST: Run the test suite. Usage: poe test"
+
+[tool.poe.tasks.test-cov]
+cmd = "pytest --cov=src --cov-report=term-missing --cov-report=html"
+help = "TEST COV: Run tests with coverage reporting. Usage: poe test-cov"
+
+[tool.poe.tasks.lint]
+cmd = "ruff check ."
+help = "LINT: Check for linting issues using ruff. Usage: poe lint"
+
+[tool.poe.tasks.lint-fix]
+cmd = "ruff check . --fix"
+help = "LINT FIX: Automatically fix linting issues. Usage: poe lint-fix"
+
+[tool.poe.tasks.format]
+sequence = [
+    { cmd = "ruff check . --select I --fix" },
+    { cmd = "ruff format ." },
+]
+help = "FORMAT: Sort imports and format code. Usage: poe format"
+
+[tool.poe.tasks.format-check]
+cmd = "ruff format . --check"
+help = "FORMAT CHECK: Check formatting without changing files. Usage: poe format-check"
+
+[tool.poe.tasks.check]
+sequence = ["lint", "format-check"]
+ignore_fail = false
+help = "CHECK: Run read-only linting and formatting checks. Usage: poe check"

@@ -1,7 +1,11 @@
 from dataclasses import dataclass
 from uuid import UUID
 
+from developer_platform.domain.access import AccessContext
+from shared.dispatch import Command
 
-@dataclass(frozen=True)
-class DeleteTemporaryDatabaseCommand:
+
+@dataclass(frozen=True, slots=True)
+class DeleteDatabase(Command[UUID]):
+    access: AccessContext
     resource_id: UUID

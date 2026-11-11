@@ -6,7 +6,7 @@ from uuid import UUID
 
 from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.workload_delivery.attach_database.command import (
-    ResourceAttachmentCommand,
+    ResourceAttachmentSpec,
 )
 from developer_platform.application.workload_delivery.shared.models import DeliveryStepDetails
 
@@ -16,7 +16,7 @@ class ApplicationResourceAttachmentRepository(Protocol):
         self,
         access: AccessContext,
         application_id: UUID,
-        command: ResourceAttachmentCommand,
+        command: ResourceAttachmentSpec,
         idempotency_key: str,
         request_hash: str,
         now: datetime,

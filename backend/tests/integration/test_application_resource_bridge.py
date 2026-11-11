@@ -4,22 +4,22 @@ import asyncio
 from uuid import UUID, uuid4
 
 import pytest
+from developer_platform.application.application_delivery.attach_resource.command import (
+    ResourceAttachmentSpec,
+)
+from developer_platform.application.application_delivery.shared.ports import (
+    ApplicationDeliveryFailure,
+)
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import Session
 from test_foundation_postgres import async_engine_for, client_for, issue
 
-from containers.application_resources import LedgerApplicationResources
-from developer_platform.application.application_delivery.attach_resource.command import (
-    ResourceAttachmentCommand,
-)
-from developer_platform.application.application_delivery.shared.ports import (
-    ApplicationDeliveryFailure,
-)
 from developer_platform.application.resource_catalog.catalog import ApprovedPostgresCatalog
 from developer_platform.application.resource_catalog.models import PostgresOption
 from developer_platform.infra.persistence.models import QuotaBudget, Reservation, Resource
 from identity.infra.persistence.models import ProjectMembershipRow
+from infra.hosts.application_resources import LedgerApplicationResources
 
 pytestmark = pytest.mark.postgres
 
@@ -61,7 +61,7 @@ def test_attachment_replays_and_cleanup_keeps_reservation_until_worker_confirms(
             project_id=project_id,
             environment_id=environment,
             owner_id=owner,
-            command=ResourceAttachmentCommand("postgres", "16", "local", "small", 3600),
+            command=ResourceAttachmentSpec("postgres", "16", "local", "small", 3600),
             idempotency_key="application:resource:stable-key",
         )
         first = await adapter.request(**kwargs)

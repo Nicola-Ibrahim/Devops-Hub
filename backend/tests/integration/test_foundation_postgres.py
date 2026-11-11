@@ -9,6 +9,7 @@ from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from conftest import migration_config
+from developer_platform.application.project_registration.command import RegisterProjectCommand
 from fastapi.testclient import TestClient
 from sqlalchemy import event, func, inspect, select, text
 from sqlalchemy.exc import IntegrityError
@@ -16,15 +17,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import NullPool
 
-from containers.factory import create_container
-from containers.http import create_app
-from containers.project_registration import RegisterProjectCommandHandler
-from containers.schema import registered_metadata
-from developer_platform.application.project_registration.command import RegisterProjectCommand
 from developer_platform.infra.persistence.models import Resource
 from identity.application.issue_api_token.command import IssueApiTokenCommand
 from identity.application.shared.errors import CredentialDeliveryError
-from identity.containers.operations import IssueApiTokenToFile, RevokeApiTokenOperation
 from identity.infra.credential_file import PrivateCredentialFile
 from identity.infra.persistence.models import (
     ApiAccessTokenRow,
@@ -32,6 +27,11 @@ from identity.infra.persistence.models import (
     ProjectMembershipRow,
     ProjectRow,
 )
+from identity.infra.token_operations import IssueApiTokenToFile, RevokeApiTokenOperation
+from infra.composition.factory import create_container
+from infra.composition.schema import registered_metadata
+from infra.hosts.project_registration import RegisterProjectCommandHandler
+from infra.http.app import create_app
 from shared.infra.persistence.audit import AuditEvent
 from shared.infra.settings import SCHEMA_REVISION, Settings
 

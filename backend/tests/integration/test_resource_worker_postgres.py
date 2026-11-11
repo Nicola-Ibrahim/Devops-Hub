@@ -5,18 +5,17 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.orm import Session
-from test_foundation_postgres import async_engine_for
-
 from developer_platform.application.resource_lifecycle.ports import (
     DatabaseCredentials,
     DatabaseEndpoint,
     DeletionObservation,
     ProviderFailure,
 )
-from developer_platform.containers.worker_queue import SqlAlchemyProvisioningQueue
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.orm import Session
+from test_foundation_postgres import async_engine_for
+
 from developer_platform.domain.leases import LeasePolicy
 from developer_platform.domain.resources import DesiredState, ResourceStatus
 from developer_platform.infra.credentials import FernetResourceCredentialCipher
@@ -31,6 +30,7 @@ from developer_platform.infra.persistence.models import (
     Resource,
     ResourceSecret,
 )
+from developer_platform.infra.persistence.worker_queue import SqlAlchemyProvisioningQueue
 from identity.infra.persistence.models import InternalUserRow, ProjectRow, TeamRow
 
 pytestmark = pytest.mark.postgres

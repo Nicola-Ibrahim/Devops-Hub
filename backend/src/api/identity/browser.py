@@ -9,19 +9,25 @@ from fastapi import APIRouter, Header, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from api.errors import APIError
-from identity.application.module import IdentityModule
-from identity.application.module_messages import (
+from api.identity.cookie_policy import BrowserCookiePolicy
+from identity.application.browser_login.command import (
     ChangeBrowserPasswordCommand,
-    ListBrowserSessionsQuery,
-    ListProjectMembersQuery,
     LoginBrowserSessionCommand,
+)
+from identity.application.browser_sessions.command import (
     LogoutAllBrowserSessionsCommand,
     LogoutBrowserSessionCommand,
-    ManageProjectMembershipCommand,
-    ReadBrowserCookiePolicyQuery,
-    ReadBrowserPrincipalQuery,
     RevokeBrowserSessionCommand,
+    RotateBrowserCsrfCommand,
     SelectBrowserProjectCommand,
+)
+from identity.application.browser_sessions.query import (
+    ListBrowserSessionsQuery,
+)
+from identity.application.module import IdentityModule
+from identity.application.project_memberships.command import ManageProjectMembershipCommand
+from identity.application.project_memberships.query import (
+    ListProjectMembersQuery,
 )
 from identity.domain.browser_identity import (
     BrowserPrincipal,
@@ -116,6 +122,7 @@ async def login(
     request: Request,
     response: Response,
     module: FromDishka[IdentityModule],
+    cookie_policy: FromDishka[BrowserCookiePolicy],
 ) -> dict[str, object]:
     result = await module.execute(
         LoginBrowserSessionCommand(
@@ -126,7 +133,7 @@ async def login(
         SESSION_COOKIE,
         result.session_token,
         httponly=True,
-        secure=await module.query(ReadBrowserCookiePolicyQuery()),
+        secure=cookie_policy.secure,
         samesite="lax",
         path="/api/v1",
         max_age=8 * 60 * 60,
@@ -144,8 +151,8 @@ async def login(
 async def browser_me(
     request: Request, response: Response, module: FromDishka[IdentityModule]
 ) -> dict[str, object]:
-    principal = await module.query(
-        ReadBrowserPrincipalQuery(require_cookie_session(browser_credentials(request)))
+    principal = await module.execute(
+        RotateBrowserCsrfCommand(require_cookie_session(browser_credentials(request)))
     )
     response.headers["Cache-Control"] = "no-store"
     return {"csrfToken": principal.csrf_token, "principal": _principal(principal)}
@@ -177,6 +184,7 @@ async def logout(
     csrf_token: Annotated[str, Header(alias=CSRF_HEADER)],
     response: Response,
     module: FromDishka[IdentityModule],
+    cookie_policy: FromDishka[BrowserCookiePolicy],
 ) -> Response:
     await module.execute(
         LogoutBrowserSessionCommand(
@@ -188,7 +196,7 @@ async def logout(
     response.delete_cookie(
         SESSION_COOKIE,
         path="/api/v1",
-        secure=await module.query(ReadBrowserCookiePolicyQuery()),
+        secure=cookie_policy.secure,
         httponly=True,
         samesite="lax",
     )
@@ -203,6 +211,7 @@ async def logout_all(
     csrf_token: Annotated[str, Header(alias=CSRF_HEADER)],
     response: Response,
     module: FromDishka[IdentityModule],
+    cookie_policy: FromDishka[BrowserCookiePolicy],
 ) -> dict[str, int]:
     count = await module.execute(
         LogoutAllBrowserSessionsCommand(
@@ -214,7 +223,7 @@ async def logout_all(
     response.delete_cookie(
         SESSION_COOKIE,
         path="/api/v1",
-        secure=await module.query(ReadBrowserCookiePolicyQuery()),
+        secure=cookie_policy.secure,
         httponly=True,
         samesite="lax",
     )
@@ -274,6 +283,7 @@ async def change_password(
     csrf_token: Annotated[str, Header(alias=CSRF_HEADER)],
     response: Response,
     module: FromDishka[IdentityModule],
+    cookie_policy: FromDishka[BrowserCookiePolicy],
 ) -> Response:
     await module.execute(
         ChangeBrowserPasswordCommand(
@@ -287,7 +297,7 @@ async def change_password(
     response.delete_cookie(
         SESSION_COOKIE,
         path="/api/v1",
-        secure=await module.query(ReadBrowserCookiePolicyQuery()),
+        secure=cookie_policy.secure,
         httponly=True,
         samesite="lax",
     )

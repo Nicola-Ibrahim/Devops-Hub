@@ -26,13 +26,13 @@ from sqlalchemy.orm import Mapped, mapped_column
 from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.shared.errors import PlatformRequestError
 from developer_platform.application.workload_delivery.attach_database.command import (
-    ResourceAttachmentCommand,
+    ResourceAttachmentSpec,
 )
 from developer_platform.application.workload_delivery.create_workload.command import (
-    ApplicationCommand,
+    ApplicationRegistration,
 )
 from developer_platform.application.workload_delivery.deploy_workload.command import (
-    DeploymentCommand,
+    DeploymentSpec,
 )
 from developer_platform.application.workload_delivery.shared.models import (
     ApplicationDetails,
@@ -215,7 +215,7 @@ class SQLAlchemyApplicationDeliveryRepository:
     async def create_application(
         self,
         access: AccessContext,
-        command: ApplicationCommand,
+        command: ApplicationRegistration,
         idempotency_key: str,
         request_hash: str,
         now: datetime,
@@ -320,7 +320,7 @@ class SQLAlchemyApplicationDeliveryRepository:
         self,
         access: AccessContext,
         application_id: UUID,
-        command: ResourceAttachmentCommand,
+        command: ResourceAttachmentSpec,
         idempotency_key: str,
         request_hash: str,
         now: datetime,
@@ -379,7 +379,7 @@ class SQLAlchemyApplicationDeliveryRepository:
         self,
         access: AccessContext,
         application_id: UUID,
-        command: DeploymentCommand,
+        command: DeploymentSpec,
         idempotency_key: str,
         request_hash: str,
         now: datetime,

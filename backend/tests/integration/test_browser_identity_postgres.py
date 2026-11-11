@@ -9,9 +9,9 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import Session
 from test_foundation_postgres import async_engine_for
 
-from identity.containers.browser_operations import BrowserIdentityService
 from identity.domain.browser_errors import BrowserAuthenticationRejected
 from identity.domain.errors import IdentityValidationError
+from identity.infra.browser_operations import BrowserIdentityService
 from identity.infra.browser_security import ScryptPasswordHasher
 from identity.infra.persistence.browser_identity import SQLAlchemyBrowserIdentityRepository
 from identity.infra.persistence.models import (

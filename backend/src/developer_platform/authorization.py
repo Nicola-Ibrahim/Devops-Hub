@@ -8,32 +8,48 @@ from dataclasses import dataclass
 from typing import Literal
 from uuid import UUID
 
-from developer_platform.application.module import (
-    AttachDatabase,
-    CreateApplication,
-    DeleteDatabase,
-    DeployApplication,
-    ProcessGithubPreviewWebhook,
-    ReadApplication,
-    ReadApplications,
-    ReadCatalog,
+from developer_platform.application.database_lifecycle.delete_database.command import DeleteDatabase
+from developer_platform.application.database_lifecycle.read_activity.query import (
+    ReadResourceActivity,
+)
+from developer_platform.application.database_lifecycle.read_connection.query import (
     ReadDatabaseConnection,
-    ReadDeploymentHistory,
+)
+from developer_platform.application.database_lifecycle.renew_lease.command import RenewDatabase
+from developer_platform.application.database_provisioning.read_resources.query import (
     ReadOperation,
     ReadProject,
     ReadProjects,
     ReadResource,
-    ReadResourceActivity,
     ReadResources,
-    ReadTemplates,
-    RenewDatabase,
-    RequestTemporaryDatabase,
-    RetryDeliveryStep,
 )
+from developer_platform.application.database_provisioning.submit_database_request.command import (
+    RequestTemporaryDatabase,
+)
+from developer_platform.application.resource_catalog.query import ReadCatalog
 from developer_platform.application.shared.errors import (
     CatalogForbidden,
     PlatformRequestError,
     resource_not_found,
+)
+from developer_platform.application.workload_delivery.attach_database.command import AttachDatabase
+from developer_platform.application.workload_delivery.create_workload.command import (
+    CreateApplication,
+)
+from developer_platform.application.workload_delivery.deploy_workload.command import (
+    DeployApplication,
+)
+from developer_platform.application.workload_delivery.handle_preview_webhook.command import (
+    ProcessGithubPreviewWebhook,
+)
+from developer_platform.application.workload_delivery.read_templates.query import ReadTemplates
+from developer_platform.application.workload_delivery.read_workloads.query import (
+    ReadApplication,
+    ReadApplications,
+    ReadDeploymentHistory,
+)
+from developer_platform.application.workload_delivery.retry_delivery_step.command import (
+    RetryDeliveryStep,
 )
 from developer_platform.domain.access import AccessContext
 

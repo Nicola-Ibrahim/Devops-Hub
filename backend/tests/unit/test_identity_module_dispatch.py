@@ -6,17 +6,30 @@ from uuid import uuid4
 
 import pytest
 
-from identity.application.module_messages import (
-    AuthenticateIdentityTokenQuery,
+from identity.application.authenticate_api_token.query import AuthenticateApiTokenQuery
+from identity.application.browser_login.command import (
+    ChangeBrowserPasswordCommand,
     LoginBrowserSessionCommand,
-    ReadBrowserCookiePolicyQuery,
 )
-from identity.containers.module import (
+from identity.application.browser_sessions.command import (
+    LogoutAllBrowserSessionsCommand,
+    LogoutBrowserSessionCommand,
+    RevokeBrowserSessionCommand,
+    RotateBrowserCsrfCommand,
+    SelectBrowserProjectCommand,
+)
+from identity.application.browser_sessions.query import (
+    AuthenticateBrowserSessionQuery,
+    ListBrowserSessionsQuery,
+)
+from identity.application.project_memberships.command import ManageProjectMembershipCommand
+from identity.application.project_memberships.query import ListProjectMembersQuery
+from identity.domain.credentials import ApiTokenAuthenticationDetails
+from identity.infra.composition.handlers import LoginBrowserSessionHandler
+from identity.infra.composition.module import (
     IDENTITY_HANDLER_REGISTRY,
     IdentityModuleDispatcher,
-    LoginBrowserSessionHandler,
 )
-from identity.domain.credentials import ApiTokenAuthenticationDetails
 from identity.infra.token_authentication_host import TokenAuthenticationHost
 from shared.dispatch import HandlerRegistry, RegistrationError, UnsupportedMessage
 from shared.infra.persistence.unit_of_work import SqlAlchemyUnitOfWork
@@ -26,10 +39,22 @@ def test_identity_messages_have_explicit_complete_registrations() -> None:
     assert (
         IDENTITY_HANDLER_REGISTRY.commands[LoginBrowserSessionCommand] is LoginBrowserSessionHandler
     )
-    assert AuthenticateIdentityTokenQuery in IDENTITY_HANDLER_REGISTRY.queries
-    assert ReadBrowserCookiePolicyQuery in IDENTITY_HANDLER_REGISTRY.queries
-    assert len(IDENTITY_HANDLER_REGISTRY.commands) == 7
-    assert len(IDENTITY_HANDLER_REGISTRY.queries) == 6
+    assert set(IDENTITY_HANDLER_REGISTRY.commands) == {
+        LoginBrowserSessionCommand,
+        RotateBrowserCsrfCommand,
+        SelectBrowserProjectCommand,
+        LogoutBrowserSessionCommand,
+        LogoutAllBrowserSessionsCommand,
+        RevokeBrowserSessionCommand,
+        ChangeBrowserPasswordCommand,
+        ManageProjectMembershipCommand,
+    }
+    assert set(IDENTITY_HANDLER_REGISTRY.queries) == {
+        AuthenticateApiTokenQuery,
+        AuthenticateBrowserSessionQuery,
+        ListBrowserSessionsQuery,
+        ListProjectMembersQuery,
+    }
 
 
 def test_identity_registry_rejects_incomplete_or_ambiguous_bindings() -> None:

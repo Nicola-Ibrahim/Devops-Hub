@@ -1,8 +1,19 @@
-from dataclasses import dataclass
+"""Queries for project membership administration."""
+
+from dataclasses import dataclass, field
 from uuid import UUID
+
+from identity.domain.browser_identity import BrowserProjectMember
+from shared.dispatch import Query
 
 
 @dataclass(frozen=True, slots=True)
-class ListProjectMembersQuery:
+class ListProjectMembersByActorQuery:
     actor_id: UUID
+    project_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class ListProjectMembersQuery(Query[tuple[BrowserProjectMember, ...]]):
+    session_token: str = field(repr=False)
     project_id: UUID
