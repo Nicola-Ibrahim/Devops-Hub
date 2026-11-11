@@ -13,7 +13,7 @@ See [operations](../docs/operations.md) for packaging, release and recovery asse
 
 ```text
 src/
-  api/                       HTTP routes, schemas, injected query ports and errors
+  api/                       HTTP routes, schemas, context module calls and errors
   identity/
     domain/                  Identity entities, value objects, aggregates, repository interfaces and policies
     application/             Identity use-case packages with command/query handlers
@@ -24,6 +24,7 @@ src/
     application/             Capability-owned command/query handlers for catalog, requests, lifecycle and delivery
     infra/persistence/       Platform-owned ORM rows and SQL adapters
     infra/                   Docker, GitHub and credential adapters
+  shared/dispatch.py         Pure typed message/registry dispatch contract
   shared/infra/              Technical engine/session/UoW, metadata and readiness
   identity/containers/       Identity Dishka providers and compatibility host imports
   developer_platform/containers/ Platform DI, HTTP and worker hosts
@@ -46,15 +47,17 @@ ports, projections, policies, and transport-independent values—not a general c
 catalog.
 `ApiTokenRepository` supplies both token queries and writes through the same
 operation-scoped adapter. `SqlAlchemyUnitOfWork` owns begin/commit/rollback/close
-outside application code. The API receives ready query capabilities from Dishka;
-there is no manually constructed global service bundle.
+outside application code. Business routes send typed messages to `IdentityModule`
+or `DeveloperPlatformModule`; their explicit context registries select one handler
+in the active request scope. Dishka registers factories at startup and constructs
+selected dependencies lazily. There is no global service bundle or package scan.
 
 Dishka application scope owns the async engine/session factory and stateless
 collaborators. Request/operation scope supplies the repository, async session and use
 cases. Each UoW executes once; repeated/concurrent use is rejected before work.
 Enter a fresh scope for another operation. Independent requests never share
-sessions. `CurrentIdentityQuery` materializes the public identity view before
-commit; commit and close finish before the API returns a successful response.
+sessions. The identity HTTP host completes bearer authentication before returning
+the public identity view; commit and close finish before a successful response.
 Cancellation/errors roll back when possible and close the session; cleanup is
 bounded and preserves the primary error. Connection loss during commit can leave
 an uncertain outcome; a rollback attempt does not prove that commit never occurred.

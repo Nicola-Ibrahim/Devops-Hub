@@ -10,17 +10,37 @@ from dishka.integrations.fastapi import FastapiProvider
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from api.platform.capabilities import PlatformRequestQueries
 from api.platform.schemas import (
     AcceptedOperation,
-    OperationView,
-    ProjectRegistrationView,
-    ResourcePage,
     ResourceRequest,
-    ResourceView,
 )
 from containers.http import create_app
+from developer_platform.application.database_provisioning.read_resources.query import (
+    OperationDetails,
+    ResourceDetails,
+)
+from developer_platform.application.module import (
+    DeveloperPlatformModule,
+    ReadOperation,
+    ReadProject,
+    ReadProjects,
+    ReadResource,
+    ReadResources,
+    RequestTemporaryDatabase,
+)
+from developer_platform.application.projects.result import (
+    EnvironmentDetails,
+    ProjectRegistrationDetails,
+)
+from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.shared.errors import PlatformRequestError
+from identity.application.module import IdentityModule
+from identity.application.module_messages import (
+    AuthenticateBrowserSessionQuery,
+    AuthenticateIdentityTokenQuery,
+)
+from identity.contracts import AuthenticatedPrincipal
+from identity.domain.browser_identity import BrowserMembership, BrowserPrincipal
 from identity.domain.errors import AuthenticationRejected
 
 PROJECT_ID = UUID("11111111-1111-4111-8111-111111111111")
@@ -50,8 +70,8 @@ class FakePlatformQueries:
         self.calls: list[tuple] = []
         self.errors: dict[str, Exception] = {}
 
-    def _authorize(self, token: str | None) -> None:
-        if token != TOKEN:
+    def _authorize(self, access: AccessContext) -> None:
+        if access.user_id != OWNER_ID:
             raise AuthenticationRejected()
 
     def _raise_error(self, route: str) -> None:
@@ -59,60 +79,58 @@ class FakePlatformQueries:
         if error is not None:
             raise error
 
-    async def request_database(self, token, command, key) -> AcceptedOperation:
-        self._authorize(token)
+    async def request_database(self, access, command, key) -> AcceptedOperation:
+        self._authorize(access)
         self._raise_error("request")
-        self.calls.append(("request_database", token, command, key))
+        self.calls.append(("request_database", access, command, key))
         return AcceptedOperation(resource_id=RESOURCE_ID, operation_id=OPERATION_ID)
 
-    async def projects(self, token):
-        return [await self.project(token, PROJECT_ID)]
+    async def projects(self, accesses):
+        return tuple([await self.project(access, access.project_id) for access in accesses])
 
-    async def project(self, token, project_id) -> ProjectRegistrationView:
-        self._authorize(token)
+    async def project(self, access, project_id) -> ProjectRegistrationDetails:
+        self._authorize(access)
         self._raise_error("project")
-        self.calls.append(("project", token, project_id))
-        return ProjectRegistrationView(
-            project_id=PROJECT_ID,
+        self.calls.append(("project", access, project_id))
+        return ProjectRegistrationDetails(
+            project_id=project_id,
             name="demo",
             owning_team_id=uuid4(),
             owning_team_name="platform",
             repository="example/demo",
             configured=True,
-            environments=[{"id": ENVIRONMENT_ID, "name": "dev"}],
+            environments=(EnvironmentDetails(ENVIRONMENT_ID, "dev"),),
         )
 
-    async def resources(self, token, project_id, after, limit) -> ResourcePage:
-        self._authorize(token)
+    async def resources(self, access, project_id, after, limit) -> tuple[ResourceDetails, ...]:
+        self._authorize(access)
         self._raise_error("resources")
-        self.calls.append(("resources", token, project_id, after, limit))
-        return ResourcePage(
-            items=[self._resource()],
-            next_after=RESOURCE_ID if limit < 100 else None,
-        )
+        self.calls.append(("resources", access, project_id, after, limit))
+        return (self._resource(),)
 
-    async def resource(self, token, resource_id) -> ResourceView:
-        self._authorize(token)
+    async def resource(self, access, resource_id) -> ResourceDetails:
+        self._authorize(access)
         self._raise_error("resource")
-        self.calls.append(("resource", token, resource_id))
+        self.calls.append(("resource", access, resource_id))
         return self._resource()
 
-    async def operation(self, token, operation_id) -> OperationView:
-        self._authorize(token)
+    async def operation(self, access, operation_id) -> OperationDetails:
+        self._authorize(access)
         self._raise_error("operation")
-        self.calls.append(("operation", token, operation_id))
-        return OperationView(
+        self.calls.append(("operation", access, operation_id))
+        return OperationDetails(
             id=OPERATION_ID,
             resource_id=RESOURCE_ID,
             action="provision",
             status="pending",
             attempts=0,
             next_attempt_at=NOW,
+            error_code=None,
         )
 
     @staticmethod
-    def _resource() -> ResourceView:
-        return ResourceView(
+    def _resource() -> ResourceDetails:
+        return ResourceDetails(
             id=RESOURCE_ID,
             project_id=PROJECT_ID,
             owner_id=OWNER_ID,
@@ -126,6 +144,59 @@ class FakePlatformQueries:
             revision=1,
             created_at=NOW,
             expires_at=NOW + timedelta(hours=1),
+            failure_code=None,
+        )
+
+    async def execute(self, command):
+        assert isinstance(command, RequestTemporaryDatabase)
+        result = await self.request_database(
+            command.access, command.request, command.idempotency_key
+        )
+        from developer_platform.domain.entities.operation import AcceptedResourceRequest
+
+        return AcceptedResourceRequest(result.resource_id, result.operation_id)
+
+    async def query(self, query):
+        if isinstance(query, ReadProjects):
+            return await self.projects(query.accesses)
+        if isinstance(query, ReadProject):
+            return await self.project(query.access, query.project_id)
+        if isinstance(query, ReadResources):
+            return await self.resources(query.access, query.project_id, query.after, query.limit)
+        if isinstance(query, ReadResource):
+            return await self.resource(query.access, query.resource_id)
+        if isinstance(query, ReadOperation):
+            return await self.operation(query.access, query.operation_id)
+        raise AssertionError(type(query))
+
+
+class FakeIdentityModule:
+    async def query(self, query):
+        if isinstance(query, AuthenticateBrowserSessionQuery):
+            assert query.project_id is None
+            return BrowserPrincipal(
+                OWNER_ID,
+                "demo-user",
+                uuid4(),
+                None,
+                None,
+                None,
+                (),
+                (
+                    BrowserMembership(PROJECT_ID, "first", "developer"),
+                    BrowserMembership(ENVIRONMENT_ID, "second", "admin"),
+                ),
+                "csrf",
+            )
+        assert isinstance(query, AuthenticateIdentityTokenQuery)
+        if query.token != TOKEN:
+            raise AuthenticationRejected()
+        return AuthenticatedPrincipal(
+            OWNER_ID,
+            PROJECT_ID,
+            uuid4(),
+            "developer",
+            frozenset(("catalog:read", "resources:read", "resources:write")),
         )
 
 
@@ -135,8 +206,12 @@ class ApiOnlyPlatformProvider(Provider):
         self.queries = queries
 
     @provide(scope=Scope.REQUEST)
-    def platform_queries(self) -> PlatformRequestQueries:
+    def platform_queries(self) -> DeveloperPlatformModule:
         return self.queries
+
+    @provide(scope=Scope.REQUEST)
+    def identity_module(self) -> IdentityModule:
+        return FakeIdentityModule()
 
 
 def _client(queries: FakePlatformQueries) -> tuple[TestClient, object]:
@@ -164,7 +239,7 @@ def test_request_resource_returns_accepted_operation_and_forwards_private_inputs
         }
         name, token, command, forwarded_key = queries.calls[0]
         assert name == "request_database"
-        assert token == TOKEN
+        assert token.user_id == OWNER_ID
         assert command.project_id == PROJECT_ID
         assert command.environment_id == ENVIRONMENT_ID
         assert forwarded_key == key
@@ -241,7 +316,24 @@ def test_platform_read_routes_return_project_resource_page_and_operation_schemas
             "resource",
             "operation",
         ]
-        assert all(call[1] == TOKEN for call in queries.calls)
+        assert all(call[1].user_id == OWNER_ID for call in queries.calls)
+    finally:
+        asyncio.run(container.close())
+
+
+def test_browser_project_list_preserves_all_memberships() -> None:
+    queries = FakePlatformQueries()
+    client, container = _client(queries)
+    try:
+        with client:
+            client.cookies.set("devops_session", "private-session")
+            response = client.get("/api/v1/projects")
+        assert response.status_code == 200
+        assert {item["project_id"] for item in response.json()} == {
+            str(PROJECT_ID),
+            str(ENVIRONMENT_ID),
+        }
+        assert [call[1].project_id for call in queries.calls] == [PROJECT_ID, ENVIRONMENT_ID]
     finally:
         asyncio.run(container.close())
 

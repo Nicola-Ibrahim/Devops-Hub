@@ -1,15 +1,28 @@
 """HTTP contracts for approved application templates and delivery workflows."""
 
 from datetime import datetime
-from typing import Annotated, Protocol
+from typing import Annotated
 from uuid import UUID
 
 from dishka.integrations.fastapi import FromDishka, inject
 from fastapi import APIRouter, Depends, Header, Request
 from pydantic import Field
 
-from api.credentials import RequestIdentity, request_identity
+from api.dependencies import platform_access
 from api.schemas import Contract
+from developer_platform.application.module import (
+    AttachDatabase,
+    CreateApplication,
+    DeployApplication,
+    DeveloperPlatformModule,
+    ProcessGithubPreviewWebhook,
+    ReadApplication,
+    ReadApplications,
+    ReadDeploymentHistory,
+    ReadTemplates,
+    RetryDeliveryStep,
+)
+from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.workload_delivery.attach_database.command import (
     ResourceAttachmentCommand,
 )
@@ -23,8 +36,6 @@ from developer_platform.application.workload_delivery.shared.models import (
     ApplicationDetails,
     DeliveryStepDetails,
     DeploymentDetails,
-    TemplateVersion,
-    WebhookResult,
 )
 
 
@@ -114,52 +125,8 @@ class WebhookResponse(Contract):
     reason: str | None = None
 
 
-class ApplicationDeliveryOperations(Protocol):
-    def templates(self) -> tuple[TemplateVersion, ...]: ...
-
-    async def create_application(
-        self, identity: RequestIdentity, command: ApplicationCommand, idempotency_key: str
-    ) -> tuple[ApplicationDetails, bool]: ...
-
-    async def list_applications(
-        self, identity: RequestIdentity
-    ) -> tuple[ApplicationDetails, ...]: ...
-
-    async def application(
-        self, identity: RequestIdentity, application_id: UUID
-    ) -> tuple[ApplicationDetails, tuple[DeliveryStepDetails, ...]]: ...
-
-    async def attach_resource(
-        self,
-        identity: RequestIdentity,
-        application_id: UUID,
-        command: ResourceAttachmentCommand,
-        idempotency_key: str,
-    ) -> DeliveryStepDetails: ...
-
-    async def deploy(
-        self,
-        identity: RequestIdentity,
-        application_id: UUID,
-        command: DeploymentCommand,
-        idempotency_key: str,
-    ) -> DeploymentDetails: ...
-
-    async def deployment_history(
-        self, identity: RequestIdentity, application_id: UUID
-    ) -> tuple[DeploymentDetails, ...]: ...
-
-    async def retry_step(
-        self, identity: RequestIdentity, application_id: UUID, step_id: UUID
-    ) -> DeliveryStepDetails: ...
-
-    async def github_webhook(
-        self, raw_body: bytes, signature: str | None, delivery_id: str | None, event: str | None
-    ) -> WebhookResult: ...
-
-
 router = APIRouter()
-RequestCredential = Annotated[RequestIdentity, Depends(request_identity)]
+PlatformAccess = Annotated[AccessContext, Depends(platform_access)]
 IdempotencyKey = Annotated[str, Header(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:-]+$")]
 
 
@@ -177,7 +144,7 @@ def _deployment(row: DeploymentDetails) -> DeploymentView:
 
 @router.get("/api/v1/templates", response_model=list[TemplateView], tags=["templates"])
 @inject
-async def templates(operations: FromDishka[ApplicationDeliveryOperations]) -> list[TemplateView]:
+async def templates(module: FromDishka[DeveloperPlatformModule]) -> list[TemplateView]:
     return [
         TemplateView(
             id=item.template_id,
@@ -186,7 +153,7 @@ async def templates(operations: FromDishka[ApplicationDeliveryOperations]) -> li
             name=item.display_name,
             description=item.description,
         )
-        for item in operations.templates()
+        for item in await module.query(ReadTemplates())
     ]
 
 
@@ -199,12 +166,12 @@ async def templates(operations: FromDishka[ApplicationDeliveryOperations]) -> li
 @inject
 async def create_application(
     body: ApplicationCreate,
-    identity: RequestCredential,
-    operations: FromDishka[ApplicationDeliveryOperations],
+    access: PlatformAccess,
+    module: FromDishka[DeveloperPlatformModule],
     idempotency_key: IdempotencyKey,
 ) -> ApplicationAccepted:
-    application, replayed = await operations.create_application(
-        identity, ApplicationCommand(**body.model_dump()), idempotency_key
+    application, replayed = await module.execute(
+        CreateApplication(access, ApplicationCommand(**body.model_dump()), idempotency_key)
     )
     return ApplicationAccepted(application=_application(application), replayed=replayed)
 
@@ -212,10 +179,10 @@ async def create_application(
 @router.get("/api/v1/applications", response_model=list[ApplicationView], tags=["applications"])
 @inject
 async def applications(
-    identity: RequestCredential,
-    operations: FromDishka[ApplicationDeliveryOperations],
+    access: PlatformAccess,
+    module: FromDishka[DeveloperPlatformModule],
 ) -> list[ApplicationView]:
-    return [_application(item) for item in await operations.list_applications(identity)]
+    return [_application(item) for item in await module.query(ReadApplications(access))]
 
 
 @router.get(
@@ -226,10 +193,10 @@ async def applications(
 @inject
 async def application(
     application_id: UUID,
-    identity: RequestCredential,
-    operations: FromDishka[ApplicationDeliveryOperations],
+    access: PlatformAccess,
+    module: FromDishka[DeveloperPlatformModule],
 ) -> ApplicationDetail:
-    app, steps = await operations.application(identity, application_id)
+    app, steps = await module.query(ReadApplication(access, application_id))
     return ApplicationDetail(application=_application(app), steps=[_step(item) for item in steps])
 
 
@@ -243,12 +210,14 @@ async def application(
 async def attach_resource(
     application_id: UUID,
     body: ResourceAttachment,
-    identity: RequestCredential,
-    operations: FromDishka[ApplicationDeliveryOperations],
+    access: PlatformAccess,
+    module: FromDishka[DeveloperPlatformModule],
     idempotency_key: IdempotencyKey,
 ) -> DeliveryStepView:
-    step = await operations.attach_resource(
-        identity, application_id, ResourceAttachmentCommand(**body.model_dump()), idempotency_key
+    step = await module.execute(
+        AttachDatabase(
+            access, application_id, ResourceAttachmentCommand(**body.model_dump()), idempotency_key
+        )
     )
     return _step(step)
 
@@ -263,15 +232,14 @@ async def attach_resource(
 async def deploy(
     application_id: UUID,
     body: DeploymentRequest,
-    identity: RequestCredential,
-    operations: FromDishka[ApplicationDeliveryOperations],
+    access: PlatformAccess,
+    module: FromDishka[DeveloperPlatformModule],
     idempotency_key: IdempotencyKey,
 ) -> DeploymentView:
-    deployment = await operations.deploy(
-        identity,
-        application_id,
-        DeploymentCommand(**body.model_dump()),
-        idempotency_key,
+    deployment = await module.execute(
+        DeployApplication(
+            access, application_id, DeploymentCommand(**body.model_dump()), idempotency_key
+        )
     )
     return _deployment(deployment)
 
@@ -284,11 +252,12 @@ async def deploy(
 @inject
 async def deployment_history(
     application_id: UUID,
-    identity: RequestCredential,
-    operations: FromDishka[ApplicationDeliveryOperations],
+    access: PlatformAccess,
+    module: FromDishka[DeveloperPlatformModule],
 ) -> list[DeploymentView]:
     return [
-        _deployment(item) for item in await operations.deployment_history(identity, application_id)
+        _deployment(item)
+        for item in await module.query(ReadDeploymentHistory(access, application_id))
     ]
 
 
@@ -301,10 +270,10 @@ async def deployment_history(
 async def retry_step(
     application_id: UUID,
     step_id: UUID,
-    identity: RequestCredential,
-    operations: FromDishka[ApplicationDeliveryOperations],
+    access: PlatformAccess,
+    module: FromDishka[DeveloperPlatformModule],
 ) -> DeliveryStepView:
-    return _step(await operations.retry_step(identity, application_id, step_id))
+    return _step(await module.execute(RetryDeliveryStep(access, application_id, step_id)))
 
 
 @router.post(
@@ -315,13 +284,15 @@ async def retry_step(
 @inject
 async def github_webhook(
     request: Request,
-    operations: FromDishka[ApplicationDeliveryOperations],
+    module: FromDishka[DeveloperPlatformModule],
 ) -> WebhookResponse:
-    result = await operations.github_webhook(
-        await request.body(),
-        request.headers.get("x-hub-signature-256"),
-        request.headers.get("x-github-delivery"),
-        request.headers.get("x-github-event"),
+    result = await module.execute(
+        ProcessGithubPreviewWebhook(
+            await request.body(),
+            request.headers.get("x-hub-signature-256"),
+            request.headers.get("x-github-delivery"),
+            request.headers.get("x-github-event"),
+        )
     )
     return WebhookResponse(
         accepted=result.accepted,

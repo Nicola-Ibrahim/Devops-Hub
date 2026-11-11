@@ -2,21 +2,21 @@ import asyncio
 from uuid import uuid4
 
 import pytest
+from developer_platform.application.resource_requests.submit_database_request.result import (
+    AcceptedDatabaseRequest,
+)
 from dishka import Provider, Scope, provide
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import SQLAlchemyError
 from test_operation_lifecycle import CapturedResponses, FakeSession
 
-from api.platform.capabilities import PlatformRequestQueries
 from containers.factory import create_container
 from containers.http import create_app
-from containers.platform_http_operations import PlatformHttpOperations
-from developer_platform.application.resource_requests.submit_database_request.result import (
-    AcceptedDatabaseRequest,
-)
 from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.shared.errors import PlatformRequestError
-from identity.application.authenticate_api_token.query import AuthenticateApiTokenQuery
+from developer_platform.containers.module import RequestDatabaseAdapter, ResourcesAdapter
+from identity.application.module import IdentityModule
+from identity.application.module_messages import AuthenticateIdentityTokenQuery
 from identity.contracts import AuthenticatedPrincipal
 from shared.infra.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from shared.infra.settings import Settings
@@ -31,11 +31,12 @@ def test_platform_di_binds_both_context_repositories_to_one_operation_session():
     async def run():
         try:
             async with container() as scope:
-                service = await scope.get(PlatformRequestQueries)
-                assert isinstance(service, PlatformHttpOperations)
-                assert service.authenticate.repository._session is service.read.repository._session
-                assert service.read.repository._session is service.unit.session
-                await service.unit.session.close()
+                request = await scope.get(RequestDatabaseAdapter)
+                read = await scope.get(ResourcesAdapter)
+                unit = await scope.get(SqlAlchemyUnitOfWork)
+                assert request.handler.repository._session is read.handler.repository._session
+                assert read.handler.repository._session is unit.session
+                await unit.session.close()
         finally:
             await container.close()
 
@@ -43,7 +44,7 @@ def test_platform_di_binds_both_context_repositories_to_one_operation_session():
 
 
 @pytest.mark.parametrize("outcome", ["accepted", "commit_failure", "request_conflict"])
-def test_http_ledger_authentication_and_commit_precede_success(outcome):
+def test_http_ledger_authentication_and_commit_precede_success(outcome, monkeypatch):
     user, project, token_id, resource_id, operation_id = (uuid4() for _ in range(5))
     events = []
     session = FakeSession(
@@ -53,17 +54,27 @@ def test_http_ledger_authentication_and_commit_precede_success(outcome):
     )
     captured = []
 
-    class Auth:
-        async def execute(self, query):
-            assert session.events == ["begin"]
-            assert query == AuthenticateApiTokenQuery("synthetic-raw-bearer-token-for-operation")
-            events.append("authenticate")
+    class Identity:
+        async def query(self, query):
+            assert query == AuthenticateIdentityTokenQuery(
+                "synthetic-raw-bearer-token-for-operation"
+            )
             return AuthenticatedPrincipal(
                 user, project, token_id, "developer", frozenset({"resources:write"})
             )
 
+    async def authenticate(active_session, token, settings, clock):
+        assert active_session is session
+        assert session.events == ["begin"]
+        assert token == "synthetic-raw-bearer-token-for-operation"
+        events.append("authenticate")
+        return AccessContext(user, project, "developer", frozenset({"resources:write"}))
+
+    monkeypatch.setattr("containers.platform_module.authenticate_request", authenticate)
+
     class Requester:
-        async def execute(self, access: AccessContext, command, key):
+        async def execute(self, message):
+            access, command, key = message.access, message.request, message.idempotency_key
             assert events == ["authenticate"]
             assert access.project_id == command.project_id == project
             assert access.user_id == user
@@ -73,12 +84,21 @@ def test_http_ledger_authentication_and_commit_precede_success(outcome):
                 raise PlatformRequestError("idempotency_conflict", "Request conflicts", 409)
             return AcceptedDatabaseRequest(resource_id, operation_id)
 
-    service = PlatformHttpOperations(Auth(), Requester(), None, None, SqlAlchemyUnitOfWork(session))
+    requester = Requester()
+    unit = SqlAlchemyUnitOfWork(session)
 
     class Override(Provider):
         @provide(scope=Scope.REQUEST, override=True)
-        def queries(self) -> PlatformRequestQueries:
-            return service
+        def identity(self) -> IdentityModule:
+            return Identity()
+
+        @provide(scope=Scope.REQUEST, override=True)
+        def unit(self) -> SqlAlchemyUnitOfWork:
+            return unit
+
+        @provide(scope=Scope.REQUEST, override=True)
+        def request_adapter(self) -> RequestDatabaseAdapter:
+            return requester
 
     config = Settings(
         database_url="postgresql+psycopg://localhost:1/devops_hub_test", token_pepper="p" * 40

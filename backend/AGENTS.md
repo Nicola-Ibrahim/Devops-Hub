@@ -75,19 +75,22 @@ over generic `service`, `manager` or `utils`.
   the API boundary. Pass a trusted actor context to the application; do not trust
   caller-supplied ownership fields. Domain rules still enforce resource ownership,
   valid state transitions, quotas and lease limits, including for worker callers.
-- Each bounded context may expose a typed module facade with `send_command` and
-  `send_query` entry points. Define its contract with application types, implement
-  it in context `infra/`, and bind it in context `containers/`. It dispatches to
-  explicitly registered handlers. The module has no business rules, HTTP schemas
-  or hidden service locator.
+- Each bounded context exposes a typed module contract with async `execute(command)`
+  and `query(query)` entry points. The context owns an explicit message-to-handler
+  registry and adapters under `containers/`; a request-scoped dispatcher resolves
+  only the selected handler. The composition root binds an HTTP host wrapper to the
+  module contract. Routes do not select or construct handlers. Application messages
+  and results contain no FastAPI/Pydantic types, and unknown messages fail closed.
 
 ## Transaction ownership
 
-The outer HTTP or worker operation host owns exactly one transaction boundary. It
-invokes `SqlAlchemyUnitOfWork.run()` around the context module call. The unit of
-work alone begins, commits, rolls back and closes the transaction: success commits;
-a raised failure rolls back. Modules, handlers, repositories and DI providers
-never receive or complete the unit of work. External effects run only after durable
+The outer HTTP or worker operation host owns each transaction boundary. For a
+single database operation it invokes `SqlAlchemyUnitOfWork.run()` around context
+dispatch: the unit of work alone begins, commits, rolls back and closes the
+transaction. The inner context dispatcher, handlers, repositories and DI providers
+never complete it. Browser login/password workflows retain their intentional short
+transaction sequence around password hashing; application delivery workers retain
+separate claim/effect/completion phases. External effects run only after durable
 intent has committed.
 
 Organize `src/api/` by HTTP-facing capability:

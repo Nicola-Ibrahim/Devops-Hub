@@ -28,11 +28,14 @@ async def request_identity(
 ) -> RequestIdentity:
     browser = browser_credentials(request)
     if browser.session_token is not None:
-        return BrowserRequestCredentials(
+        identity: RequestIdentity = BrowserRequestCredentials(
             browser.session_token,
             browser.project_id,
             request.headers.get(CSRF_HEADER),
             request.headers.get("origin"),
             request.method not in {"GET", "HEAD", "OPTIONS"},
         )
-    return credentials.credentials if credentials is not None else None
+    else:
+        identity = credentials.credentials if credentials is not None else None
+    request.state.request_identity = identity
+    return identity

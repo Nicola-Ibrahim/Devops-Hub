@@ -8,14 +8,19 @@ import pytest
 from dishka import Provider, Scope, provide
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.pool import NullPool
 
-from api.dependencies import ReadCurrentIdentity
 from containers.factory import create_container
 from containers.http import create_app
 from identity.application.issue_api_token.command import IssueApiTokenCommand
 from identity.application.issue_api_token.result import PreparedApiToken
+from identity.application.module import IdentityModule
 from identity.application.shared.errors import IdentityUnavailable
 from identity.application.shared.ports import ApiTokenRepository
 from identity.containers.operations import IssueApiTokenToFile
@@ -42,6 +47,12 @@ class FakeSession:
         self.fail_commit = fail_commit
         self.fail_rollback = fail_rollback
         self.fail_close = fail_close
+
+    async def __aenter__(self) -> "FakeSession":
+        return self
+
+    async def __aexit__(self, *args: object) -> None:
+        return None
 
     async def begin(self) -> None:
         self.events.append("begin")
@@ -414,10 +425,10 @@ def test_container_scopes_bind_fresh_sessions_and_ready_identity_query(scope_kin
 
     async def resolve_request():
         async with container() as scope:
-            query = await scope.get(ReadCurrentIdentity)
+            module = await scope.get(IdentityModule)
             unit = await scope.get(SqlAlchemyUnitOfWork)
             repository = await scope.get(ApiTokenRepository)
-            assert callable(query.execute)
+            assert callable(module.query)
             assert isinstance(repository, SQLAlchemyApiTokenRepository)
             assert repository._session is unit.session
             await unit.session.close()
@@ -439,7 +450,7 @@ def test_container_scopes_bind_fresh_sessions_and_ready_identity_query(scope_kin
     assert all(session.events == ["close"] for session in sessions)
 
 
-def test_http_commit_failure_returns_503_without_success_response_start():
+def test_http_commit_failure_returns_503_without_success_response_start(monkeypatch):
     now = datetime.now(UTC)
     repository = FakeApiTokenRepository(
         ApiTokenAuthenticationDetails(
@@ -454,15 +465,15 @@ def test_http_commit_failure_returns_503_without_success_response_start():
         )
     )
     session = FakeSession(fail_commit=SQLAlchemyError("database detail"))
+    monkeypatch.setattr(
+        "identity.infra.token_authentication_host.SQLAlchemyApiTokenRepository",
+        lambda active: repository,
+    )
 
     class Overrides(Provider):
-        @provide(scope=Scope.REQUEST, provides=AsyncSession, override=True)
-        def session(self) -> AsyncSession:
-            return cast(AsyncSession, session)
-
-        @provide(scope=Scope.REQUEST, provides=ApiTokenRepository, override=True)
-        def repository(self) -> ApiTokenRepository:
-            return repository
+        @provide(scope=Scope.APP, provides=async_sessionmaker[AsyncSession], override=True)
+        def sessions(self) -> async_sessionmaker[AsyncSession]:
+            return cast(async_sessionmaker[AsyncSession], lambda: session)
 
     engine: AsyncEngine = create_async_engine(
         "postgresql+psycopg://localhost:1/devops_hub_test", poolclass=NullPool

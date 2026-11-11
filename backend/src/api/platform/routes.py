@@ -1,16 +1,18 @@
+"""HTTP translation for approved platform resources and lifecycle operations."""
+
 from dataclasses import asdict
-from typing import Annotated
+from typing import Annotated, Literal, cast
 from uuid import UUID
 
 from dishka.integrations.fastapi import FromDishka, inject
 from fastapi import APIRouter, Depends, Header, Query, Response
 
-from api.credentials import RequestIdentity, request_identity
+from api.credentials import BrowserRequestCredentials, RequestIdentity, request_identity
 from api.dependencies import platform_access
-from api.platform.capabilities import PlatformRequestQueries
 from api.platform.schemas import (
     AcceptedOperation,
     ActivityPage,
+    ActivityView,
     CatalogResponse,
     ConnectionView,
     OperationView,
@@ -21,19 +23,41 @@ from api.platform.schemas import (
     ResourceRequest,
     ResourceView,
 )
-from developer_platform.application.resource_catalog.handler import ReadCatalogQueryHandler
+from developer_platform.application.database_lifecycle.renew_lease.command import RenewDatabaseLease
+from developer_platform.application.database_provisioning.submit_database_request.command import (
+    RequestDatabaseCommand,
+)
+from developer_platform.application.module import (
+    DeleteDatabase,
+    DeveloperPlatformModule,
+    ReadCatalog,
+    ReadDatabaseConnection,
+    ReadOperation,
+    ReadProject,
+    ReadProjects,
+    ReadResource,
+    ReadResourceActivity,
+    ReadResources,
+    RenewDatabase,
+    RequestTemporaryDatabase,
+)
 from developer_platform.application.shared.dto import AccessContext
+from developer_platform.application.shared.permissions import ALL_SCOPES
+from identity.application.module import IdentityModule
+from identity.application.module_messages import (
+    AuthenticateBrowserSessionQuery,
+    AuthenticateIdentityTokenQuery,
+)
 
 router = APIRouter()
+Access = Annotated[AccessContext, Depends(platform_access)]
+Bearer = Annotated[RequestIdentity, Depends(request_identity)]
 
 
 @router.get("/api/v1/catalog", response_model=CatalogResponse, tags=["catalog"])
 @inject
-async def catalog(
-    access: Annotated[AccessContext, Depends(platform_access)],
-    read_catalog: FromDishka[ReadCatalogQueryHandler],
-) -> CatalogResponse:
-    result = read_catalog.execute(access)
+async def catalog(access: Access, module: FromDishka[DeveloperPlatformModule]) -> CatalogResponse:
+    result = await module.query(ReadCatalog(access))
     return CatalogResponse(
         project_id=result.project_id,
         templates=[
@@ -43,13 +67,6 @@ async def catalog(
     )
 
 
-Bearer = Annotated[RequestIdentity, Depends(request_identity)]
-
-
-def credential(value: RequestIdentity) -> RequestIdentity:
-    return value
-
-
 @router.post(
     "/api/v1/resources", response_model=AcceptedOperation, status_code=202, tags=["resources"]
 )
@@ -57,15 +74,19 @@ def credential(value: RequestIdentity) -> RequestIdentity:
 async def request_database(
     command: ResourceRequest,
     response: Response,
-    credentials: Bearer,
-    queries: FromDishka[PlatformRequestQueries],
+    access: Access,
+    module: FromDishka[DeveloperPlatformModule],
     idempotency_key: Annotated[
         str, Header(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:-]+$")
     ],
 ) -> AcceptedOperation:
-    result = await queries.request_database(credential(credentials), command, idempotency_key)
+    result = await module.execute(
+        RequestTemporaryDatabase(
+            access, RequestDatabaseCommand(**command.model_dump()), idempotency_key
+        )
+    )
     response.headers["Location"] = f"/api/v1/operations/{result.operation_id}"
-    return result
+    return AcceptedOperation(**asdict(result))
 
 
 @router.get(
@@ -73,9 +94,10 @@ async def request_database(
 )
 @inject
 async def project(
-    project_id: UUID, credentials: Bearer, queries: FromDishka[PlatformRequestQueries]
+    project_id: UUID, access: Access, module: FromDishka[DeveloperPlatformModule]
 ) -> ProjectRegistrationView:
-    return await queries.project(credential(credentials), project_id)
+    result = await module.query(ReadProject(access, project_id))
+    return ProjectRegistrationView.model_validate(asdict(result))
 
 
 @router.get(
@@ -84,36 +106,66 @@ async def project(
 @inject
 async def resources(
     project_id: UUID,
-    credentials: Bearer,
-    queries: FromDishka[PlatformRequestQueries],
+    access: Access,
+    module: FromDishka[DeveloperPlatformModule],
     after: UUID | None = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
 ) -> ResourcePage:
-    return await queries.resources(credential(credentials), project_id, after, limit)
+    results = await module.query(ReadResources(access, project_id, after, limit))
+    return ResourcePage(
+        items=[ResourceView.model_validate(asdict(item)) for item in results],
+        next_after=results[-1].id if len(results) == limit else None,
+    )
 
 
 @router.get("/api/v1/resources/{resource_id}", response_model=ResourceView, tags=["resources"])
 @inject
 async def resource(
-    resource_id: UUID, credentials: Bearer, queries: FromDishka[PlatformRequestQueries]
+    resource_id: UUID, access: Access, module: FromDishka[DeveloperPlatformModule]
 ) -> ResourceView:
-    return await queries.resource(credential(credentials), resource_id)
+    result = await module.query(ReadResource(access, resource_id))
+    return ResourceView.model_validate(asdict(result))
 
 
 @router.get("/api/v1/operations/{operation_id}", response_model=OperationView, tags=["operations"])
 @inject
 async def operation(
-    operation_id: UUID, credentials: Bearer, queries: FromDishka[PlatformRequestQueries]
+    operation_id: UUID, access: Access, module: FromDishka[DeveloperPlatformModule]
 ) -> OperationView:
-    return await queries.operation(credential(credentials), operation_id)
+    result = await module.query(ReadOperation(access, operation_id))
+    return OperationView.model_validate(asdict(result))
 
 
 @router.get("/api/v1/projects", response_model=list[ProjectRegistrationView], tags=["projects"])
 @inject
 async def projects(
-    credentials: Bearer, queries: FromDishka[PlatformRequestQueries]
+    credentials: Bearer,
+    identity: FromDishka[IdentityModule],
+    module: FromDishka[DeveloperPlatformModule],
 ) -> list[ProjectRegistrationView]:
-    return await queries.projects(credential(credentials))
+    if isinstance(credentials, BrowserRequestCredentials):
+        principal = await identity.query(AuthenticateBrowserSessionQuery(credentials.session_token))
+        accesses = tuple(
+            AccessContext(
+                principal.user_id,
+                member.project_id,
+                cast(Literal["developer", "admin"], member.role),
+                frozenset(ALL_SCOPES),
+            )
+            for member in principal.memberships
+        )
+    else:
+        token_principal = await identity.query(AuthenticateIdentityTokenQuery(credentials))
+        accesses = (
+            AccessContext(
+                token_principal.user_id,
+                token_principal.project_id,
+                token_principal.role,
+                token_principal.scopes,
+            ),
+        )
+    rows = await module.query(ReadProjects(accesses))
+    return [ProjectRegistrationView.model_validate(asdict(row)) for row in rows]
 
 
 @router.post(
@@ -123,10 +175,16 @@ async def projects(
 async def renew(
     resource_id: UUID,
     command: RenewRequest,
-    credentials: Bearer,
-    queries: FromDishka[PlatformRequestQueries],
+    access: Access,
+    module: FromDishka[DeveloperPlatformModule],
 ) -> ResourceView:
-    return await queries.renew(credential(credentials), resource_id, command)
+    row = await module.execute(
+        RenewDatabase(
+            access,
+            RenewDatabaseLease(resource_id, command.expected_revision, command.expires_at),
+        )
+    )
+    return ResourceView.model_validate(asdict(row))
 
 
 @router.delete(
@@ -137,9 +195,10 @@ async def renew(
 )
 @inject
 async def delete_resource(
-    resource_id: UUID, credentials: Bearer, queries: FromDishka[PlatformRequestQueries]
+    resource_id: UUID, access: Access, module: FromDishka[DeveloperPlatformModule]
 ) -> AcceptedOperation:
-    return await queries.delete(credential(credentials), resource_id)
+    operation_id = await module.execute(DeleteDatabase(access, resource_id))
+    return AcceptedOperation(resource_id=resource_id, operation_id=operation_id)
 
 
 @router.post(
@@ -147,9 +206,10 @@ async def delete_resource(
 )
 @inject
 async def connection(
-    resource_id: UUID, credentials: Bearer, queries: FromDishka[PlatformRequestQueries]
+    resource_id: UUID, access: Access, module: FromDishka[DeveloperPlatformModule]
 ) -> ConnectionView:
-    return await queries.connection(credential(credentials), resource_id)
+    result = await module.query(ReadDatabaseConnection(access, resource_id))
+    return ConnectionView.model_validate(asdict(result))
 
 
 @router.get(
@@ -157,6 +217,7 @@ async def connection(
 )
 @inject
 async def activity(
-    project_id: UUID, credentials: Bearer, queries: FromDishka[PlatformRequestQueries]
+    project_id: UUID, access: Access, module: FromDishka[DeveloperPlatformModule]
 ) -> ActivityPage:
-    return await queries.activity(credential(credentials), project_id)
+    rows = await module.query(ReadResourceActivity(access, project_id))
+    return ActivityPage(items=[ActivityView.model_validate(asdict(row)) for row in rows])

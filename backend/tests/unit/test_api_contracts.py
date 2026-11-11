@@ -9,13 +9,14 @@ from fastapi import Query
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from api.dependencies import ReadCurrentIdentity
-from api.identity.schemas import PrincipalView
 from api.platform.schemas import RenewRequest, ResourceRequest, ResourceView
 from containers.http import create_app
+from developer_platform.application.module import DeveloperPlatformModule, ReadCatalog
 from developer_platform.application.resource_catalog.handler import ReadCatalogQueryHandler
 from identity.application.authenticate_api_token.handler import AuthenticateApiTokenHandler
 from identity.application.authenticate_api_token.query import AuthenticateApiTokenQuery
+from identity.application.module import IdentityModule
+from identity.application.module_messages import AuthenticateIdentityTokenQuery
 from identity.domain.credentials import ApiTokenAuthenticationDetails
 from identity.infra.tokens import token_digest
 from shared.infra.readiness import ReadinessProbe
@@ -158,25 +159,25 @@ def test_http_transport_works_with_fake_application_ports():
             return "ready"
 
     class FakeIdentityQuery:
-        async def execute(self, token):
-            principal = await AuthenticateApiTokenHandler(Reader(), Hasher(), lambda: now).execute(
-                AuthenticateApiTokenQuery(token)
+        async def query(self, message):
+            assert isinstance(message, AuthenticateIdentityTokenQuery)
+            return await AuthenticateApiTokenHandler(Reader(), Hasher(), lambda: now).execute(
+                AuthenticateApiTokenQuery(message.token)
             )
-            return PrincipalView(
-                user_id=principal.user_id,
-                project_id=principal.project_id,
-                role=principal.role,
-                scopes=sorted(principal.scopes),
-            )
+
+    class FakePlatformModule:
+        async def query(self, message):
+            assert isinstance(message, ReadCatalog)
+            return ReadCatalogQueryHandler().execute(message.access)
 
     class FakeCapabilities(Provider):
         @provide(scope=Scope.REQUEST)
-        def authenticate(self) -> ReadCurrentIdentity:
+        def authenticate(self) -> IdentityModule:
             return FakeIdentityQuery()
 
         @provide(scope=Scope.REQUEST)
-        def catalog(self) -> ReadCatalogQueryHandler:
-            return ReadCatalogQueryHandler()
+        def platform(self) -> DeveloperPlatformModule:
+            return FakePlatformModule()
 
         @provide(scope=Scope.APP)
         def readiness(self) -> ReadinessProbe:

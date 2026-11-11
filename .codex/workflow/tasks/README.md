@@ -2,7 +2,7 @@
 
 Create a task record only when the user requests it. Use the
 [task template](../templates/task.md) and keep scope, decisions, verification
-and handoff together. This directory now keeps unfinished tasks only.
+and handoff together. This directory keeps unfinished tasks and the completed 02a handoff record.
 
 No feature tasks are preassigned. A record does not authorize implementation,
 live provisioning, deployment, migrations or paid services.
@@ -20,6 +20,7 @@ partial code stays in the working tree; it has not been removed or marked comple
 | Order | Task | Priority | Classification | Size | Current state |
 | --- | --- | --- | --- | --- | --- |
 | **02** | [PostgreSQL recovery acceptance](02-postgres-recovery-acceptance.md) | P1 | Design required | Medium | Verification / remaining coverage |
+| **02a** | [Context module dispatch](02a-context-module-dispatch.md) | P1 architecture | Design required | Large | Implemented; isolated checks and independent review passed; live PostgreSQL acceptance belongs to 02 |
 | **03** | [Dashboard identity administration](03-dashboard-identity-administration.md) | P1 | Design required | Medium | Missing UI / existing API |
 | **04** | [Platform observability acceptance](04-platform-observability-acceptance.md) | P2 | Design required | Medium | Partial / verification |
 | **05** | [Control-plane backup and restore acceptance](05-control-plane-restore-acceptance.md) | P2 | Design required | Large | Existing assets / unverified recovery |
@@ -33,12 +34,12 @@ partial code stays in the working tree; it has not been removed or marked comple
 | **13** | [Configured-server database connectivity](13-remote-database-access.md) | P2 | Design required | Large | Not implemented |
 | **14** | [AWS hosting infrastructure validation](14-aws-hosting-validation.md) | P2 | Design required | Large | Existing assets / cloud deferred |
 
-**Start with 02, then 03.** Task 01 is complete and its plan has been removed.
-There are 13 unfinished tasks. Existing numbers are retained so references stay stable.
+**Start with 02, then 03.** Task 02a is complete; task 01's plan has been removed.
+There are 13 unfinished tasks and one completed 02a handoff record. Existing numbers are retained so references stay stable.
 
 | Stage | Tasks | Outcome |
 | --- | --- | --- |
-| Local foundation | 02–03 | Stable backend, recovery confidence and internal administration |
+| Local foundation | 02, 02a, 03 | Stable backend, recovery confidence, module dispatch and internal administration |
 | Operations and delivery | 04–07 | Monitoring, recovery, host setup and safe releases |
 | Application self-service | 08–10 | Database attachment, templates and deployment visibility |
 | Advanced developer experience | 11–12 | Additional languages and PR previews |

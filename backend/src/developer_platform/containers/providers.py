@@ -9,7 +9,6 @@ from dishka import Provider, Scope, provide
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from api.health.metrics import OperationalMetrics
-from api.platform.applications import ApplicationDeliveryOperations
 from developer_platform.application.database_lifecycle.ports import ResourceCredentialCipher
 from developer_platform.application.database_lifecycle.service import ManageDatabaseLifecycleHandler
 from developer_platform.application.database_provisioning.read_resources.handler import (
@@ -28,9 +27,34 @@ from developer_platform.application.projects.handler import RegisterProjectHandl
 from developer_platform.application.projects.port import ProjectRegistrationRepository
 from developer_platform.application.resource_catalog.catalog import ApprovedPostgresCatalog
 from developer_platform.application.resource_catalog.handler import ReadCatalogQueryHandler
-from developer_platform.application.workload_delivery.shared.ports import ResourceProvisioner
+from developer_platform.application.workload_delivery.shared.ports import (
+    ResourceProvisioner,
+    TemplateCatalog,
+)
 from developer_platform.containers.application_host import ApplicationDeliveryHost
 from developer_platform.containers.metrics_operations import DatabaseOperationalMetrics
+from developer_platform.containers.module import (
+    ActivityAdapter,
+    ApplicationAdapter,
+    ApplicationsAdapter,
+    AttachDatabaseAdapter,
+    CatalogAdapter,
+    ConnectionAdapter,
+    CreateApplicationAdapter,
+    DeleteDatabaseAdapter,
+    DeployApplicationAdapter,
+    DeploymentHistoryAdapter,
+    OperationAdapter,
+    ProjectAdapter,
+    ProjectsAdapter,
+    RenewDatabaseAdapter,
+    RequestDatabaseAdapter,
+    ResourceAdapter,
+    ResourcesAdapter,
+    RetryDeliveryStepAdapter,
+    TemplatesAdapter,
+    WebhookAdapter,
+)
 from developer_platform.containers.ports import PlatformRequestAuthenticator
 from developer_platform.domain.interfaces.resource_request_repository import (
     ResourceRequestRepository,
@@ -60,6 +84,27 @@ from shared.infra.settings import Settings
 
 
 class PlatformProvider(Provider):
+    catalog_adapter = provide(CatalogAdapter, scope=Scope.REQUEST)
+    project_adapter = provide(ProjectAdapter, scope=Scope.REQUEST)
+    projects_adapter = provide(ProjectsAdapter, scope=Scope.REQUEST)
+    resources_adapter = provide(ResourcesAdapter, scope=Scope.REQUEST)
+    resource_adapter = provide(ResourceAdapter, scope=Scope.REQUEST)
+    operation_adapter = provide(OperationAdapter, scope=Scope.REQUEST)
+    request_adapter = provide(RequestDatabaseAdapter, scope=Scope.REQUEST)
+    renew_adapter = provide(RenewDatabaseAdapter, scope=Scope.REQUEST)
+    delete_adapter = provide(DeleteDatabaseAdapter, scope=Scope.REQUEST)
+    connection_adapter = provide(ConnectionAdapter, scope=Scope.REQUEST)
+    activity_adapter = provide(ActivityAdapter, scope=Scope.REQUEST)
+    templates_adapter = provide(TemplatesAdapter, scope=Scope.REQUEST)
+    applications_adapter = provide(ApplicationsAdapter, scope=Scope.REQUEST)
+    application_adapter = provide(ApplicationAdapter, scope=Scope.REQUEST)
+    create_application_adapter = provide(CreateApplicationAdapter, scope=Scope.REQUEST)
+    attach_adapter = provide(AttachDatabaseAdapter, scope=Scope.REQUEST)
+    deploy_adapter = provide(DeployApplicationAdapter, scope=Scope.REQUEST)
+    deployment_history_adapter = provide(DeploymentHistoryAdapter, scope=Scope.REQUEST)
+    retry_adapter = provide(RetryDeliveryStepAdapter, scope=Scope.REQUEST)
+    webhook_adapter = provide(WebhookAdapter, scope=Scope.REQUEST)
+
     sql_ledger_repository = provide(SQLAlchemyPlatformLedgerRepository, scope=Scope.REQUEST)
 
     @provide(scope=Scope.REQUEST)
@@ -149,6 +194,10 @@ class ApplicationDeliveryProvider(Provider):
         )
 
     @provide(scope=Scope.APP)
+    def template_catalog(self, templates: FilesystemTemplateCatalog) -> TemplateCatalog:
+        return templates
+
+    @provide(scope=Scope.APP)
     def images(self, settings: Settings) -> StaticApprovedImageCatalog:
         return StaticApprovedImageCatalog({"local": frozenset(settings.approved_local_images)})
 
@@ -227,9 +276,3 @@ class ApplicationDeliveryProvider(Provider):
             preview_ttl_seconds=settings.preview_ttl_seconds,
             effect_guard=PostgresResourceEffectGuard(engine),
         )
-
-    @provide(scope=Scope.REQUEST)
-    def application_delivery_operations(
-        self, service: ApplicationDeliveryHost
-    ) -> ApplicationDeliveryOperations:
-        return service

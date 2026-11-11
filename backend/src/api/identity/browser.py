@@ -1,7 +1,7 @@
 """Cookie-based internal identity HTTP contract and transport routes."""
 
 from dataclasses import dataclass
-from typing import Annotated, Literal, Protocol
+from typing import Annotated, Literal
 from uuid import UUID
 
 from dishka.integrations.fastapi import FromDishka, inject
@@ -9,11 +9,22 @@ from fastapi import APIRouter, Header, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from api.errors import APIError
+from identity.application.module import IdentityModule
+from identity.application.module_messages import (
+    ChangeBrowserPasswordCommand,
+    ListBrowserSessionsQuery,
+    ListProjectMembersQuery,
+    LoginBrowserSessionCommand,
+    LogoutAllBrowserSessionsCommand,
+    LogoutBrowserSessionCommand,
+    ManageProjectMembershipCommand,
+    ReadBrowserCookiePolicyQuery,
+    ReadBrowserPrincipalQuery,
+    RevokeBrowserSessionCommand,
+    SelectBrowserProjectCommand,
+)
 from identity.domain.browser_identity import (
-    BrowserLogin,
     BrowserPrincipal,
-    BrowserProjectMember,
-    BrowserSession,
 )
 
 SESSION_COOKIE = "devops_session"
@@ -25,57 +36,6 @@ CSRF_HEADER = "X-CSRF-Token"
 class BrowserCredentials:
     session_token: str | None
     project_id: UUID | None
-
-
-class BrowserIdentityOperations(Protocol):
-    cookie_secure: bool
-
-    async def login(
-        self, user_name: str, password: str, project_id: UUID | None, origin: str | None
-    ) -> BrowserLogin: ...
-
-    async def authenticate_session(
-        self, session_token: str, project_id: UUID | None = None
-    ) -> BrowserPrincipal: ...
-
-    async def browser_me(self, session_token: str) -> BrowserPrincipal: ...
-
-    async def select_project(
-        self, session_token: str, project_id: UUID, csrf_token: str, origin: str | None
-    ) -> BrowserPrincipal: ...
-
-    async def logout(self, session_token: str, csrf_token: str, origin: str | None) -> None: ...
-
-    async def logout_all(self, session_token: str, csrf_token: str, origin: str | None) -> int: ...
-
-    async def list_sessions(self, session_token: str) -> tuple[BrowserSession, ...]: ...
-
-    async def revoke_session(
-        self, session_token: str, session_id: UUID, csrf_token: str, origin: str | None
-    ) -> bool: ...
-
-    async def change_password(
-        self,
-        session_token: str,
-        current_password: str,
-        new_password: str,
-        csrf_token: str,
-        origin: str | None,
-    ) -> None: ...
-
-    async def list_project_members(
-        self, session_token: str, project_id: UUID
-    ) -> tuple[BrowserProjectMember, ...]: ...
-
-    async def manage_project_membership(
-        self,
-        session_token: str,
-        project_id: UUID,
-        user_id: UUID,
-        role: str | None,
-        csrf_token: str,
-        origin: str | None,
-    ) -> None: ...
 
 
 def browser_credentials(request: Request) -> BrowserCredentials:
@@ -155,16 +115,18 @@ async def login(
     body: LoginBody,
     request: Request,
     response: Response,
-    operations: FromDishka[BrowserIdentityOperations],
+    module: FromDishka[IdentityModule],
 ) -> dict[str, object]:
-    result = await operations.login(
-        body.user_name, body.password, body.project_id, request.headers.get("origin")
+    result = await module.execute(
+        LoginBrowserSessionCommand(
+            body.user_name, body.password, body.project_id, request.headers.get("origin")
+        )
     )
     response.set_cookie(
         SESSION_COOKIE,
         result.session_token,
         httponly=True,
-        secure=operations.cookie_secure,
+        secure=await module.query(ReadBrowserCookiePolicyQuery()),
         samesite="lax",
         path="/api/v1",
         max_age=8 * 60 * 60,
@@ -180,9 +142,11 @@ async def login(
 @router.get("/api/v1/me/browser", tags=["identity"])
 @inject
 async def browser_me(
-    request: Request, response: Response, operations: FromDishka[BrowserIdentityOperations]
+    request: Request, response: Response, module: FromDishka[IdentityModule]
 ) -> dict[str, object]:
-    principal = await operations.browser_me(require_cookie_session(browser_credentials(request)))
+    principal = await module.query(
+        ReadBrowserPrincipalQuery(require_cookie_session(browser_credentials(request)))
+    )
     response.headers["Cache-Control"] = "no-store"
     return {"csrfToken": principal.csrf_token, "principal": _principal(principal)}
 
@@ -193,13 +157,15 @@ async def select_project(
     body: ProjectBody,
     request: Request,
     csrf_token: Annotated[str, Header(alias=CSRF_HEADER)],
-    operations: FromDishka[BrowserIdentityOperations],
+    module: FromDishka[IdentityModule],
 ) -> dict[str, object]:
-    principal = await operations.select_project(
-        require_cookie_session(browser_credentials(request)),
-        body.project_id,
-        csrf_token,
-        request.headers.get("origin"),
+    principal = await module.execute(
+        SelectBrowserProjectCommand(
+            require_cookie_session(browser_credentials(request)),
+            body.project_id,
+            csrf_token,
+            request.headers.get("origin"),
+        )
     )
     return {"csrfToken": principal.csrf_token, "principal": _principal(principal)}
 
@@ -210,17 +176,19 @@ async def logout(
     request: Request,
     csrf_token: Annotated[str, Header(alias=CSRF_HEADER)],
     response: Response,
-    operations: FromDishka[BrowserIdentityOperations],
+    module: FromDishka[IdentityModule],
 ) -> Response:
-    await operations.logout(
-        require_cookie_session(browser_credentials(request)),
-        csrf_token,
-        request.headers.get("origin"),
+    await module.execute(
+        LogoutBrowserSessionCommand(
+            require_cookie_session(browser_credentials(request)),
+            csrf_token,
+            request.headers.get("origin"),
+        )
     )
     response.delete_cookie(
         SESSION_COOKIE,
         path="/api/v1",
-        secure=operations.cookie_secure,
+        secure=await module.query(ReadBrowserCookiePolicyQuery()),
         httponly=True,
         samesite="lax",
     )
@@ -234,17 +202,19 @@ async def logout_all(
     request: Request,
     csrf_token: Annotated[str, Header(alias=CSRF_HEADER)],
     response: Response,
-    operations: FromDishka[BrowserIdentityOperations],
+    module: FromDishka[IdentityModule],
 ) -> dict[str, int]:
-    count = await operations.logout_all(
-        require_cookie_session(browser_credentials(request)),
-        csrf_token,
-        request.headers.get("origin"),
+    count = await module.execute(
+        LogoutAllBrowserSessionsCommand(
+            require_cookie_session(browser_credentials(request)),
+            csrf_token,
+            request.headers.get("origin"),
+        )
     )
     response.delete_cookie(
         SESSION_COOKIE,
         path="/api/v1",
-        secure=operations.cookie_secure,
+        secure=await module.query(ReadBrowserCookiePolicyQuery()),
         httponly=True,
         samesite="lax",
     )
@@ -256,10 +226,12 @@ async def logout_all(
 async def sessions(
     request: Request,
     response: Response,
-    operations: FromDishka[BrowserIdentityOperations],
+    module: FromDishka[IdentityModule],
 ) -> list[dict[str, object]]:
     response.headers["Cache-Control"] = "no-store"
-    values = await operations.list_sessions(require_cookie_session(browser_credentials(request)))
+    values = await module.query(
+        ListBrowserSessionsQuery(require_cookie_session(browser_credentials(request)))
+    )
     return [
         {
             "sessionId": str(item.session_id),
@@ -280,13 +252,15 @@ async def revoke_session(
     request: Request,
     csrf_token: Annotated[str, Header(alias=CSRF_HEADER)],
     response: Response,
-    operations: FromDishka[BrowserIdentityOperations],
+    module: FromDishka[IdentityModule],
 ) -> Response:
-    await operations.revoke_session(
-        require_cookie_session(browser_credentials(request)),
-        session_id,
-        csrf_token,
-        request.headers.get("origin"),
+    await module.execute(
+        RevokeBrowserSessionCommand(
+            require_cookie_session(browser_credentials(request)),
+            session_id,
+            csrf_token,
+            request.headers.get("origin"),
+        )
     )
     response.status_code = 204
     return response
@@ -299,19 +273,21 @@ async def change_password(
     request: Request,
     csrf_token: Annotated[str, Header(alias=CSRF_HEADER)],
     response: Response,
-    operations: FromDishka[BrowserIdentityOperations],
+    module: FromDishka[IdentityModule],
 ) -> Response:
-    await operations.change_password(
-        require_cookie_session(browser_credentials(request)),
-        body.current_password,
-        body.new_password,
-        csrf_token,
-        request.headers.get("origin"),
+    await module.execute(
+        ChangeBrowserPasswordCommand(
+            require_cookie_session(browser_credentials(request)),
+            body.current_password,
+            body.new_password,
+            csrf_token,
+            request.headers.get("origin"),
+        )
     )
     response.delete_cookie(
         SESSION_COOKIE,
         path="/api/v1",
-        secure=operations.cookie_secure,
+        secure=await module.query(ReadBrowserCookiePolicyQuery()),
         httponly=True,
         samesite="lax",
     )
@@ -325,11 +301,11 @@ async def list_project_members(
     project_id: UUID,
     request: Request,
     response: Response,
-    operations: FromDishka[BrowserIdentityOperations],
+    module: FromDishka[IdentityModule],
 ) -> list[dict[str, object]]:
     response.headers["Cache-Control"] = "no-store"
-    members = await operations.list_project_members(
-        require_cookie_session(browser_credentials(request)), project_id
+    members = await module.query(
+        ListProjectMembersQuery(require_cookie_session(browser_credentials(request)), project_id)
     )
     return [
         {
@@ -351,15 +327,17 @@ async def set_project_member(
     request: Request,
     csrf_token: Annotated[str, Header(alias=CSRF_HEADER)],
     response: Response,
-    operations: FromDishka[BrowserIdentityOperations],
+    module: FromDishka[IdentityModule],
 ) -> Response:
-    await operations.manage_project_membership(
-        require_cookie_session(browser_credentials(request)),
-        project_id,
-        user_id,
-        body.role,
-        csrf_token,
-        request.headers.get("origin"),
+    await module.execute(
+        ManageProjectMembershipCommand(
+            require_cookie_session(browser_credentials(request)),
+            project_id,
+            user_id,
+            body.role,
+            csrf_token,
+            request.headers.get("origin"),
+        )
     )
     response.status_code = 204
     return response
@@ -375,15 +353,17 @@ async def remove_project_member(
     request: Request,
     csrf_token: Annotated[str, Header(alias=CSRF_HEADER)],
     response: Response,
-    operations: FromDishka[BrowserIdentityOperations],
+    module: FromDishka[IdentityModule],
 ) -> Response:
-    await operations.manage_project_membership(
-        require_cookie_session(browser_credentials(request)),
-        project_id,
-        user_id,
-        None,
-        csrf_token,
-        request.headers.get("origin"),
+    await module.execute(
+        ManageProjectMembershipCommand(
+            require_cookie_session(browser_credentials(request)),
+            project_id,
+            user_id,
+            None,
+            csrf_token,
+            request.headers.get("origin"),
+        )
     )
     response.status_code = 204
     return response

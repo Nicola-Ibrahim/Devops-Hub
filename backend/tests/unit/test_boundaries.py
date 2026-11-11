@@ -65,6 +65,8 @@ def violation(module, target):
     if other in RETIRED_ROOTS:
         return True
     if root in CONTEXTS:
+        if target == "shared.dispatch" or target.startswith("shared.dispatch."):
+            return False  # Pure cross-context message/handler contract.
         layer = module_parts[1:2]
         if layer == ["containers"]:
             if other in CONTEXTS - {root}:
@@ -172,6 +174,7 @@ def test_indirect_package_reexport_cannot_smuggle_infrastructure_into_core():
     [
         ("identity.application.flow", "from ..infra import tokens", True),
         ("identity.application.flow", "from ..domain import credentials", False),
+        ("identity.application.flow", "from shared.dispatch import Command", False),
         ("developer_platform.application.flow", "from identity import contracts", True),
         ("api.platform.routes", "from developer_platform.infra import persistence", True),
         ("shared.infra.database", "import containers.http", True),
