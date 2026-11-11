@@ -3,10 +3,11 @@
 import unittest
 from uuid import UUID
 
+from developer_platform.application.module import ReadCatalog
 from developer_platform.application.resource_catalog.handler import ReadCatalogQueryHandler
 from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.shared.errors import CatalogForbidden
-from developer_platform.application.shared.permissions import ALL_SCOPES
+from developer_platform.authorization import ALL_SCOPES, authorize_platform_action
 
 
 class ReadCatalogTests(unittest.TestCase):
@@ -39,7 +40,7 @@ class ReadCatalogTests(unittest.TestCase):
         )
 
         with self.assertRaises(CatalogForbidden) as caught:
-            ReadCatalogQueryHandler().execute(admin)
+            authorize_platform_action(ReadCatalog(admin))
 
         self.assertEqual(caught.exception.code, "forbidden")
         self.assertEqual(caught.exception.message, "The token does not permit this action")

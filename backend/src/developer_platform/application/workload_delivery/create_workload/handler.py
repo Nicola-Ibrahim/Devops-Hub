@@ -15,7 +15,6 @@ from developer_platform.application.workload_delivery.shared.models import Workl
 from developer_platform.application.workload_delivery.shared.policy import (
     APP_NAME,
     IDENTIFIER,
-    require_delivery_scope,
     validate_delivery_key,
 )
 from developer_platform.application.workload_delivery.shared.ports import (
@@ -38,7 +37,6 @@ class CreateApplicationHandler:
     async def execute(
         self, access: AccessContext, command: ApplicationCommand, idempotency_key: str
     ) -> tuple[WorkloadDetails, bool]:
-        require_delivery_scope(access, "resources:write")
         validate_delivery_key(idempotency_key)
         if not APP_NAME.fullmatch(command.name):
             raise PlatformRequestError("invalid_workload_name", "Workload name is invalid", 422)

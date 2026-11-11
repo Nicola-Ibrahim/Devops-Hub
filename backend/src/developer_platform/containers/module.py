@@ -1,7 +1,7 @@
 """Explicit platform message bindings; use-case adapters stay in this context."""
 
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, TypeVar
 from uuid import UUID
 
 from developer_platform.application.database_lifecycle.read_connection.query import (
@@ -58,11 +58,14 @@ from developer_platform.application.workload_delivery.shared.ports import (
     ApplicationDeliveryService,
     TemplateCatalog,
 )
+from developer_platform.authorization import authorize_platform_action
 from developer_platform.domain.resource_lifecycle_repository import (
     ResourceActivity,
     ResourceSnapshot,
 )
-from shared.dispatch import HandlerRegistry, ModuleDispatcher
+from shared.dispatch import Command, HandlerRegistry, ModuleDispatcher, Query
+
+ResultT = TypeVar("ResultT")
 
 
 class CatalogAdapter:
@@ -283,6 +286,16 @@ PLATFORM_HANDLER_REGISTRY = HandlerRegistry(
 )
 
 
-class DeveloperPlatformDispatcher(ModuleDispatcher):
+class _DeveloperPlatformDispatcher(ModuleDispatcher):
+    """Internal handler dispatcher; only authenticated hosts expose the module contract."""
+
     def __init__(self, resolve_handler: Callable[[type[Any]], Awaitable[Any]]) -> None:
         super().__init__(PLATFORM_HANDLER_REGISTRY, resolve_handler)
+
+    async def execute(self, command: Command[ResultT]) -> ResultT:
+        authorize_platform_action(command)
+        return await super().execute(command)
+
+    async def query(self, query: Query[ResultT]) -> ResultT:
+        authorize_platform_action(query)
+        return await super().query(query)

@@ -42,7 +42,7 @@ from developer_platform.application.module import (
     RequestTemporaryDatabase,
 )
 from developer_platform.application.shared.dto import AccessContext
-from developer_platform.application.shared.permissions import ALL_SCOPES
+from developer_platform.authorization import ALL_SCOPES, authorize_platform_action
 from identity.application.module import IdentityModule
 from identity.application.module_messages import (
     AuthenticateBrowserSessionQuery,
@@ -57,7 +57,9 @@ Bearer = Annotated[RequestIdentity, Depends(request_identity)]
 @router.get("/api/v1/catalog", response_model=CatalogResponse, tags=["catalog"])
 @inject
 async def catalog(access: Access, module: FromDishka[DeveloperPlatformModule]) -> CatalogResponse:
-    result = await module.query(ReadCatalog(access))
+    message = ReadCatalog(access)
+    authorize_platform_action(message)
+    result = await module.query(message)
     return CatalogResponse(
         project_id=result.project_id,
         templates=[
@@ -80,11 +82,11 @@ async def request_database(
         str, Header(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:-]+$")
     ],
 ) -> AcceptedOperation:
-    result = await module.execute(
-        RequestTemporaryDatabase(
-            access, RequestDatabaseCommand(**command.model_dump()), idempotency_key
-        )
+    message = RequestTemporaryDatabase(
+        access, RequestDatabaseCommand(**command.model_dump()), idempotency_key
     )
+    authorize_platform_action(message)
+    result = await module.execute(message)
     response.headers["Location"] = f"/api/v1/operations/{result.operation_id}"
     return AcceptedOperation(**asdict(result))
 
@@ -96,7 +98,9 @@ async def request_database(
 async def project(
     project_id: UUID, access: Access, module: FromDishka[DeveloperPlatformModule]
 ) -> ProjectRegistrationView:
-    result = await module.query(ReadProject(access, project_id))
+    message = ReadProject(access, project_id)
+    authorize_platform_action(message)
+    result = await module.query(message)
     return ProjectRegistrationView.model_validate(asdict(result))
 
 
@@ -111,7 +115,9 @@ async def resources(
     after: UUID | None = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
 ) -> ResourcePage:
-    results = await module.query(ReadResources(access, project_id, after, limit))
+    message = ReadResources(access, project_id, after, limit)
+    authorize_platform_action(message)
+    results = await module.query(message)
     return ResourcePage(
         items=[ResourceView.model_validate(asdict(item)) for item in results],
         next_after=results[-1].id if len(results) == limit else None,
@@ -123,7 +129,9 @@ async def resources(
 async def resource(
     resource_id: UUID, access: Access, module: FromDishka[DeveloperPlatformModule]
 ) -> ResourceView:
-    result = await module.query(ReadResource(access, resource_id))
+    message = ReadResource(access, resource_id)
+    authorize_platform_action(message)
+    result = await module.query(message)
     return ResourceView.model_validate(asdict(result))
 
 
@@ -132,7 +140,9 @@ async def resource(
 async def operation(
     operation_id: UUID, access: Access, module: FromDishka[DeveloperPlatformModule]
 ) -> OperationView:
-    result = await module.query(ReadOperation(access, operation_id))
+    message = ReadOperation(access, operation_id)
+    authorize_platform_action(message)
+    result = await module.query(message)
     return OperationView.model_validate(asdict(result))
 
 
@@ -164,7 +174,9 @@ async def projects(
                 token_principal.scopes,
             ),
         )
-    rows = await module.query(ReadProjects(accesses))
+    message = ReadProjects(accesses)
+    authorize_platform_action(message)
+    rows = await module.query(message)
     return [ProjectRegistrationView.model_validate(asdict(row)) for row in rows]
 
 
@@ -178,12 +190,12 @@ async def renew(
     access: Access,
     module: FromDishka[DeveloperPlatformModule],
 ) -> ResourceView:
-    row = await module.execute(
-        RenewDatabase(
-            access,
-            RenewDatabaseLease(resource_id, command.expected_revision, command.expires_at),
-        )
+    message = RenewDatabase(
+        access,
+        RenewDatabaseLease(resource_id, command.expected_revision, command.expires_at),
     )
+    authorize_platform_action(message)
+    row = await module.execute(message)
     return ResourceView.model_validate(asdict(row))
 
 
@@ -197,7 +209,9 @@ async def renew(
 async def delete_resource(
     resource_id: UUID, access: Access, module: FromDishka[DeveloperPlatformModule]
 ) -> AcceptedOperation:
-    operation_id = await module.execute(DeleteDatabase(access, resource_id))
+    message = DeleteDatabase(access, resource_id)
+    authorize_platform_action(message)
+    operation_id = await module.execute(message)
     return AcceptedOperation(resource_id=resource_id, operation_id=operation_id)
 
 
@@ -208,7 +222,9 @@ async def delete_resource(
 async def connection(
     resource_id: UUID, access: Access, module: FromDishka[DeveloperPlatformModule]
 ) -> ConnectionView:
-    result = await module.query(ReadDatabaseConnection(access, resource_id))
+    message = ReadDatabaseConnection(access, resource_id)
+    authorize_platform_action(message)
+    result = await module.query(message)
     return ConnectionView.model_validate(asdict(result))
 
 
@@ -219,5 +235,7 @@ async def connection(
 async def activity(
     project_id: UUID, access: Access, module: FromDishka[DeveloperPlatformModule]
 ) -> ActivityPage:
-    rows = await module.query(ReadResourceActivity(access, project_id))
+    message = ReadResourceActivity(access, project_id)
+    authorize_platform_action(message)
+    rows = await module.query(message)
     return ActivityPage(items=[ActivityView.model_validate(asdict(row)) for row in rows])

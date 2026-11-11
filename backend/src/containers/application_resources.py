@@ -15,15 +15,16 @@ from developer_platform.application.database_provisioning.submit_database_reques
 from developer_platform.application.database_provisioning.submit_database_request.handler import (
     RequestTemporaryDatabaseHandler,
 )
+from developer_platform.application.module import RequestTemporaryDatabase
 from developer_platform.application.resource_catalog.catalog import ApprovedPostgresCatalog
 from developer_platform.application.shared.dto import AccessContext
-from developer_platform.application.shared.permissions import ALL_SCOPES
 from developer_platform.application.workload_delivery.attach_database.command import (
     ResourceAttachmentCommand,
 )
 from developer_platform.application.workload_delivery.shared.ports import (
     ApplicationDeliveryFailure,
 )
+from developer_platform.authorization import ALL_SCOPES, authorize_platform_action
 from developer_platform.infra.persistence.ledger import SQLAlchemyPlatformLedgerRepository
 from developer_platform.infra.persistence.lifecycle import mark_for_deletion
 from developer_platform.infra.persistence.models import Resource
@@ -63,6 +64,7 @@ class LedgerApplicationResources:
                 command.size_id,
                 command.ttl_seconds,
             )
+            authorize_platform_action(RequestTemporaryDatabase(access, request, idempotency_key))
             usecase = RequestTemporaryDatabaseHandler(
                 SQLAlchemyPlatformLedgerRepository(session),
                 self.catalog,

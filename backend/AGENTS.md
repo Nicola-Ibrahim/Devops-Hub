@@ -75,6 +75,12 @@ over generic `service`, `manager` or `utils`.
   the API boundary. Pass a trusted actor context to the application; do not trust
   caller-supplied ownership fields. Domain rules still enforce resource ownership,
   valid state transitions, quotas and lease limits, including for worker callers.
+- Platform developer-action scope/project rules live in
+  `developer_platform/authorization.py`. API routes check them before dispatch;
+  HTTP and non-HTTP hosts check again using freshly authenticated access. Platform
+  application handlers do not repeat these transport permission checks. Loaded
+  resource/application ownership, readiness, quota and idempotency remain enforced
+  by domain and persistence rules within the operation transaction.
 - Each bounded context exposes a typed module contract with async `execute(command)`
   and `query(query)` entry points. The context owns an explicit message-to-handler
   registry and adapters under `containers/`; a request-scoped dispatcher resolves

@@ -11,7 +11,6 @@ from developer_platform.application.workload_delivery.retry_delivery_step.port i
     DeliveryRetryRepository,
 )
 from developer_platform.application.workload_delivery.shared.models import DeliveryStepDetails
-from developer_platform.application.workload_delivery.shared.policy import require_delivery_scope
 
 
 class RetryDeliveryStepHandler:
@@ -21,7 +20,6 @@ class RetryDeliveryStepHandler:
     async def execute(
         self, access: AccessContext, command: RetryDeliveryStepCommand
     ) -> DeliveryStepDetails:
-        require_delivery_scope(access, "resources:write")
         return await self.repository.retry_step(
             access, command.application_id, command.step_id, self.clock()
         )

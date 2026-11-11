@@ -10,7 +10,6 @@ from developer_platform.application.database_provisioning.submit_database_reques
 from developer_platform.application.resource_catalog.catalog import ApprovedPostgresCatalog
 from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.shared.errors import PlatformRequestError
-from developer_platform.application.shared.project_access import require_project_scope
 from developer_platform.domain.aggregates.resource_lifecycle import ResourceLifecycle
 from developer_platform.domain.entities.operation import AcceptedResourceRequest
 from developer_platform.domain.errors import DomainError
@@ -40,7 +39,6 @@ class RequestTemporaryDatabaseHandler:
     async def execute(
         self, access: AccessContext, command: RequestDatabaseCommand, key: str
     ) -> AcceptedResourceRequest:
-        require_project_scope(access, command.project_id, "resources:write")
         try:
             idempotency_key = IdempotencyKey(key)
             name = ResourceName(command.display_name)

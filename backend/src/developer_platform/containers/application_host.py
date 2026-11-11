@@ -10,6 +10,15 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from api.credentials import RequestIdentity
+from developer_platform.application.module import (
+    AttachDatabase,
+    CreateApplication,
+    DeployApplication,
+    ReadApplication,
+    ReadApplications,
+    ReadDeploymentHistory,
+    RetryDeliveryStep,
+)
 from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.shared.errors import PlatformRequestError
 from developer_platform.application.workload_delivery.attach_database.command import (
@@ -44,6 +53,7 @@ from developer_platform.application.workload_delivery.shared.ports import (
     TemplateCatalog,
     WebhookSignatureVerifier,
 )
+from developer_platform.authorization import authorize_platform_access
 from developer_platform.infra.persistence.delivery import SQLAlchemyApplicationDeliveryRepository
 from shared.infra.persistence.unit_of_work import DatabaseUnavailable, SqlAlchemyUnitOfWork
 
@@ -93,6 +103,7 @@ class ApplicationDeliveryHost:
     async def _run(
         self,
         identity: RequestIdentity,
+        action_type: type[object],
         action: Callable[[ApplicationDeliveryService, AccessContext], Awaitable[T]],
         present: Callable[[T], R],
     ) -> R:
@@ -104,6 +115,7 @@ class ApplicationDeliveryHost:
 
                 async def authorized() -> T:
                     access = await self.authenticate(session, identity)
+                    authorize_platform_access(action_type, access)
                     return await action(delivery, access)
 
                 return await unit.run(authorized, present)
@@ -117,6 +129,7 @@ class ApplicationDeliveryHost:
     ) -> tuple[ApplicationDetails, bool]:
         return await self._run(
             identity,
+            CreateApplication,
             lambda usecase, access: usecase.create_workload(access, command, key),
             lambda result: result,
         )
@@ -124,6 +137,7 @@ class ApplicationDeliveryHost:
     async def list_applications(self, identity: RequestIdentity) -> tuple[ApplicationDetails, ...]:
         return await self._run(
             identity,
+            ReadApplications,
             lambda usecase, access: usecase.list_workloads(access),
             tuple,
         )
@@ -133,6 +147,7 @@ class ApplicationDeliveryHost:
     ) -> tuple[ApplicationDetails, tuple[DeliveryStepDetails, ...]]:
         return await self._run(
             identity,
+            ReadApplication,
             lambda usecase, access: usecase.workload(access, application_id),
             lambda result: result,
         )
@@ -146,6 +161,7 @@ class ApplicationDeliveryHost:
     ) -> DeliveryStepDetails:
         return await self._run(
             identity,
+            AttachDatabase,
             lambda usecase, access: usecase.attach_database(access, application_id, command, key),
             lambda result: result,
         )
@@ -159,6 +175,7 @@ class ApplicationDeliveryHost:
     ) -> DeploymentDetails:
         return await self._run(
             identity,
+            DeployApplication,
             lambda usecase, access: usecase.deploy(access, application_id, command, key),
             lambda result: result,
         )
@@ -168,6 +185,7 @@ class ApplicationDeliveryHost:
     ) -> tuple[DeploymentDetails, ...]:
         return await self._run(
             identity,
+            ReadDeploymentHistory,
             lambda usecase, access: usecase.deployment_history(access, application_id),
             tuple,
         )
@@ -177,6 +195,7 @@ class ApplicationDeliveryHost:
     ) -> DeliveryStepDetails:
         return await self._run(
             identity,
+            RetryDeliveryStep,
             lambda usecase, access: usecase.retry_step(access, application_id, step_id),
             lambda result: result,
         )

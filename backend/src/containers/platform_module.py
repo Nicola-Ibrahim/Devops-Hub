@@ -24,8 +24,8 @@ from developer_platform.application.module import (
 )
 from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.shared.errors import PlatformRequestError, ledger_unavailable
-from developer_platform.application.shared.permissions import ALL_SCOPES
-from developer_platform.containers.module import DeveloperPlatformDispatcher
+from developer_platform.authorization import ALL_SCOPES, authorize_platform_action
+from developer_platform.containers.module import _DeveloperPlatformDispatcher
 from identity.containers.browser_operations import authenticate_browser_operation
 from shared.dispatch import Command, Query
 from shared.infra.clock import Clock
@@ -55,7 +55,7 @@ class PlatformHttpModule(DeveloperPlatformModule):
         self._request = request
         self._settings = settings
         self._clock = clock
-        self._inner = DeveloperPlatformDispatcher(container.get)
+        self._inner = _DeveloperPlatformDispatcher(container.get)
 
     async def execute(self, command: Command[ResultT]) -> ResultT:
         if isinstance(command, ProcessGithubPreviewWebhook):
@@ -64,12 +64,14 @@ class PlatformHttpModule(DeveloperPlatformModule):
 
     async def query(self, query: Query[ResultT]) -> ResultT:
         if isinstance(query, ReadTemplates):
+            authorize_platform_action(query)
             return cast(ResultT, await self._inner.query(query))
         return await self._run_authorized(query, self._inner.query)
 
     async def _run_unscoped(
         self, message: MessageT, dispatch: Callable[[MessageT], Awaitable[ResultT]]
     ) -> ResultT:
+        authorize_platform_action(message)
         unit = await self._container.get(SqlAlchemyUnitOfWork)
         try:
             return await unit.run(lambda: dispatch(message), lambda result: result)
@@ -113,6 +115,7 @@ class PlatformHttpModule(DeveloperPlatformModule):
                     current = cast(MessageT, replace(message, accesses=(access,)))
                 else:
                     current = cast(MessageT, replace(message, access=access))
+            authorize_platform_action(current)
             return await dispatch(current)
 
         try:

@@ -14,7 +14,6 @@ from developer_platform.application.workload_delivery.attach_database.port impor
 )
 from developer_platform.application.workload_delivery.shared.models import DeliveryStepDetails
 from developer_platform.application.workload_delivery.shared.policy import (
-    require_delivery_scope,
     validate_delivery_key,
 )
 from developer_platform.application.workload_delivery.shared.ports import RequestFingerprint
@@ -38,7 +37,6 @@ class AttachApplicationResourceHandler:
         command: ResourceAttachmentCommand,
         idempotency_key: str,
     ) -> DeliveryStepDetails:
-        require_delivery_scope(access, "resources:write")
         validate_delivery_key(idempotency_key)
         try:
             ResourceSpec(

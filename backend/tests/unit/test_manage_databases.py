@@ -4,11 +4,13 @@ import asyncio
 from uuid import uuid4
 
 import pytest
-
 from developer_platform.application.resource_lifecycle.ports import DatabaseCredentials
 from developer_platform.application.resource_lifecycle.service import ManageDatabaseLifecycleHandler
+
+from developer_platform.application.module import ReadDatabaseConnection
 from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.shared.errors import CatalogForbidden, PlatformRequestError
+from developer_platform.authorization import authorize_platform_action
 from developer_platform.domain.resource_lifecycle_repository import ResourceConnectionSecret
 
 
@@ -22,9 +24,7 @@ def test_connection_requires_scope_and_cipher_before_sensitive_read():
     allowed = AccessContext(user_id, project_id, "developer", frozenset({"connections:read"}))
 
     with pytest.raises(CatalogForbidden):
-        asyncio.run(
-            ManageDatabaseLifecycleHandler(Repository(), None).connection(forbidden, resource_id)
-        )
+        authorize_platform_action(ReadDatabaseConnection(forbidden, resource_id))
     with pytest.raises(PlatformRequestError) as error:
         asyncio.run(
             ManageDatabaseLifecycleHandler(Repository(), None).connection(allowed, resource_id)

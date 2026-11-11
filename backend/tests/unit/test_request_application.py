@@ -10,9 +10,6 @@ from developer_platform.application.project_registration.result import (
     EnvironmentDetails,
     ProjectRegistrationDetails,
 )
-from developer_platform.application.resource_catalog.catalog import ApprovedPostgresCatalog
-from developer_platform.application.resource_catalog.handler import ReadCatalogQueryHandler
-from developer_platform.application.resource_catalog.models import PostgresOption, ResourceSize
 from developer_platform.application.resource_requests.read_resources.handler import (
     ReadPlatformResourcesQueryHandler,
 )
@@ -29,8 +26,21 @@ from developer_platform.application.resource_requests.submit_database_request.ha
 from developer_platform.application.resource_requests.submit_database_request.result import (
     AcceptedDatabaseRequest,
 )
+
+from developer_platform.application.module import (
+    ReadCatalog,
+    ReadOperation,
+    ReadProject,
+    ReadResource,
+    ReadResources,
+    RequestTemporaryDatabase,
+)
+from developer_platform.application.resource_catalog.catalog import ApprovedPostgresCatalog
+from developer_platform.application.resource_catalog.handler import ReadCatalogQueryHandler
+from developer_platform.application.resource_catalog.models import PostgresOption, ResourceSize
 from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.shared.errors import CatalogForbidden, PlatformRequestError
+from developer_platform.authorization import authorize_platform_action
 
 PROJECT_ID = UUID("11111111-1111-4111-8111-111111111111")
 OTHER_PROJECT_ID = UUID("22222222-2222-4222-8222-222222222222")
@@ -125,15 +135,13 @@ def _command(**overrides) -> RequestDatabaseCommand:
 
 
 class RequestApplicationTests(unittest.IsolatedAsyncioTestCase):
-    def test_project_scope_hides_cross_project_and_denies_missing_scope(self) -> None:
-        from developer_platform.application.shared.project_access import require_project_scope
-
+    def test_action_policy_hides_cross_project_and_denies_missing_scope(self) -> None:
         with self.assertRaises(PlatformRequestError) as hidden:
-            require_project_scope(_access("resources:read"), OTHER_PROJECT_ID, "resources:read")
+            authorize_platform_action(ReadProject(_access("resources:read"), OTHER_PROJECT_ID))
         self.assertEqual(hidden.exception.status, 404)
 
         with self.assertRaises(CatalogForbidden) as forbidden:
-            require_project_scope(_access(), PROJECT_ID, "resources:write")
+            authorize_platform_action(RequestTemporaryDatabase(_access(), _command(), "key"))
         self.assertEqual(forbidden.exception.code, "forbidden")
 
     async def test_registration_rejects_invalid_registration_values(self) -> None:
@@ -160,20 +168,19 @@ class RequestApplicationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.configured)
         self.assertEqual(repository.calls, [("register_project", command, PROJECT_ID, TEAM_ID)])
 
-    async def test_request_rejects_scope_and_project_mismatch_before_repository_calls(self) -> None:
+    async def test_request_policy_rejects_scope_and_project_mismatch_before_repository_calls(
+        self,
+    ) -> None:
         repository = FakePlatformLedgerRepository()
-        service = RequestTemporaryDatabaseHandler(
-            repository,
-            ApprovedPostgresCatalog(),
-            lambda: NOW,
-            lambda command: "fingerprint",
-            INSTALLATION_ID,
-        )
         with self.assertRaises(CatalogForbidden):
-            await service.execute(_access(), _command(), "request-key")
+            authorize_platform_action(
+                RequestTemporaryDatabase(_access(), _command(), "request-key")
+            )
         with self.assertRaises(PlatformRequestError) as caught:
-            await service.execute(
-                _access("resources:write"), _command(project_id=OTHER_PROJECT_ID), "request-key"
+            authorize_platform_action(
+                RequestTemporaryDatabase(
+                    _access("resources:write"), _command(project_id=OTHER_PROJECT_ID), "request-key"
+                )
             )
         self.assertEqual(caught.exception.status, 404)
         self.assertEqual(repository.calls, [])
@@ -290,17 +297,17 @@ class RequestApplicationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(caught.exception.status, 409)
         self.assertNotIn("accept_database_request", [call[0] for call in repository.calls])
 
-    async def test_read_workflows_require_scope_and_bound_pagination(self) -> None:
+    async def test_read_policy_requires_scope_and_handler_bounds_pagination(self) -> None:
         repository = FakePlatformLedgerRepository()
         service = ReadPlatformResourcesQueryHandler(repository)
-        for action in (
-            lambda: service.project(_access(), PROJECT_ID),
-            lambda: service.resources(_access(), PROJECT_ID, None, 10),
-            lambda: service.resource(_access(), RESOURCE_ID),
-            lambda: service.operation(_access(), OPERATION_ID),
+        for message in (
+            ReadProject(_access(), PROJECT_ID),
+            ReadResources(_access(), PROJECT_ID, None, 10),
+            ReadResource(_access(), RESOURCE_ID),
+            ReadOperation(_access(), OPERATION_ID),
         ):
             with self.assertRaises(CatalogForbidden):
-                await action()
+                authorize_platform_action(message)
         for invalid_limit in (0, 101):
             with self.assertRaises(PlatformRequestError) as caught:
                 await service.resources(_access("resources:read"), PROJECT_ID, None, invalid_limit)
@@ -313,7 +320,9 @@ class RequestApplicationTests(unittest.IsolatedAsyncioTestCase):
         access = _access("resources:read")
 
         with self.assertRaises(PlatformRequestError) as project_error:
-            await service.project(access, OTHER_PROJECT_ID)
+            authorize_platform_action(ReadProject(access, OTHER_PROJECT_ID))
+        with self.assertRaises(PlatformRequestError):
+            await service.project(access, PROJECT_ID)
         with self.assertRaises(PlatformRequestError) as resource_error:
             await service.resource(access, RESOURCE_ID)
         with self.assertRaises(PlatformRequestError) as operation_error:
@@ -330,6 +339,7 @@ class RequestApplicationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             repository.calls,
             [
+                ("find_project", PROJECT_ID),
                 ("find_resource", PROJECT_ID, RESOURCE_ID),
                 ("find_operation", PROJECT_ID, OPERATION_ID),
             ],
@@ -357,7 +367,7 @@ class CatalogApplicationTests(unittest.TestCase):
 
     def test_catalog_requires_catalog_scope(self) -> None:
         with self.assertRaises(CatalogForbidden):
-            ReadCatalogQueryHandler().execute(_access())
+            authorize_platform_action(ReadCatalog(_access()))
 
 
 if __name__ == "__main__":

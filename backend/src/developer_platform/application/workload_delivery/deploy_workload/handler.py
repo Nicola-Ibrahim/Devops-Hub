@@ -14,7 +14,6 @@ from developer_platform.application.workload_delivery.deploy_workload.port impor
 )
 from developer_platform.application.workload_delivery.shared.models import DeploymentDetails
 from developer_platform.application.workload_delivery.shared.policy import (
-    require_delivery_scope,
     validate_delivery_key,
 )
 from developer_platform.application.workload_delivery.shared.ports import (
@@ -43,7 +42,6 @@ class DeployApplicationHandler:
         command: DeploymentCommand,
         idempotency_key: str,
     ) -> DeploymentDetails:
-        require_delivery_scope(access, "resources:write")
         validate_delivery_key(idempotency_key)
         try:
             image = ImageDigest(command.image_digest)
