@@ -45,17 +45,38 @@ def test_api_settings_load_prefixed_environment_and_configure_fastapi(monkeypatc
     monkeypatch.setenv("API_TITLE", "Internal Developer Platform")
     monkeypatch.setenv("API_VERSION", "2.3.0")
     monkeypatch.setenv("API_OPENAPI_URL", "/schema.json")
+    monkeypatch.setenv(
+        "API_CORS_ALLOWED_ORIGINS", "https://dashboard.example,https://preview.example"
+    )
+    monkeypatch.setenv("API_TRUSTED_HOSTS", "testserver,api.example")
     get_api_settings.cache_clear()
     try:
         loaded = get_api_settings()
         assert loaded.title == "Internal Developer Platform"
         assert loaded.version == "2.3.0"
         assert loaded.openapi_url == "/schema.json"
+        assert loaded.cors_allowed_origins == (
+            "https://dashboard.example",
+            "https://preview.example",
+        )
+        assert loaded.trusted_hosts == ("testserver", "api.example")
 
         app = create_app(settings(), api_settings=loaded)
         assert app.title == loaded.title
         assert app.version == loaded.version
         assert app.openapi_url == "/schema.json"
+        with TestClient(app) as client:
+            response = client.options(
+                "/health/live",
+                headers={
+                    "Origin": "https://dashboard.example",
+                    "Access-Control-Request-Method": "GET",
+                    "Access-Control-Request-Headers": "authorization",
+                },
+            )
+        assert response.status_code == 200
+        assert response.headers["access-control-allow-origin"] == "https://dashboard.example"
+        assert response.headers["access-control-allow-credentials"] == "true"
     finally:
         get_api_settings.cache_clear()
 
@@ -63,6 +84,43 @@ def test_api_settings_load_prefixed_environment_and_configure_fastapi(monkeypatc
 def test_api_settings_validate_required_metadata():
     with pytest.raises(ValidationError):
         APISettings(title="")
+
+
+def test_api_settings_reject_wildcard_credentials_origin():
+    with pytest.raises(ValidationError):
+        APISettings(cors_allowed_origins="*")
+
+
+def test_database_settings_accept_runtime_environment_and_cloud_database_alias(monkeypatch):
+    monkeypatch.delenv("PLATFORM_DATABASE_URL", raising=False)
+    monkeypatch.delenv("PLATFORM_DATABASE_URL_FILE", raising=False)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://platform:private@db.example/platform")
+    monkeypatch.setenv("PLATFORM_TOKEN_PEPPER", "runtime-secret-pepper-value-123456")
+    monkeypatch.setenv("PLATFORM_DATABASE_POOL_SIZE", "12")
+
+    config = Settings()
+
+    assert config.database_url.get_secret_value().startswith(
+        "postgresql+psycopg://platform:private@db.example/platform"
+    )
+    assert config.database_pool_size == 12
+    assert "private" not in repr(config)
+
+
+def test_database_settings_accept_vault_rendered_secret_file(monkeypatch, tmp_path):
+    secret_file = tmp_path / "database-url"
+    secret_file.write_text("postgresql+psycopg://platform:private@db.example/platform\n")
+    monkeypatch.delenv("PLATFORM_DATABASE_URL", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("PLATFORM_DATABASE_URL_FILE", raising=False)
+    monkeypatch.setenv("DATABASE_URL_FILE", str(secret_file))
+    monkeypatch.setenv("PLATFORM_TOKEN_PEPPER", "runtime-secret-pepper-value-123456")
+
+    assert (
+        Settings()
+        .database_url.get_secret_value()
+        .startswith("postgresql+psycopg://platform:private@db.example/platform")
+    )
 
 
 @pytest.mark.parametrize("header", [None, "Bearer short", "Basic not-a-token"])

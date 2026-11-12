@@ -42,10 +42,17 @@ group ID for the worker without making the API privileged. Do not publish the AP
 or worker Docker socket to the public network.
 
 Compose mounts source secret files read-only. A small root entrypoint copies only
-the configured `_FILE` values into each API/worker/migration container's ephemeral
-`/run` tmpfs, sets mode `0400` and ownership to the fixed non-root service UID,
-then drops privileges. Worker supplementary groups retain only the configured
-Docker socket GID; the API does not receive that group or socket.
+the configured `_FILE` values from `PLATFORM_SECRET_FILES_ROOT` (default
+`/run/secrets`) into each API/worker/migration container's ephemeral `/run` tmpfs,
+sets mode `0400` and ownership to the fixed non-root service UID, then drops
+privileges. Worker supplementary groups retain only the configured Docker socket
+GID; the API does not receive that group or socket.
+
+The backend accepts runtime environment values and secret-file paths, so a future
+Vault agent can inject values directly or render files beneath a mounted trusted
+directory and set `PLATFORM_SECRET_FILES_ROOT` plus the matching `*_FILE` paths.
+Never include secret values in Compose interpolation files or print resolved
+`docker compose config` output.
 
 The worker's `PLATFORM_LOCAL_PROVIDER_ENABLED` setting defaults to false. Enable
 it only after the local provider readiness, credential isolation, host network

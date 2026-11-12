@@ -31,7 +31,12 @@ async def run_worker(config: Settings, once: bool = False) -> None:
             "Worker requires an enabled target, stable installation and credential key"
         )
     engine = create_async_database_engine(
-        config.database_url.get_secret_value(), config.database_connect_timeout
+        config.database_url.get_secret_value(),
+        config.database_connect_timeout,
+        pool_size=config.database_pool_size,
+        max_overflow=config.database_max_overflow,
+        pool_timeout=config.database_pool_timeout,
+        pool_recycle=config.database_pool_recycle_seconds,
     )
     try:
         from shared.infra.settings import SCHEMA_REVISION

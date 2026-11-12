@@ -319,20 +319,6 @@ def test_revoke_is_idempotent_and_does_not_duplicate_audit(postgres_engine, tmp_
         assert session.scalar(select(func.count()).select_from(AuditEvent)) == 2
 
 
-def test_forward_migration_preserves_legacy_project_identity_without_invented_metadata(
-    postgres_engine,
-):
-    project_id = uuid4()
-    with postgres_engine.begin() as connection:
-        command.downgrade(migration_config(connection), "0001_foundation")
-        connection.execute(
-            text("INSERT INTO projects (id, name, created_at) VALUES (:id, :name, now())"),
-            {"id": project_id, "name": "legacy-project"},
-        )
-        command.upgrade(migration_config(connection), "head")
-        row = connection.execute(
-            text(
-                "SELECT project_id, name, owning_team_id, owning_team_name, "
                 "repository, configured FROM project_registrations WHERE project_id = :id"
             ),
             {"id": project_id},

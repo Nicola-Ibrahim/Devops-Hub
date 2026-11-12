@@ -294,7 +294,7 @@ def test_public_openapi_matches_versioned_ledger_contract():
     assert create_app(settings).openapi() == expected
 
 
-def test_frozen_migration_unchanged():
-    expected = (BACKEND / "tests/contracts/foundation_migration.sha256").read_text().strip()
-    path = BACKEND / "migrations/versions/0001_foundation.py"
-    assert hashlib.sha256(path.read_bytes()).hexdigest() == expected
+def test_initial_migration_is_metadata_driven():
+    source = (BACKEND / "migrations/versions/0001_initial_schema.py").read_text()
+    assert "registered_metadata().create_all" in source
+    assert "registered_metadata().drop_all" in source

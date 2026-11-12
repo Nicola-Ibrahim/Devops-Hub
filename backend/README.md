@@ -122,10 +122,15 @@ account bootstrap or target-administration endpoint is implied by this refactor.
 ## Install and configure
 
 From this directory, use Python 3.12+ and `uv sync --frozen`. Dependencies are
-locked in `uv.lock`. The backend does not implicitly read `.env` files or require
-Doppler. Supply configuration through the process environment:
+locked in `uv.lock`. `Settings` and `APISettings` use Pydantic Settings and read
+process environment values directly; values may come from a shell, container
+runtime, a secret injector, or explicit constructor arguments. Dotenv files are
+disabled by default. The application does not require Doppler or a specific secret
+manager. Supply the required runtime values through those environment sources:
 
 - `PLATFORM_DATABASE_URL`: `postgresql+psycopg` URL for the control-plane database.
+  `DATABASE_URL` is also accepted for managed database integrations; plain
+  `postgresql://` URLs are normalized to the installed psycopg driver.
 - `PLATFORM_TOKEN_PEPPER`: a random secret with at least 32 characters. Keep it
   outside source control and preserve it across API/admin restarts. Changing it
   invalidates existing API tokens.
@@ -133,6 +138,25 @@ Doppler. Supply configuration through the process environment:
 - `PLATFORM_INSTALLATION_ID`: stable UUID for enabled resource acceptance.
   Do not generate a different UUID on each restart. Missing installation identity
   fails closed; setting it alone does not enable the provider.
+
+- `PLATFORM_DATABASE_CONNECT_TIMEOUT`, `PLATFORM_DATABASE_POOL_SIZE`,
+  `PLATFORM_DATABASE_MAX_OVERFLOW`, `PLATFORM_DATABASE_POOL_TIMEOUT`, and
+  `PLATFORM_DATABASE_POOL_RECYCLE_SECONDS`: connection and pool limits for each
+  API/worker process. Size these against the database connection budget and the
+  number of replicas.
+- `API_CORS_ALLOWED_ORIGINS`: optional comma-separated or JSON array of exact
+  browser origins for direct cross-origin API calls. Credentials are enabled only
+  for those explicit origins; wildcard origins are rejected.
+- `API_TRUSTED_HOSTS`: optional comma-separated or JSON array of accepted hostnames.
+- `PLATFORM_BROWSER_ALLOWED_ORIGINS`: origins accepted by browser CSRF checks. For
+  direct browser-to-API calls, configure this alongside `API_CORS_ALLOWED_ORIGINS`.
+
+Secrets can be supplied as values or file paths such as `PLATFORM_DATABASE_URL_FILE`
+and `PLATFORM_TOKEN_PEPPER_FILE`. A Vault agent or another injector can render files
+and set those path variables, or inject values directly. In containers,
+`PLATFORM_SECRET_FILES_ROOT` sets the trusted root for secret files; it defaults to
+`/run/secrets`. File paths outside that root are rejected by the entrypoint. Keep
+secret values out of command lines and diagnostic output.
 
 Provide an empty, dedicated PostgreSQL database before starting. Use a local
 secret file or secret manager for the environment; do not paste real credentials
@@ -152,10 +176,10 @@ uv run fastapi dev --host 127.0.0.1 --port 8000
 ```
 
 `[tool.fastapi]` selects `api.asgi:app`. `DevOpsHubAPI` owns HTTP assembly and
-uses cached Pydantic `APISettings` for metadata and OpenAPI/docs routes. Override
+uses cached Pydantic `APISettings` for metadata, CORS, trusted hosts and OpenAPI/docs routes. Override
 these with `API_TITLE`, `API_VERSION`, `API_DESCRIPTION`, `API_OPENAPI_URL`,
-`API_DOCS_URL`, and `API_REDOC_URL`. API settings read process environment values
-without loading a `.env` file; tests may inject an `APISettings` instance directly.
+`API_DOCS_URL`, `API_REDOC_URL`, `API_CORS_ALLOWED_ORIGINS`, and
+`API_TRUSTED_HOSTS`. Tests may inject an `APISettings` instance directly.
 `BackendRuntime`
 builds the lazy dependency graph before middleware setup, then owns startup/shutdown;
 startup does not connect to the database or perform provisioning. It closes only

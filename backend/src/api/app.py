@@ -10,6 +10,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncEngine
 from starlette.exceptions import HTTPException
+from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import Lifespan
 
 from api.core.errors import APIError, error_response, handle_api_error, handle_validation_error
@@ -54,6 +56,24 @@ class DevOpsHubAPI(FastAPI):
         )
         app = self
         app.middleware("http")(request_boundary)
+        if settings.trusted_hosts:
+            app.add_middleware(
+                TrustedHostMiddleware,
+                allowed_hosts=list(settings.trusted_hosts),
+            )
+        if settings.cors_allowed_origins:
+            app.add_middleware(
+                CORSMiddleware,
+                allow_origins=list(settings.cors_allowed_origins),
+                allow_credentials=True,
+                allow_methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+                allow_headers=[
+                    "Authorization",
+                    "Content-Type",
+                    "Idempotency-Key",
+                    "X-CSRF-Token",
+                ],
+            )
         app.add_exception_handler(APIError, handle_api_error)  # type: ignore[arg-type]
         app.add_exception_handler(RequestValidationError, handle_validation_error)  # type: ignore[arg-type]
 

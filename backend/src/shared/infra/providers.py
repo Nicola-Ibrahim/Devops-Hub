@@ -25,7 +25,12 @@ class DatabaseProvider(Provider):
         self, settings: Settings, external: ExternalDatabase
     ) -> AsyncIterator[AsyncEngine]:
         engine = external.engine or create_async_database_engine(
-            settings.database_url.get_secret_value(), settings.database_connect_timeout
+            settings.database_url.get_secret_value(),
+            settings.database_connect_timeout,
+            pool_size=settings.database_pool_size,
+            max_overflow=settings.database_max_overflow,
+            pool_timeout=settings.database_pool_timeout,
+            pool_recycle=settings.database_pool_recycle_seconds,
         )
         try:
             yield engine
