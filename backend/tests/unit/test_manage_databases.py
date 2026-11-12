@@ -4,18 +4,18 @@ import asyncio
 from uuid import uuid4
 
 import pytest
-from developer_platform.application.resource_lifecycle.ports import DatabaseCredentials
+from devops_hub.platform.application.resource_lifecycle.ports import DatabaseCredentials
 
-from developer_platform.application.database_lifecycle.read_connection.handler import (
+from devops_hub.platform.application.database_lifecycle.read_connection.handler import (
     GetDatabaseConnectionQueryHandler,
 )
-from developer_platform.application.database_lifecycle.read_connection.query import (
+from devops_hub.platform.application.database_lifecycle.read_connection.query import (
     ReadDatabaseConnection,
 )
-from developer_platform.application.shared.dto import AccessContext
-from developer_platform.application.shared.errors import CatalogForbidden, PlatformRequestError
-from developer_platform.application.shared.resource_repository import ResourceConnectionSecret
-from developer_platform.authorization import authorize_platform_action
+from devops_hub.platform.application.shared.dto import AccessContext
+from devops_hub.platform.application.shared.errors import CatalogForbidden, PlatformRequestError
+from devops_hub.platform.application.shared.resource_repository import ResourceConnectionSecret
+from devops_hub.platform.authorization import authorize_platform_action
 
 
 def test_connection_requires_scope_and_cipher_before_sensitive_read():

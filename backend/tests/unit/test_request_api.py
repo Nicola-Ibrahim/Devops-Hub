@@ -11,11 +11,8 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from api.app import create_app
-from api.platform.schemas import (
-    AcceptedOperation,
-    ResourceRequest,
-)
-from developer_platform.application.database_provisioning.read_resources.query import (
+from api.platform.resources.schemas import AcceptedOperation, ResourceRequest
+from devops_hub.platform.application.database_provisioning.read_resources.query import (
     OperationDetails,
     ReadOperation,
     ReadProject,
@@ -24,16 +21,16 @@ from developer_platform.application.database_provisioning.read_resources.query i
     ReadResources,
     ResourceDetails,
 )
-from developer_platform.application.database_provisioning.submit_database_request.command import (
+from devops_hub.platform.application.database_provisioning.submit_database_request.command import (
     RequestTemporaryDatabase,
 )
-from developer_platform.application.module import DeveloperPlatformModule
-from developer_platform.application.projects.result import (
+from devops_hub.platform.application.module import DeveloperPlatformModule
+from devops_hub.platform.application.projects.result import (
     EnvironmentDetails,
     ProjectRegistrationDetails,
 )
-from developer_platform.application.shared.dto import AccessContext
-from developer_platform.application.shared.errors import PlatformRequestError
+from devops_hub.platform.application.shared.dto import AccessContext
+from devops_hub.platform.application.shared.errors import PlatformRequestError
 from identity.application.authenticate_api_token.query import AuthenticateApiTokenQuery
 from identity.application.authenticate_session.query import AuthenticateSessionQuery
 from identity.application.module import IdentityModule
@@ -150,7 +147,7 @@ class FakePlatformQueries:
         result = await self.request_database(
             command.access, command.request, command.idempotency_key
         )
-        from developer_platform.domain.entities.operation import AcceptedResourceRequest
+        from devops_hub.platform.domain.entities.operation import AcceptedResourceRequest
 
         return AcceptedResourceRequest(result.resource_id, result.operation_id)
 

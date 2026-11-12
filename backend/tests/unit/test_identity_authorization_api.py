@@ -10,7 +10,7 @@ from dishka.integrations.fastapi import FastapiProvider
 from fastapi.testclient import TestClient
 
 from api.app import create_app
-from api.identity.cookie_policy import BrowserCookiePolicy
+from api.settings.config import BrowserCookiePolicy
 from identity.application.authenticate_session.query import AuthenticateSessionQuery
 from identity.application.authorization.models import AuthorizationDecision
 from identity.application.authorization.port import (

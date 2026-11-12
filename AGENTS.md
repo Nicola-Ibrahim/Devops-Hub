@@ -62,7 +62,9 @@ For cross-cutting work, load the relevant skills together. Use
 - Inspect the working tree before edits and preserve unrelated changes. Do not stage, commit, reset, or switch branches unless requested.
 - Inspect existing code before changing it. State assumptions where the implementation does not yet exist.
 - Keep frontend, backend, and platform responsibilities separate. Agree on API contracts and resource states before implementing cross-cutting flows.
-- Keep identity and developer_platform independent; [backend/AGENTS.md](backend/AGENTS.md) defines DDD and FastAPI boundaries.
+- Keep identity and platform independent; [backend/AGENTS.md](backend/AGENTS.md) defines DDD and FastAPI boundaries.
+  The Python package is namespaced as `devops_hub.platform` to avoid shadowing
+  the standard library.
 - Every temporary resource must have an owner, creation time, expiry, status, and cleanup path. Provisioning and deletion must be safe to retry.
 - Never commit credentials or return a database password in logs, CI output, or ordinary API list responses.
 - Use focused tests for lifecycle and failure behavior. Run relevant checks and report what was verified.

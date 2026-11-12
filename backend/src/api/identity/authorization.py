@@ -3,7 +3,7 @@
 import logging
 from uuid import UUID
 
-from api.errors import APIError
+from api.core.errors import APIError
 from identity.application.authenticate_session.query import AuthenticateSessionQuery
 from identity.application.authorization.models import AuthorizationRequest
 from identity.application.authorization.port import (

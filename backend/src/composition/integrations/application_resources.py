@@ -9,24 +9,24 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from developer_platform.application.database_provisioning.submit_database_request.command import (
+from devops_hub.platform.application.database_provisioning.submit_database_request.command import (
     DatabaseRequest,
     RequestTemporaryDatabase,
 )
-from developer_platform.application.database_provisioning.submit_database_request.handler import (
+from devops_hub.platform.application.database_provisioning.submit_database_request.handler import (
     RequestTemporaryDatabaseHandler,
 )
-from developer_platform.application.resource_catalog.catalog import ApprovedPostgresCatalog
-from developer_platform.application.shared.dto import AccessContext
-from developer_platform.application.workload_delivery.attach_database.command import (
+from devops_hub.platform.application.resource_catalog.catalog import ApprovedPostgresCatalog
+from devops_hub.platform.application.shared.dto import AccessContext
+from devops_hub.platform.application.workload_delivery.attach_database.command import (
     ResourceAttachmentSpec,
 )
-from developer_platform.application.workload_delivery.shared.ports import (
+from devops_hub.platform.application.workload_delivery.shared.ports import (
     ApplicationDeliveryFailure,
 )
-from developer_platform.authorization import ALL_SCOPES, authorize_platform_action
-from developer_platform.infra.persistence.models import Resource
-from developer_platform.infra.persistence.resource_repository import SQLAlchemyResourceRepository
+from devops_hub.platform.authorization import ALL_SCOPES, authorize_platform_action
+from devops_hub.platform.infra.persistence.models import Resource
+from devops_hub.platform.infra.persistence.resource_repository import SQLAlchemyResourceRepository
 from identity.infra.persistence.resource_request_authority import resource_request_role
 
 

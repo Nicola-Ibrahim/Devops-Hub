@@ -15,8 +15,8 @@ from shared.infra.settings import Settings
 
 BACKEND = Path(__file__).parents[2]
 SRC = BACKEND / "src"
-ROOTS = {"api", "identity", "developer_platform", "shared", "composition"}
-CONTEXTS = {"identity", "developer_platform"}
+ROOTS = {"api", "identity", "devops_hub", "shared", "composition"}
+CONTEXTS = {"identity", "devops_hub.platform"}
 RETIRED_ROOTS = {
     "containers",
     "entrypoints",
@@ -24,6 +24,7 @@ RETIRED_ROOTS = {
     "provisioning",
     "platform_runtime",
     "platform_infrastructure",
+    "developer_platform",
     "infra",
 }
 IO_LIBRARIES = {
@@ -59,32 +60,43 @@ def imports(source, module, is_package=False):
             yield from (base + "." + alias.name for alias in node.names if alias.name != "*")
 
 
+def context_name(module):
+    if module == "identity" or module.startswith("identity."):
+        return "identity"
+    if module == "devops_hub.platform" or module.startswith("devops_hub.platform."):
+        return "devops_hub.platform"
+    return None
+
+
 def violation(module, target):
     root = module.split(".")[0]
     other = target.split(".")[0]
     target_parts = target.split(".")
     module_parts = module.split(".")
+    module_context = context_name(module)
+    target_context = context_name(target)
     if other in RETIRED_ROOTS:
         return True
-    if root in CONTEXTS:
-        if module.startswith(root + ".infra.workers.") and other == "composition":
+    if module_context:
+        layer_parts = module_parts[1:2] if module_context == "identity" else module_parts[2:3]
+        if module.startswith(module_context + ".infra.workers.") and other == "composition":
             return False
         if target == "shared.dispatch" or target.startswith("shared.dispatch."):
             return False  # Pure cross-context message/handler contract.
-        if other in CONTEXTS - {root} or other in {
+        if (target_context is not None and target_context != module_context) or other in {
             "api",
             "composition",
             "containers",
             "entrypoints",
         }:
             return True
-        if module_parts[1:2] in (["domain"], ["application"]) or module == "identity.contracts":
+        if layer_parts in (["domain"], ["application"]) or module == "identity.contracts":
             if other == "shared" or "infra" in target_parts[1:]:
                 return True
             if other in IO_LIBRARIES:
                 return True
-        if module_parts[1:2] == ["infra"]:
-            if other in CONTEXTS - {root} or other in {
+        if layer_parts == ["infra"]:
+            if (target_context is not None and target_context != module_context) or other in {
                 "api",
                 "composition",
                 "containers",
@@ -96,7 +108,12 @@ def violation(module, target):
             return False
         return False
     if root == "shared":
-        return other in CONTEXTS | {"api", "composition", "containers", "entrypoints"}
+        return target_context is not None or other in {
+            "api",
+            "composition",
+            "containers",
+            "entrypoints",
+        }
     if root == "api":
         if target.startswith("shared.infra.readiness"):
             return False
@@ -109,7 +126,7 @@ def violation(module, target):
         }
         is_api_composition = module.startswith("api.composition.")
         if module in api_adapters or is_api_composition:
-            is_context_infrastructure = other in CONTEXTS and "infra" in target_parts[1:]
+            is_context_infrastructure = target_context is not None and "infra" in target_parts
             if is_context_infrastructure or target.startswith("shared.infra."):
                 return False
             if module == "api.app" and other == "composition":
@@ -146,6 +163,7 @@ def test_source_import_contracts():
         path.name for path in SRC.iterdir() if path.is_dir() and not path.name.startswith("__")
     }
     assert actual_roots == ROOTS
+    assert not (SRC / "developer_platform").exists()
     assert not any((SRC / root).exists() for root in RETIRED_ROOTS)
     assert not (SRC / "platform.py").exists(), (
         "src/platform.py would shadow Python's platform module"
@@ -186,10 +204,10 @@ def boundary_failures(sources):
             for package, (_, is_package) in sources.items():
                 if is_package and (target == package or target.startswith(package + ".")):
                     pending.extend(graph[package])
-            if origin.split(".")[0] in CONTEXTS and origin.split(".")[1:2] in (
-                ["domain"],
-                ["application"],
-            ):
+            origin_context = context_name(origin)
+            origin_parts = origin.split(".")
+            origin_layer = origin_parts[1:2] if origin_context == "identity" else origin_parts[2:3]
+            if origin_context and origin_layer in (["domain"], ["application"]):
                 pending.extend(graph.get(target, ()))
     return sorted(failures)
 
@@ -211,13 +229,17 @@ def test_indirect_package_reexport_cannot_smuggle_infrastructure_into_core():
         ("identity.application.flow", "from ..infra import tokens", True),
         ("identity.application.flow", "from ..domain import credentials", False),
         ("identity.application.flow", "from shared.dispatch import Command", False),
-        ("developer_platform.application.flow", "from identity import contracts", True),
-        ("api.platform.routes", "from developer_platform.infra import persistence", True),
-        ("api.platform.module", "from developer_platform.infra.composition import module", False),
+        ("devops_hub.platform.application.flow", "from identity import contracts", True),
+        (
+            "api.platform.resources.routes",
+            "from devops_hub.platform.infra import persistence",
+            True,
+        ),
+        ("api.platform.module", "from devops_hub.platform.infra.composition import module", False),
         ("shared.infra.database", "import containers.http", True),
         ("identity.contracts", "from .infra import tokens", True),
         ("identity.infra.security.tokens", "from shared.infra import database", False),
-        ("developer_platform.infra.persistence", "from identity.domain import records", True),
+        ("devops_hub.platform.infra.persistence", "from identity.domain import records", True),
         ("identity.infra.persistence", "from .models import InternalUserRow", False),
         ("identity.infra.persistence", "import sqlalchemy", False),
         ("identity.infra.persistence", "from datetime import datetime", False),
@@ -233,13 +255,16 @@ def test_checker_resolves_relative_imports_and_reexports(module, source, forbidd
 
 def test_application_packages_import_without_frameworks_or_other_contexts():
     # Independent interpreters prevent previously loaded modules from hiding a leak.
-    for context in ("identity", "developer_platform"):
+    for context in ("identity", "devops_hub.platform"):
         script = """
 import importlib.abc,sys
 sys.path.insert(0,sys.argv[1])
 class DenyIO(importlib.abc.MetaPathFinder):
     def find_spec(self,fullname,path=None,target=None):
-        if fullname.split('.')[0] in set(sys.argv[3].split(',')):
+        if any(
+            fullname == name or fullname.startswith(name + ".")
+            for name in sys.argv[3].split(",")
+        ):
             raise AssertionError('Forbidden dependency: '+fullname)
 sys.meta_path.insert(0,DenyIO())
 if sys.argv[2]=='identity':
@@ -247,7 +272,7 @@ if sys.argv[2]=='identity':
     import identity.application.issue_api_token.handler
     import identity.application.revoke_api_token.handler
 else:
-    import developer_platform.application.resource_catalog.handler,developer_platform.domain
+    import devops_hub.platform.application.resource_catalog.handler,devops_hub.platform.domain
 """
         denied = IO_LIBRARIES | (CONTEXTS - {context})
         subprocess.run(

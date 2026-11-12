@@ -22,8 +22,12 @@ api/composition -> adapts HTTP requests to context capabilities
   to application commands/queries and maps results to responses. It contains no
   domain state transitions or direct ORM access.
 - Context `infra/composition` registers handlers, ports and concrete module
-  dispatchers. The top-level `composition` package assembles process dependencies
-  and schema metadata. Cross-context bridges and their bindings live under
+  dispatchers and exposes context-owned container registrations. The top-level
+  `composition` package combines those registrations into one process-scoped Dishka
+  container and owns `BackendRuntime`; contexts contribute providers rather than
+  creating isolated containers, preserving shared session and unit-of-work scopes.
+  Alembic alone discovers aggregate schema metadata under
+  `migrations/`. Cross-context bridges and their bindings live under
   `composition/integrations`; API request adapters and their provider live under
   `api/composition`; resource and application workers live with their owning
   context under `infra/workers`.
@@ -32,7 +36,7 @@ api/composition -> adapts HTTP requests to context capabilities
 - `shared/infra` contains technical primitives only. Business rules remain in the
   context that owns them.
 
-`identity` and `developer_platform` are independent bounded contexts. Identity
+`identity` and `devops_hub.platform` are independent bounded contexts. Identity
 owns users, credentials, sessions, tokens and project membership. Developer
 platform owns registered projects, catalog choices, resource requests, leases,
 operations and workload delivery. Cross-context actor mapping belongs in the
@@ -91,7 +95,7 @@ empty infrastructure folders or adapters for unimplemented targets.
   caller-supplied ownership fields. Domain rules still enforce resource ownership,
   valid state transitions, quotas and lease limits, including for worker callers.
 - Platform developer-action scope/project rules live in
-  `developer_platform/authorization.py`. API routes check them before dispatch;
+  `devops_hub.platform/authorization.py`. API routes check them before dispatch;
   HTTP and non-HTTP hosts check again using freshly authenticated access. Platform
   application handlers do not repeat these transport permission checks. Loaded
   resource/application ownership, readiness, quota and idempotency remain enforced
@@ -115,28 +119,51 @@ transaction sequence around password hashing; application delivery workers retai
 separate claim/effect/completion phases. External effects run only after durable
 intent has committed.
 
-Organize `src/api/` by HTTP-facing capability:
+Organize `src/api/` by bounded context and HTTP feature:
 
 ```text
 api/
-  app.py                 FastAPI setup, factory and router registration
-  asgi.py                ASGI startup entrypoint
-  composition/           HTTP-to-context adapters and API-specific DI provider
-  dependencies.py        authentication and shared request dependencies
-  errors.py              domain/application error-to-HTTP mapping
-  identity/              internal users, sessions, tokens, memberships
-  platform/              projects, catalog, resources, operations, workloads
-  health/                liveness, readiness and metrics
-composition/             Process composition root and schema metadata assembly
+  app.py                 FastAPI setup, factory and error mapping
+  asgi.py                ASGI entrypoint
+  router.py              Root API router
+  core/                  shared HTTP errors, schemas, dependencies and security
+    middlewares/         request boundary middleware
+  settings/              HTTP-only configuration and cookie policy
+  identity/               bounded-context router and feature packages
+    authentication/      login, logout and project selection routes/schemas
+    sessions/            current session, password and session routes/schemas
+    memberships/         project membership routes/schemas
+    principal/           authenticated principal route/schema
+  platform/               bounded-context router and feature packages
+    catalog/              catalog routes/schemas
+    projects/             project routes/schemas
+    resources/            database resource lifecycle routes/schemas
+    operations/           async operation routes/schemas
+    application_delivery/ templates, applications and deployment routes/schemas
+  health/                 liveness, readiness and metrics
+  composition/            HTTP-to-context adapters and API-only DI provider
+composition/              process composition root and BackendRuntime
   integrations/          Cross-context bridges and their provider bindings
+migrations/               Alembic environment, metadata discovery and revisions
 ```
 
-Within a capability, group routes and request/response schemas by resource or
-workflow when files grow; avoid one giant router or schema module. Keep common
-API plumbing at the API root. API provider bindings live in `api/composition`, while
-context providers live in each context's `infra/composition`; neither belongs in route
-modules. API routes call the context module contract; migrate affected
-callers together when changing an existing contract.
+Each bounded context has one base router that aggregates feature routers; the root
+API router registers health and context routers. Keep each feature's routes and
+request/response schemas together. Shared HTTP plumbing belongs under `api/core/`,
+HTTP-only settings under `api/settings/`, and API provider bindings in
+`api/composition/`; context providers remain in each context's `infra/composition/`.
+API routes call the context module contract; migrate callers together when changing
+an existing contract.
+
+`BackendRuntime` builds the lazy API dependency graph before FastAPI middleware is
+installed, then owns the process `start()`/`close()` lifecycle. Startup performs no
+database connection, migration or provisioning. A runtime-created container is
+closed by the runtime; an injected container remains caller-owned. Worker composition
+uses the same backend container assembler with context-owned worker providers.
+
+Alembic owns model discovery and schema changes. `migrations/metadata.py` imports
+the context mappings for `target_metadata`; API and worker startup must not call it,
+create tables or run migrations. Apply revisions explicitly through Alembic.
 
 ## Invariants
 

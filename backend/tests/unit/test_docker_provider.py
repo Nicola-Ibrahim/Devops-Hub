@@ -8,15 +8,15 @@ from uuid import UUID, uuid4
 
 import docker
 import pytest
-from developer_platform.application.resource_lifecycle.ports import (
+from devops_hub.platform.application.resource_lifecycle.ports import (
     DatabaseCredentials,
     DatabaseEndpoint,
     ProviderFailure,
     ProvisioningJob,
 )
 
-import developer_platform.infra.providers.docker_postgres as docker_provider
-from developer_platform.infra.providers.docker_postgres import DockerPostgresProvider
+import devops_hub.platform.infra.providers.docker_postgres as docker_provider
+from devops_hub.platform.infra.providers.docker_postgres import DockerPostgresProvider
 
 
 class FakeImage:

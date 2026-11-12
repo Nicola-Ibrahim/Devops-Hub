@@ -3,7 +3,7 @@ from uuid import UUID
 from dishka.integrations.fastapi import FromDishka, inject
 from fastapi import APIRouter
 
-from api.errors import APIError
+from api.core.errors import APIError
 from identity.application.authorization.models import AuthorizationRequest
 from identity.application.authorization.port import (
     AuthorizationDecisionPort,

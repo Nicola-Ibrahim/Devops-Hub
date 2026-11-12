@@ -2,8 +2,8 @@ import hmac
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from api.errors import APIError
-from developer_platform.infra.observability.metrics import render_metrics
+from api.core.errors import APIError
+from devops_hub.platform.infra.observability.metrics import render_metrics
 from shared.infra.settings import Settings
 
 

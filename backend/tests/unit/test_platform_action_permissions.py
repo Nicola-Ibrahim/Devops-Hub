@@ -6,26 +6,26 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from developer_platform.application.database_lifecycle.read_connection.query import (
+from devops_hub.platform.application.database_lifecycle.read_connection.query import (
     ReadDatabaseConnection,
 )
-from developer_platform.application.database_provisioning.read_resources.query import (
+from devops_hub.platform.application.database_provisioning.read_resources.query import (
     ReadProject,
     ReadProjects,
 )
-from developer_platform.application.resource_catalog.query import ReadCatalog
-from developer_platform.application.shared.errors import CatalogForbidden, PlatformRequestError
-from developer_platform.application.workload_delivery.handle_preview_webhook.command import (
+from devops_hub.platform.application.resource_catalog.query import ReadCatalog
+from devops_hub.platform.application.shared.errors import CatalogForbidden, PlatformRequestError
+from devops_hub.platform.application.workload_delivery.handle_preview_webhook.command import (
     ProcessGithubPreviewWebhook,
 )
-from developer_platform.application.workload_delivery.read_templates.query import ReadTemplates
-from developer_platform.authorization import ACTION_PERMISSIONS, authorize_platform_action
-from developer_platform.domain.access import AccessContext
-from developer_platform.domain.errors import DomainError
-from developer_platform.domain.services.resource_access import ResourceAccessPolicy, ResourceActor
-from developer_platform.infra.composition.module import (
+from devops_hub.platform.application.workload_delivery.read_templates.query import ReadTemplates
+from devops_hub.platform.authorization import ACTION_PERMISSIONS, authorize_platform_action
+from devops_hub.platform.domain.access import AccessContext
+from devops_hub.platform.domain.errors import DomainError
+from devops_hub.platform.domain.services.resource_access import ResourceAccessPolicy, ResourceActor
+from devops_hub.platform.infra.composition.module import (
     PLATFORM_HANDLER_REGISTRY,
-    _DeveloperPlatformDispatcher,
+    DeveloperPlatformModuleDispatcher,
 )
 
 
@@ -61,7 +61,7 @@ def test_direct_dispatch_denies_before_resolving_a_handler() -> None:
         raise AssertionError("denied action resolved a handler")
 
     access = AccessContext(uuid4(), uuid4(), "developer", frozenset())
-    module = _DeveloperPlatformDispatcher(resolve)
+    module = DeveloperPlatformModuleDispatcher(resolve)
     with pytest.raises(CatalogForbidden):
         asyncio.run(module.query(ReadDatabaseConnection(access, uuid4())))
     assert resolved == []

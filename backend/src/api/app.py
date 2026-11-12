@@ -1,8 +1,7 @@
 """FastAPI application, error mapping, routing and configured app factory."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
 
 from dishka import AsyncContainer
 from dishka.integrations.fastapi import setup_dishka
@@ -13,35 +12,17 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from starlette.exceptions import HTTPException
 from starlette.types import Lifespan
 
-from api.errors import APIError, error_response, handle_api_error, handle_validation_error
-from api.health.metrics import router as metrics_router
-from api.health.routes import router as health_router
-from api.identity.browser import router as browser_router
-from api.identity.routes import router as identity_router
-from api.middleware import request_boundary
-from api.platform.applications import router as applications_router
-from api.platform.routes import router as platform_router
-from api.schemas import ErrorResponse
-from composition.factory import create_container
-from developer_platform.application.shared.errors import CatalogForbidden, PlatformRequestError
-from developer_platform.domain import DomainError
+from api.core.errors import APIError, error_response, handle_api_error, handle_validation_error
+from api.core.middlewares.request_boundary import request_boundary
+from api.core.schemas import ErrorResponse
+from api.router import router as api_router
+from api.settings.config import APISettings, get_api_settings
+from composition.runtime import BackendRuntime
+from devops_hub.platform.application.shared.errors import CatalogForbidden, PlatformRequestError
+from devops_hub.platform.domain import DomainError
 from identity.application.shared.errors import CredentialDeliveryError, IdentityUnavailable
 from identity.domain.errors import AuthenticationRejected, IdentityValidationError
 from shared.infra.settings import Settings
-
-
-@dataclass(frozen=True)
-class APIConfiguration:
-    """HTTP metadata and documentation routes; deployment secrets stay in Settings."""
-
-    title: str = "DevOps Hub API"
-    version: str = "0.1.0"
-    description: str = (
-        "Developer platform API for identity, projects, approved resources, "
-        "application templates, and durable delivery workflows."
-    )
-    docs_url: str | None = "/docs"
-    redoc_url: str | None = "/redoc"
 
 
 class DevOpsHubAPI(FastAPI):
@@ -49,17 +30,18 @@ class DevOpsHubAPI(FastAPI):
 
     def __init__(
         self,
-        config: APIConfiguration | None = None,
+        settings: APISettings | None = None,
         *,
         lifespan: Lifespan[FastAPI] | None = None,
     ) -> None:
-        config = config or APIConfiguration()
+        settings = settings or get_api_settings()
         super().__init__(
-            title=config.title,
-            version=config.version,
-            description=config.description,
-            docs_url=config.docs_url,
-            redoc_url=config.redoc_url,
+            title=settings.title,
+            version=settings.version,
+            description=settings.description,
+            openapi_url=settings.openapi_url,
+            docs_url=settings.docs_url,
+            redoc_url=settings.redoc_url,
             lifespan=lifespan,
             responses={
                 404: {"model": ErrorResponse},
@@ -109,13 +91,7 @@ class DevOpsHubAPI(FastAPI):
                 request, exc.status_code, "http_error", "Request could not be completed"
             )
 
-        app.include_router(health_router)
-        app.include_router(metrics_router)
-
-        app.include_router(browser_router)
-        app.include_router(identity_router)
-        app.include_router(platform_router)
-        app.include_router(applications_router)
+        app.include_router(api_router)
 
 
 def create_app(
@@ -123,26 +99,23 @@ def create_app(
     *,
     engine: AsyncEngine | None = None,
     container: AsyncContainer | None = None,
-    api_config: APIConfiguration | None = None,
+    api_settings: APISettings | None = None,
 ) -> FastAPI:
     """Build the HTTP app and its process composition; injected resources stay caller-owned."""
-    runtime = (
-        container
-        if container is not None
-        else create_container(
-            settings if settings is not None else Settings(),  # type: ignore[call-arg]
-            engine=engine,
-        )
+    runtime = BackendRuntime(
+        settings,
+        engine=engine,
+        container=container,
     )
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         try:
+            await runtime.start()
             yield
         finally:
-            if container is None:
-                await runtime.close()
+            await runtime.close()
 
-    app = DevOpsHubAPI(api_config, lifespan=lifespan)
-    setup_dishka(runtime, app)
+    app = DevOpsHubAPI(api_settings, lifespan=lifespan)
+    setup_dishka(runtime.container, app)
     return app

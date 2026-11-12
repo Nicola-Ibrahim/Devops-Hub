@@ -6,15 +6,15 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from developer_platform.application.application_delivery.shared.ports import (
+from devops_hub.platform.application.application_delivery.shared.ports import (
     ApplicationDeliveryFailure,
     TemplateVersion,
 )
 
-from developer_platform.domain.aggregates.application_delivery import ApplicationDelivery
-from developer_platform.domain.entities.application import Application, DeliveryStep
-from developer_platform.infra.security.webhooks import HmacGitHubWebhookVerifier
-from developer_platform.infra.templates.catalog import FilesystemTemplateCatalog
+from devops_hub.platform.domain.aggregates.application_delivery import ApplicationDelivery
+from devops_hub.platform.domain.entities.application import Application, DeliveryStep
+from devops_hub.platform.infra.security.webhooks import HmacGitHubWebhookVerifier
+from devops_hub.platform.infra.templates.catalog import FilesystemTemplateCatalog
 
 TEMPLATE_ROOT = Path(__file__).resolve().parents[2] / "../templates"
 
@@ -131,7 +131,7 @@ def test_template_file_symlink_is_rejected(tmp_path: Path) -> None:
 
 
 def test_disabled_repository_adapter_does_not_claim_success() -> None:
-    from developer_platform.infra.providers.github import GitHubRepositoryAdapter
+    from devops_hub.platform.infra.providers.github import GitHubRepositoryAdapter
 
     adapter = GitHubRepositoryAdapter("", None)
 
@@ -153,9 +153,9 @@ def test_template_update_pr_preserves_user_changes_and_uses_owned_branch(monkeyp
     import base64
 
     import httpx
-    from developer_platform.application.application_delivery.shared.ports import GeneratedFile
+    from devops_hub.platform.application.application_delivery.shared.ports import GeneratedFile
 
-    from developer_platform.infra.providers.github import GitHubRepositoryAdapter
+    from devops_hub.platform.infra.providers.github import GitHubRepositoryAdapter
 
     def digest(value):
         return hashlib.sha256(value).hexdigest()

@@ -13,32 +13,37 @@ See [operations](../docs/operations.md) for packaging, release and recovery asse
 
 ```text
 src/
-  api/                       FastAPI app/factory, HTTP routes, schemas and errors
-    composition/             HTTP-to-context adapters and API-specific providers
+  api/                        FastAPI app and HTTP layer
+    router.py                 Root router for health and bounded contexts
+    core/                     Shared errors, schemas, dependencies and security
+      middlewares/            Request-boundary middleware
+    settings/                 HTTP-only API and browser cookie settings
+    composition/              HTTP-to-context adapters and API-only providers
+    identity/                 Identity base router and feature route/schema packages
+    platform/                 Platform base router and feature route/schema packages
     health/                   Health routes and operational metrics adapter
-    platform/                 Platform routes, schemas and HTTP module facade
   identity/
     domain/                  Identity entities, value objects, aggregates, repository interfaces and policies
     application/             Identity use-case packages with command/query handlers
     infra/persistence/       Identity-owned ORM rows and account/session/membership/token adapters
-    infra/composition/       Identity module dispatch and Dishka providers
+    infra/composition/       Identity module dispatch, providers and container registrations
     infra/authorization/     Identity-owned OPA adapter
     infra/security/          Password, token and private credential adapters
     infra/hosts/              Identity HTTP and worker authentication adapters
-  developer_platform/
+  devops_hub.platform/
     domain/                  Platform entities, value objects, aggregates, repository interfaces and policies
     application/             Capability-owned command/query handlers for catalog, requests, lifecycle and delivery
     infra/persistence/       Platform-owned ORM rows, transactional stores and read projections
-    infra/composition/       Platform module dispatch and capability providers
+    infra/composition/       Platform dispatch, providers and API/worker container registrations
     infra/observability/     Platform metric projections
     infra/workers/           Resource and application worker processes
     infra/providers/         Docker database/application and GitHub adapters
     infra/security/          Credential, approval, fingerprint and signature adapters
     infra/templates/         Filesystem template catalog
   shared/dispatch.py         Pure typed message/registry dispatch contract
-  composition/               Process DI and migration metadata registration
+  composition/               BackendContainer assembly and BackendRuntime lifecycle
     integrations/            Cross-context bridges and their DI provider
-  migrations/                Alembic configuration and revision scripts
+  migrations/                Alembic metadata discovery, environment and revisions
   shared/infra/              Technical engine/session/UoW and readiness
   shared/infra/settings.py   Runtime and database configuration
 ```
@@ -102,7 +107,7 @@ Business names distinguish `ProjectMembershipStatus`, `ApiTokenStatus`,
 `InternalUserRow` and `ProjectMembershipRow`. No speculative entity/value-object
 wrappers were added. The OpenAPI snapshot intentionally extends the API with
 request/read contracts; existing token and health response shapes remain unchanged.
-The platform package remains `developer_platform` to avoid shadowing Python's
+The platform package remains `devops_hub.platform` to avoid shadowing Python's
 standard-library `platform` module. Cross-context actor mapping stays at the host/composition boundary;
 neither context imports the other's internals.
 
@@ -144,10 +149,27 @@ Startup never creates tables or runs migrations. Start the API on loopback:
 uv run fastapi dev --host 127.0.0.1 --port 8000
 ```
 
-`[tool.fastapi]` selects `api.asgi:app`. The `DevOpsHubAPI` class owns HTTP
-assembly and accepts `APIConfiguration` for metadata/documentation routes. The host
-keeps DI and lifecycle ownership; tests can still inject settings, engines and
-containers through `create_app`. For production use `uv run fastapi run` (no reload).
+`[tool.fastapi]` selects `api.asgi:app`. `DevOpsHubAPI` owns HTTP assembly and
+uses cached Pydantic `APISettings` for metadata and OpenAPI/docs routes. Override
+these with `API_TITLE`, `API_VERSION`, `API_DESCRIPTION`, `API_OPENAPI_URL`,
+`API_DOCS_URL`, and `API_REDOC_URL`. API settings read process environment values
+without loading a `.env` file; tests may inject an `APISettings` instance directly.
+`BackendRuntime`
+builds the lazy dependency graph before middleware setup, then owns startup/shutdown;
+startup does not connect to the database or perform provisioning. It closes only
+containers it creates. Tests can inject settings, engines and caller-owned containers
+through `create_app`. For production use `uv run fastapi run` (no reload).
+
+The root API router includes one router per bounded context. Identity and Platform
+each aggregate feature routers with their route and schema definitions together.
+Shared HTTP behavior lives in `api/core/`; HTTP-only configuration lives in
+`api/settings/`. API providers stay separate from context `infra/composition`
+providers, and worker processes use a worker-specific composition factory.
+
+Alembic alone discovers ORM metadata and changes schema. `migrations/metadata.py`
+supplies Alembic `target_metadata`; API and worker runtime setup never registers
+models, creates tables or runs migrations. Run migrations explicitly with the
+Alembic command above.
 
 `GET /health/live` checks the process; `GET /health/ready` checks database access
 and the exact migration revision. API readiness does not establish provider or
@@ -209,7 +231,7 @@ former operator command has been removed. Do not enable an unverified target.
 For an already configured target, start the durable worker separately:
 
 ```bash
-uv run python -m developer_platform.infra.workers.resource_worker
+uv run python -m devops_hub.platform.infra.workers.resource_worker
 ```
 
 API requests never call Docker. The worker claims durable operations, stores encrypted
@@ -253,7 +275,7 @@ and drift acceptance remain pending in
 is not proof that the entire application deployment flow works. Missing configuration
 fails closed, and disabled adapters report failure rather than external success.
 
-Run `uv run python -m developer_platform.infra.workers.application_worker` separately for application steps.
+Run `uv run python -m devops_hub.platform.infra.workers.application_worker` separately for application steps.
 Resources are requested through the same quota/idempotency ledger and database
 worker. Preview events require a configured signing secret and registered repository;
 untrusted forks are rejected. External GitHub/cloud end-to-end acceptance is separate

@@ -6,19 +6,19 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from developer_platform.application.application_delivery.shared.ports import (
+from devops_hub.platform.application.application_delivery.shared.ports import (
     ApplicationDeliveryFailure,
 )
-from developer_platform.application.resource_lifecycle.ports import DatabaseCredentials
+from devops_hub.platform.application.resource_lifecycle.ports import DatabaseCredentials
 from psycopg.conninfo import conninfo_to_dict
 from sqlalchemy import Select
 
-from developer_platform.infra.persistence.application_bindings import (
+from devops_hub.platform.infra.persistence.application_bindings import (
     SQLAlchemyApplicationDatabaseBindings,
 )
-from developer_platform.infra.persistence.delivery import ApplicationRow
-from developer_platform.infra.persistence.models import Resource, ResourceSecret
-from developer_platform.infra.providers.application_runtime import managed_resource_container_name
+from devops_hub.platform.infra.persistence.delivery import ApplicationRow
+from devops_hub.platform.infra.persistence.models import Resource, ResourceSecret
+from devops_hub.platform.infra.providers.application_runtime import managed_resource_container_name
 
 
 class FakeSession:

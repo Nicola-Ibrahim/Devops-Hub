@@ -2,7 +2,7 @@ import asyncio
 from uuid import uuid4
 
 import pytest
-from developer_platform.application.resource_requests.submit_database_request.result import (
+from devops_hub.platform.application.resource_requests.submit_database_request.result import (
     AcceptedDatabaseRequest,
 )
 from dishka import Provider, Scope, provide
@@ -11,15 +11,15 @@ from sqlalchemy.exc import SQLAlchemyError
 from test_operation_lifecycle import CapturedResponses, FakeSession
 
 from api.app import create_app
-from composition.factory import create_container
-from developer_platform.application.database_provisioning.read_resources.handler import (
+from composition.container import BackendContainer
+from devops_hub.platform.application.database_provisioning.read_resources.handler import (
     ReadResourcesHandler,
 )
-from developer_platform.application.database_provisioning.submit_database_request.handler import (
+from devops_hub.platform.application.database_provisioning.submit_database_request.handler import (
     RequestTemporaryDatabaseHandler,
 )
-from developer_platform.application.shared.dto import AccessContext
-from developer_platform.application.shared.errors import PlatformRequestError
+from devops_hub.platform.application.shared.dto import AccessContext
+from devops_hub.platform.application.shared.errors import PlatformRequestError
 from identity.application.authenticate_api_token.query import AuthenticateApiTokenQuery
 from identity.application.module import IdentityModule
 from identity.contracts import AuthenticatedPrincipal
@@ -31,7 +31,7 @@ def test_platform_di_binds_both_context_repositories_to_one_operation_session():
     config = Settings(
         database_url="postgresql+psycopg://localhost:1/devops_hub_test", token_pepper="p" * 40
     )
-    container = create_container(config)
+    container = BackendContainer(config).combined()
 
     async def run():
         try:
@@ -106,7 +106,7 @@ def test_http_ledger_authentication_and_commit_precede_success(outcome, monkeypa
     config = Settings(
         database_url="postgresql+psycopg://localhost:1/devops_hub_test", token_pepper="p" * 40
     )
-    container = create_container(config, overrides=(Override(),))
+    container = BackendContainer(config, overrides=(Override(),)).combined()
     capture = CapturedResponses(create_app(container=container))
     try:
         with TestClient(capture) as client:

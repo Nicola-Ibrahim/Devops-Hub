@@ -1,7 +1,7 @@
 import unittest
 from datetime import UTC, datetime, timedelta, timezone
 
-from developer_platform.domain import (
+from devops_hub.platform.domain import (
     DeletionReason,
     DesiredState,
     DomainError,

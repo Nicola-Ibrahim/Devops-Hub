@@ -5,48 +5,48 @@ import unittest
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from developer_platform.application.project_registration.command import RegisterProjectCommand
-from developer_platform.application.project_registration.handler import RegisterProjectHandler
-from developer_platform.application.project_registration.result import (
+from devops_hub.platform.application.project_registration.command import RegisterProjectCommand
+from devops_hub.platform.application.project_registration.handler import RegisterProjectHandler
+from devops_hub.platform.application.project_registration.result import (
     EnvironmentDetails,
     ProjectRegistrationDetails,
 )
-from developer_platform.application.resource_requests.read_resources.handler import (
+from devops_hub.platform.application.resource_requests.read_resources.handler import (
     ReadOperationHandler,
     ReadProjectHandler,
     ReadResourceHandler,
     ReadResourcesHandler,
 )
-from developer_platform.application.resource_requests.read_resources.query import (
+from devops_hub.platform.application.resource_requests.read_resources.query import (
     OperationDetails,
     ResourceDetails,
 )
-from developer_platform.application.resource_requests.submit_database_request.command import (
+from devops_hub.platform.application.resource_requests.submit_database_request.command import (
     DatabaseRequest,
 )
-from developer_platform.application.resource_requests.submit_database_request.handler import (
+from devops_hub.platform.application.resource_requests.submit_database_request.handler import (
     RequestTemporaryDatabaseHandler,
 )
-from developer_platform.application.resource_requests.submit_database_request.result import (
+from devops_hub.platform.application.resource_requests.submit_database_request.result import (
     AcceptedDatabaseRequest,
 )
 
-from developer_platform.application.database_provisioning.read_resources.query import (
+from devops_hub.platform.application.database_provisioning.read_resources.query import (
     ReadOperation,
     ReadProject,
     ReadResource,
     ReadResources,
 )
-from developer_platform.application.database_provisioning.submit_database_request.command import (
+from devops_hub.platform.application.database_provisioning.submit_database_request.command import (
     RequestTemporaryDatabase,
 )
-from developer_platform.application.resource_catalog.catalog import ApprovedPostgresCatalog
-from developer_platform.application.resource_catalog.handler import ReadCatalogQueryHandler
-from developer_platform.application.resource_catalog.models import PostgresOption, ResourceSize
-from developer_platform.application.resource_catalog.query import ReadCatalog
-from developer_platform.application.shared.dto import AccessContext
-from developer_platform.application.shared.errors import CatalogForbidden, PlatformRequestError
-from developer_platform.authorization import authorize_platform_action
+from devops_hub.platform.application.resource_catalog.catalog import ApprovedPostgresCatalog
+from devops_hub.platform.application.resource_catalog.handler import ReadCatalogQueryHandler
+from devops_hub.platform.application.resource_catalog.models import PostgresOption, ResourceSize
+from devops_hub.platform.application.resource_catalog.query import ReadCatalog
+from devops_hub.platform.application.shared.dto import AccessContext
+from devops_hub.platform.application.shared.errors import CatalogForbidden, PlatformRequestError
+from devops_hub.platform.authorization import authorize_platform_action
 
 PROJECT_ID = UUID("11111111-1111-4111-8111-111111111111")
 OTHER_PROJECT_ID = UUID("22222222-2222-4222-8222-222222222222")

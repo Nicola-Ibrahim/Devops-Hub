@@ -3,9 +3,9 @@
 import asyncio
 from uuid import uuid4
 
-from developer_platform.application.resource_catalog.handler import ReadCatalogQueryHandler
-from developer_platform.application.resource_catalog.query import ReadCatalog
-from developer_platform.application.shared.dto import AccessContext
+from devops_hub.platform.application.resource_catalog.handler import ReadCatalogQueryHandler
+from devops_hub.platform.application.resource_catalog.query import ReadCatalog
+from devops_hub.platform.application.shared.dto import AccessContext
 
 
 def test_catalog_handler_returns_catalog_without_rechecking_transport_scope() -> None:

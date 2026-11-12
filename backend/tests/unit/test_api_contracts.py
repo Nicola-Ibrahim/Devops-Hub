@@ -10,10 +10,11 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from api.app import create_app
-from api.platform.schemas import RenewRequest, ResourceRequest, ResourceView
-from developer_platform.application.module import DeveloperPlatformModule
-from developer_platform.application.resource_catalog.handler import ReadCatalogQueryHandler
-from developer_platform.application.resource_catalog.query import ReadCatalog
+from api.platform.resources.schemas import RenewRequest, ResourceRequest, ResourceView
+from api.settings.config import APISettings, get_api_settings
+from devops_hub.platform.application.module import DeveloperPlatformModule
+from devops_hub.platform.application.resource_catalog.handler import ReadCatalogQueryHandler
+from devops_hub.platform.application.resource_catalog.query import ReadCatalog
 from identity.application.authenticate_api_token.handler import AuthenticateApiTokenHandler
 from identity.application.authenticate_api_token.query import AuthenticateApiTokenQuery
 from identity.application.module import IdentityModule
@@ -38,6 +39,30 @@ def test_liveness_and_openapi_do_not_connect_or_migrate():
         assert spec["paths"]["/api/v1/me"]["get"]["security"] == [{"HTTPBearer": []}]
         assert spec["paths"]["/api/v1/resources"]["post"]["responses"]["202"]
         assert client.get("/health/ready").status_code == 503
+
+
+def test_api_settings_load_prefixed_environment_and_configure_fastapi(monkeypatch):
+    monkeypatch.setenv("API_TITLE", "Internal Developer Platform")
+    monkeypatch.setenv("API_VERSION", "2.3.0")
+    monkeypatch.setenv("API_OPENAPI_URL", "/schema.json")
+    get_api_settings.cache_clear()
+    try:
+        loaded = get_api_settings()
+        assert loaded.title == "Internal Developer Platform"
+        assert loaded.version == "2.3.0"
+        assert loaded.openapi_url == "/schema.json"
+
+        app = create_app(settings(), api_settings=loaded)
+        assert app.title == loaded.title
+        assert app.version == loaded.version
+        assert app.openapi_url == "/schema.json"
+    finally:
+        get_api_settings.cache_clear()
+
+
+def test_api_settings_validate_required_metadata():
+    with pytest.raises(ValidationError):
+        APISettings(title="")
 
 
 @pytest.mark.parametrize("header", [None, "Bearer short", "Basic not-a-token"])

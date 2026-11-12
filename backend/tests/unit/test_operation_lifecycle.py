@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.pool import NullPool
 
 from api.app import create_app
-from composition.factory import create_container
+from composition.container import BackendContainer
 from identity.application.issue_api_token.command import IssueApiTokenCommand
 from identity.application.issue_api_token.result import PreparedApiToken
 from identity.application.module import IdentityModule
@@ -421,7 +421,9 @@ def test_container_scopes_bind_fresh_sessions_and_ready_identity_query(scope_kin
             sessions.append(result)
             return cast(AsyncSession, result)
 
-    container = create_container(settings(), engine=engine, overrides=(SessionOverride(),))
+    container = BackendContainer(
+        settings(), engine=engine, overrides=(SessionOverride(),)
+    ).combined()
 
     async def resolve_request():
         async with container() as scope:
@@ -478,7 +480,7 @@ def test_http_commit_failure_returns_503_without_success_response_start(monkeypa
     engine: AsyncEngine = create_async_engine(
         "postgresql+psycopg://localhost:1/devops_hub_test", poolclass=NullPool
     )
-    container = create_container(settings(), engine=engine, overrides=(Overrides(),))
+    container = BackendContainer(settings(), engine=engine, overrides=(Overrides(),)).combined()
     capture = CapturedResponses(create_app(container=container))
     try:
         with TestClient(capture) as client:
@@ -509,7 +511,7 @@ def test_http_lifespan_disposes_only_host_owned_database(monkeypatch, ownership)
         engine = create_async_engine(settings().database_url.get_secret_value(), poolclass=NullPool)
         container = None
         if ownership == "caller_container":
-            container = create_container(settings())
+            container = BackendContainer(settings()).combined()
             app = create_app(container=container)
         elif ownership == "caller_engine":
             app = create_app(settings(), engine=engine)

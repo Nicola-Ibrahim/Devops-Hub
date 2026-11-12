@@ -5,8 +5,8 @@ from uuid import uuid4
 import pytest
 from starlette.requests import Request
 
-from api.errors import APIError
-from api.identity.browser import browser_credentials
+from api.core.errors import APIError
+from api.identity.authentication.credentials import browser_credentials
 from identity.application.change_password.command import VerifyPasswordChange
 from identity.application.change_password.handler import VerifyPasswordChangeHandler
 from identity.application.login.command import VerifyLoginCredentials

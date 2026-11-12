@@ -127,26 +127,22 @@ with tempfile.TemporaryDirectory(prefix="hub-packaged-", dir="/private/tmp") as 
         )
         seed_fixture = r"""import asyncio, json
 from pathlib import Path
-from composition.factory import create_container
+from composition.container import BackendContainer
 from composition.integrations.project_registration import RegisterProjectCommandHandler
 from identity.infra.hosts.identity_sessions import BrowserIdentityService
-from composition.schema import registered_metadata
-from developer_platform.application.ledger import RegisterProjectCommand
+from devops_hub.platform.application.ledger import RegisterProjectCommand
 from shared.infra.settings import Settings
-from api.identity.browser import BrowserIdentityOperations
 
 async def seed():
     settings = Settings()
-    registered_metadata()
-    container = create_container(settings)
+    container = BackendContainer(settings).combined()
     try:
         async with container() as scope:
             registration = await scope.get(RegisterProjectCommandHandler)
             project = await registration.execute(
                 RegisterProjectCommand("demo", "platform", "example/demo", ("dev",))
             )
-            identity = await scope.get(BrowserIdentityOperations)
-            assert isinstance(identity, BrowserIdentityService)
+            identity = await scope.get(BrowserIdentityService)
             password = Path("/run/platform-secrets/acceptance_password").read_text().strip()
             user_id = await identity.create_user("demo", password)
             await identity.bootstrap_first_project_admin(user_id, project.project_id)
@@ -167,10 +163,9 @@ asyncio.run(seed())
         probe_fixture = r"""import asyncio, secrets
 from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
-from composition.schema import registered_metadata
-from developer_platform.application.lifecycle import DatabaseCredentials, ProvisioningJob
-from developer_platform.infra.providers.docker_postgres import DockerPostgresProvider
-from developer_platform.infra.persistence.models import QuotaBudget
+from devops_hub.platform.application.lifecycle import DatabaseCredentials, ProvisioningJob
+from devops_hub.platform.infra.providers.docker_postgres import DockerPostgresProvider
+from devops_hub.platform.infra.persistence.models import QuotaBudget
 from shared.infra.settings import Settings
 from shared.infra.persistence.database import create_async_database_engine
 
@@ -178,7 +173,6 @@ async def probe():
     settings = Settings()
     if settings.installation_id is None or settings.resource_key is None:
         raise RuntimeError("Acceptance target configuration is incomplete")
-    registered_metadata()
     engine = create_async_database_engine(settings.database_url.get_secret_value(), settings.database_connect_timeout)
     try:
         job = ProvisioningJob(uuid4(), uuid4(), settings.installation_id, 1, uuid4(),

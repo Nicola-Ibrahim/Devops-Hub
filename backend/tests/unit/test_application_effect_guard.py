@@ -5,12 +5,12 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from developer_platform.application.application_delivery.shared.ports import (
+from devops_hub.platform.application.application_delivery.shared.ports import (
     DeliveryClaim,
     DeliveryResult,
 )
 
-from developer_platform.infra.workers.application_host import ApplicationDeliveryHost
+from devops_hub.platform.infra.workers.application_host import ApplicationDeliveryHost
 
 
 def test_application_effect_and_completion_keep_exclusive_ownership():

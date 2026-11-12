@@ -104,7 +104,7 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    command: ["python", "-m", "developer_platform.infra.workers.resource_worker"]
+    command: ["python", "-m", "devops_hub.platform.infra.workers.resource_worker"]
     environment:
       PLATFORM_DATABASE_URL_FILE: /run/secrets/platform_database_url
       PLATFORM_TOKEN_PEPPER_FILE: /run/secrets/platform_token_pepper

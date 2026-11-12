@@ -6,9 +6,9 @@ from typing import Literal, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.credentials import BrowserRequestCredentials, RequestIdentity
-from developer_platform.application.shared.dto import AccessContext
-from developer_platform.application.shared.errors import PlatformRequestError
+from api.core.security.request_identity import BrowserRequestCredentials, RequestIdentity
+from devops_hub.platform.application.shared.dto import AccessContext
+from devops_hub.platform.application.shared.errors import PlatformRequestError
 from identity.application.authenticate_api_token.handler import AuthenticateApiTokenHandler
 from identity.application.authenticate_api_token.query import AuthenticateApiTokenQuery
 from identity.infra.hosts.identity_sessions import authenticate_browser_operation

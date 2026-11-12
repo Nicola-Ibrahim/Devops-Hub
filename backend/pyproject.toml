@@ -31,13 +31,14 @@ entrypoint = "api.asgi:app"
 packages = [
     "src/api",
     "src/identity",
-    "src/developer_platform",
+    "src/devops_hub",
     "src/shared",
     "src/composition",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 markers = [
     "postgres: requires an explicitly configured disposable PostgreSQL test database",
 ]

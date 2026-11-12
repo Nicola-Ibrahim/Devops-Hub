@@ -44,7 +44,7 @@ from shared.infra.clock import Clock
 from shared.infra.settings import Settings
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class IdentityTokenScopePolicy:
     scopes: tuple[str, ...]
 

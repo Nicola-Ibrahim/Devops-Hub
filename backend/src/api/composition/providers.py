@@ -5,9 +5,9 @@ from fastapi import Request
 
 from api.health.metrics import OperationalMetrics
 from api.health.metrics_adapter import DatabaseOperationalMetrics
-from api.identity.cookie_policy import BrowserCookiePolicy
 from api.platform.module import PlatformRequestModule
-from developer_platform.application.module import DeveloperPlatformModule
+from api.settings.config import BrowserCookiePolicy
+from devops_hub.platform.application.module import DeveloperPlatformModule
 from shared.infra.clock import Clock
 from shared.infra.settings import Settings
 

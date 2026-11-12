@@ -5,9 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from composition.integrations.application_resources import LedgerApplicationResources
 from composition.integrations.project_registration import RegisterProjectCommandHandler
-from developer_platform.application.projects.handler import RegisterProjectHandler
-from developer_platform.application.resource_catalog.catalog import ApprovedPostgresCatalog
-from developer_platform.application.workload_delivery.shared.ports import ResourceProvisioner
+from devops_hub.platform.application.projects.handler import RegisterProjectHandler
+from devops_hub.platform.application.resource_catalog.catalog import ApprovedPostgresCatalog
+from devops_hub.platform.application.workload_delivery.shared.ports import ResourceProvisioner
 from identity.domain.interfaces.project_access_directory import ProjectAccessDirectory
 from shared.infra.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from shared.infra.settings import Settings

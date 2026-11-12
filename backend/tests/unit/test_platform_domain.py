@@ -3,16 +3,16 @@ from uuid import uuid4
 
 import pytest
 
-from developer_platform.domain.aggregates.resource_lifecycle import ResourceLifecycle
-from developer_platform.domain.errors import DomainError
-from developer_platform.domain.services.resource_admission import (
+from devops_hub.platform.domain.aggregates.resource_lifecycle import ResourceLifecycle
+from devops_hub.platform.domain.errors import DomainError
+from devops_hub.platform.domain.services.resource_admission import (
     CapacitySnapshot,
     ResourceAdmissionPolicy,
 )
-from developer_platform.domain.value_objects.resource_name import ResourceName
-from developer_platform.domain.value_objects.resource_spec import ResourceSpec
-from developer_platform.domain.value_objects.revision import ResourceRevision
-from developer_platform.domain.value_objects.statuses import DesiredState, ResourceStatus
+from devops_hub.platform.domain.value_objects.resource_name import ResourceName
+from devops_hub.platform.domain.value_objects.resource_spec import ResourceSpec
+from devops_hub.platform.domain.value_objects.revision import ResourceRevision
+from devops_hub.platform.domain.value_objects.statuses import DesiredState, ResourceStatus
 
 
 def _resource(now: datetime) -> ResourceLifecycle:

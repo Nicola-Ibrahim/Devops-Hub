@@ -9,7 +9,7 @@ from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from conftest import migration_config
-from developer_platform.application.project_registration.command import RegisterProjectCommand
+from devops_hub.platform.application.project_registration.command import RegisterProjectCommand
 from fastapi.testclient import TestClient
 from sqlalchemy import event, func, inspect, select, text
 from sqlalchemy.exc import IntegrityError
@@ -18,10 +18,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import NullPool
 
 from api.app import create_app
-from composition.factory import create_container
+from composition.container import BackendContainer
 from composition.integrations.project_registration import RegisterProjectCommandHandler
-from composition.schema import registered_metadata
-from developer_platform.infra.persistence.models import Resource
+from devops_hub.platform.infra.persistence.models import Resource
 from identity.application.issue_api_token.command import IssueApiTokenCommand
 from identity.application.shared.errors import CredentialDeliveryError
 from identity.infra.hosts.api_token_operations import IssueApiTokenToFile, RevokeApiTokenOperation
@@ -32,6 +31,7 @@ from identity.infra.persistence.models import (
     ProjectRow,
 )
 from identity.infra.security.credential_file import PrivateCredentialFile
+from migrations.metadata import registered_metadata
 from shared.infra.persistence.audit import AuditEvent
 from shared.infra.settings import SCHEMA_REVISION, Settings
 
@@ -70,7 +70,7 @@ def client_for(sync_engine, config=None):
 
 
 async def issue_with_container(database: AsyncEngine, path, config, user, project, **kwargs):
-    container = create_container(config, engine=database)
+    container = BackendContainer(config, engine=database).combined()
     try:
         async with container() as scope:
             service = await scope.get(IssueApiTokenToFile)
@@ -83,7 +83,7 @@ async def issue_with_container(database: AsyncEngine, path, config, user, projec
 
 
 async def register_project_with_container(database: AsyncEngine, config, project):
-    container = create_container(config, engine=database)
+    container = BackendContainer(config, engine=database).combined()
     try:
         async with container() as scope:
             handler = await scope.get(RegisterProjectCommandHandler)
@@ -120,7 +120,7 @@ def issue(sync_engine, path, user="developer", project="project", **kwargs):
 
 
 async def revoke_with_container(database: AsyncEngine, token_id, config):
-    container = create_container(config, engine=database)
+    container = BackendContainer(config, engine=database).combined()
     try:
         async with container() as scope:
             service = await scope.get(RevokeApiTokenOperation)
