@@ -17,16 +17,18 @@ src/
   identity/
     domain/                  Identity entities, value objects, aggregates, repository interfaces and policies
     application/             Identity use-case packages with command/query handlers
-    infra/persistence/       Identity-owned ORM rows and async token repository
+    infra/persistence/       Identity-owned ORM rows and account/session/membership/token adapters
     infra/composition/       Identity module dispatch and Dishka providers
     infra/                   Token operations, hashing and private file delivery
   developer_platform/
     domain/                  Platform entities, value objects, aggregates, repository interfaces and policies
     application/             Capability-owned command/query handlers for catalog, requests, lifecycle and delivery
-    infra/persistence/       Platform-owned ORM rows and SQL adapters
+    infra/persistence/       Platform-owned ORM rows, transactional stores and read projections
     infra/composition/       Platform module dispatch and capability providers
     infra/observability/     Platform metric projections
-    infra/                   Docker, GitHub and credential adapters
+    infra/providers/         Docker database/application and GitHub adapters
+    infra/security/          Credential, approval, fingerprint and signature adapters
+    infra/templates/         Filesystem template catalog
   shared/dispatch.py         Pure typed message/registry dispatch contract
   shared/infra/              Technical engine/session/UoW, metadata and readiness
   infra/composition/        Process DI and migration metadata registration
@@ -36,7 +38,7 @@ src/
   shared/infra/settings.py    Runtime and database configuration
 ```
 
-Application services receive repositories, clocks and domain-facing interfaces.
+Application services receive repositories, clocks and narrow capability ports.
 They never receive a unit of work, SQLAlchemy session, DI container or HTTP request.
 Each identity capability owns its `command.py` or `query.py` and `handler.py`;
 handlers translate inputs into domain value objects/policies and return application
@@ -311,3 +313,11 @@ Historical local lifecycle acceptance does not establish complete application
 attachment, host deployment or cloud readiness. Remaining feature and verification
 scope is separated in the [numbered task index](../.codex/workflow/tasks/README.md);
 finish one selected task at a time.
+
+## Identity service boundaries
+
+See [Identity services](../docs/identity-services.md) for the action catalog,
+aggregate/repository ownership, session expiry and local OPA setup. Protected
+Identity routes now require OPA; login remains available during policy outages.
+Compose configures the OPA URL automatically. Database/schema readiness and
+authorization readiness are exposed separately.

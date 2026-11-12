@@ -46,29 +46,26 @@ from developer_platform.application.workload_delivery.retry_delivery_step.handle
 from developer_platform.application.workload_delivery.retry_delivery_step.port import (
     DeliveryRetryRepository,
 )
+from developer_platform.application.workload_delivery.shared.database_binding import (
+    ApplicationDatabaseBindingResolver,
+)
 from developer_platform.application.workload_delivery.shared.ports import (
     ApprovedImageCatalog,
     RequestFingerprint,
     TemplateCatalog,
     WebhookSignatureVerifier,
 )
-from developer_platform.infra.application_runtime import (
-    ApplicationDatabaseBindingResolver,
-    DockerApplicationRuntime,
-)
-from developer_platform.infra.credentials import FernetResourceCredentialCipher
-from developer_platform.infra.delivery_adapters import (
-    DockerApplicationAdapter,
-    FilesystemTemplateCatalog,
-    GitHubRepositoryAdapter,
-    HmacGitHubWebhookVerifier,
-    Sha256RequestFingerprint,
-    StaticApprovedImageCatalog,
-)
 from developer_platform.infra.persistence.application_bindings import (
     SQLAlchemyApplicationDatabaseBindings,
 )
 from developer_platform.infra.persistence.delivery import SQLAlchemyApplicationDeliveryRepository
+from developer_platform.infra.providers.docker_application import DockerApplicationAdapter
+from developer_platform.infra.providers.github import GitHubRepositoryAdapter
+from developer_platform.infra.security.approval import StaticApprovedImageCatalog
+from developer_platform.infra.security.credentials import FernetResourceCredentialCipher
+from developer_platform.infra.security.fingerprint import Sha256RequestFingerprint
+from developer_platform.infra.security.webhooks import HmacGitHubWebhookVerifier
+from developer_platform.infra.templates.catalog import FilesystemTemplateCatalog
 from shared.infra.clock import Clock
 from shared.infra.settings import Settings
 
@@ -101,10 +98,6 @@ class ApplicationDeliveryProvider(Provider):
         )
 
     @provide(scope=Scope.APP)
-    def application_runtime(self, settings: Settings) -> DockerApplicationRuntime:
-        return DockerApplicationRuntime(settings.docker_url, settings.postgres_image)
-
-    @provide(scope=Scope.APP)
     def database_bindings(
         self, settings: Settings, sessions: async_sessionmaker[AsyncSession]
     ) -> ApplicationDatabaseBindingResolver | None:
@@ -119,14 +112,14 @@ class ApplicationDeliveryProvider(Provider):
     def deployer(
         self,
         settings: Settings,
-        runtime: DockerApplicationRuntime,
         bindings: ApplicationDatabaseBindingResolver | None,
     ) -> DockerApplicationAdapter | None:
         if not settings.approved_local_images or settings.installation_id is None:
             return None
         return DockerApplicationAdapter(
             frozenset(settings.approved_local_images),
-            runtime,
+            settings.docker_url,
+            settings.postgres_image,
             settings.installation_id,
             bindings,
         )

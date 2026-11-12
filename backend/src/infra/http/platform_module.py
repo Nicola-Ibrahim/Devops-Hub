@@ -33,7 +33,7 @@ from developer_platform.application.workload_delivery.retry_delivery_step.comman
 )
 from developer_platform.authorization import ALL_SCOPES, authorize_platform_action
 from developer_platform.infra.composition.module import _DeveloperPlatformDispatcher
-from identity.infra.browser_operations import authenticate_browser_operation
+from identity.infra.hosts.identity_sessions import authenticate_browser_operation
 from infra.http.authentication import authenticate_request
 from shared.dispatch import Command, Query
 from shared.infra.clock import Clock

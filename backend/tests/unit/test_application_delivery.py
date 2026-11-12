@@ -11,12 +11,54 @@ from developer_platform.application.application_delivery.shared.ports import (
     TemplateVersion,
 )
 
-from developer_platform.infra.delivery_adapters import (
-    FilesystemTemplateCatalog,
-    HmacGitHubWebhookVerifier,
-)
+from developer_platform.domain.aggregates.application_delivery import ApplicationDelivery
+from developer_platform.domain.entities.application import Application, DeliveryStep
+from developer_platform.infra.security.webhooks import HmacGitHubWebhookVerifier
+from developer_platform.infra.templates.catalog import FilesystemTemplateCatalog
 
 TEMPLATE_ROOT = Path(__file__).resolve().parents[2] / "../templates"
+
+
+def test_delivery_aggregate_retry_resets_failed_step_and_application_state() -> None:
+    from datetime import UTC, datetime
+
+    now = datetime.now(UTC)
+    application_id = uuid4()
+    step_id = uuid4()
+    delivery = ApplicationDelivery(
+        Application(
+            id=application_id,
+            project_id=uuid4(),
+            environment_id=uuid4(),
+            owner_id=uuid4(),
+            name="example",
+            template_id="python-fastapi",
+            template_version="1.0.0",
+            status="failed",
+            created_at=now,
+            updated_at=now,
+        ),
+        (
+            DeliveryStep(
+                id=step_id,
+                application_id=application_id,
+                kind="repository",
+                status="failed",
+                attempts=2,
+                created_at=now,
+                updated_at=now,
+                error_code="provider_unavailable",
+            ),
+        ),
+    )
+
+    retried = delivery.retry(step_id, now)
+
+    assert retried.application.status == "pending"
+    assert retried.application.updated_at == now
+    assert retried.steps[0].status == "pending"
+    assert retried.steps[0].error_code is None
+    assert retried.steps[0].attempts == 2
 
 
 def test_catalog_lists_and_renders_only_versioned_templates() -> None:
@@ -89,7 +131,7 @@ def test_template_file_symlink_is_rejected(tmp_path: Path) -> None:
 
 
 def test_disabled_repository_adapter_does_not_claim_success() -> None:
-    from developer_platform.infra.delivery_adapters import GitHubRepositoryAdapter
+    from developer_platform.infra.providers.github import GitHubRepositoryAdapter
 
     adapter = GitHubRepositoryAdapter("", None)
 
@@ -113,7 +155,7 @@ def test_template_update_pr_preserves_user_changes_and_uses_owned_branch(monkeyp
     import httpx
     from developer_platform.application.application_delivery.shared.ports import GeneratedFile
 
-    from developer_platform.infra.delivery_adapters import GitHubRepositoryAdapter
+    from developer_platform.infra.providers.github import GitHubRepositoryAdapter
 
     def digest(value):
         return hashlib.sha256(value).hexdigest()

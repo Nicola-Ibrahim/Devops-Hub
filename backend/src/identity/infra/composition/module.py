@@ -3,70 +3,64 @@
 from dishka import AsyncContainer
 
 from identity.application.authenticate_api_token.query import AuthenticateApiTokenQuery
-from identity.application.browser_login.command import (
-    ChangeBrowserPasswordCommand,
-    LoginBrowserSessionCommand,
-)
-from identity.application.browser_sessions.command import (
-    LogoutAllBrowserSessionsCommand,
-    LogoutBrowserSessionCommand,
-    RevokeBrowserSessionCommand,
-    RotateBrowserCsrfCommand,
-    SelectBrowserProjectCommand,
-)
-from identity.application.browser_sessions.query import (
-    AuthenticateBrowserSessionQuery,
-    ListBrowserSessionsQuery,
-)
-from identity.application.project_memberships.command import ManageProjectMembershipCommand
-from identity.application.project_memberships.query import ListProjectMembersQuery
-from identity.infra.composition.handlers import (
-    AuthenticateBrowserSessionHandler,
+from identity.application.authenticate_session.query import AuthenticateSessionQuery
+from identity.application.change_password.command import ChangePasswordCommand
+from identity.application.list_project_members.query import ListProjectMembersQuery
+from identity.application.list_sessions.query import ListSessionsQuery
+from identity.application.login.command import LoginCommand
+from identity.application.logout.command import LogoutCommand
+from identity.application.logout_all_sessions.command import LogoutAllSessionsCommand
+from identity.application.manage_project_membership.command import ManageProjectMembershipCommand
+from identity.application.revoke_session.command import RevokeSessionCommand
+from identity.application.rotate_csrf.command import RotateCsrfCommand
+from identity.application.select_active_project.command import SelectActiveProjectCommand
+from identity.infra.hosts.module_handlers import (
     AuthenticateIdentityTokenHandler,
-    ChangeBrowserPasswordHandler,
-    ListBrowserSessionsHandler,
+    AuthenticateSessionHandler,
+    ChangePasswordHandler,
     ListProjectMembersHandler,
-    LoginBrowserSessionHandler,
-    LogoutAllBrowserSessionsHandler,
-    LogoutBrowserSessionHandler,
+    ListSessionsHandler,
+    LoginHandler,
+    LogoutAllSessionsHandler,
+    LogoutHandler,
     ManageProjectMembershipHandler,
-    RevokeBrowserSessionHandler,
-    RotateBrowserCsrfHandler,
-    SelectBrowserProjectHandler,
+    RevokeSessionHandler,
+    RotateCsrfHandler,
+    SelectActiveProjectHandler,
 )
 from shared.dispatch import HandlerRegistry, ModuleDispatcher
 
 IDENTITY_HANDLER_REGISTRY = HandlerRegistry(
     commands=(
-        (LoginBrowserSessionCommand, LoginBrowserSessionHandler),
-        (RotateBrowserCsrfCommand, RotateBrowserCsrfHandler),
-        (SelectBrowserProjectCommand, SelectBrowserProjectHandler),
-        (LogoutBrowserSessionCommand, LogoutBrowserSessionHandler),
-        (LogoutAllBrowserSessionsCommand, LogoutAllBrowserSessionsHandler),
-        (RevokeBrowserSessionCommand, RevokeBrowserSessionHandler),
-        (ChangeBrowserPasswordCommand, ChangeBrowserPasswordHandler),
+        (LoginCommand, LoginHandler),
+        (RotateCsrfCommand, RotateCsrfHandler),
+        (SelectActiveProjectCommand, SelectActiveProjectHandler),
+        (LogoutCommand, LogoutHandler),
+        (LogoutAllSessionsCommand, LogoutAllSessionsHandler),
+        (RevokeSessionCommand, RevokeSessionHandler),
+        (ChangePasswordCommand, ChangePasswordHandler),
         (ManageProjectMembershipCommand, ManageProjectMembershipHandler),
     ),
     queries=(
         (AuthenticateApiTokenQuery, AuthenticateIdentityTokenHandler),
-        (AuthenticateBrowserSessionQuery, AuthenticateBrowserSessionHandler),
-        (ListBrowserSessionsQuery, ListBrowserSessionsHandler),
+        (AuthenticateSessionQuery, AuthenticateSessionHandler),
+        (ListSessionsQuery, ListSessionsHandler),
         (ListProjectMembersQuery, ListProjectMembersHandler),
     ),
     required_commands=(
-        LoginBrowserSessionCommand,
-        RotateBrowserCsrfCommand,
-        SelectBrowserProjectCommand,
-        LogoutBrowserSessionCommand,
-        LogoutAllBrowserSessionsCommand,
-        RevokeBrowserSessionCommand,
-        ChangeBrowserPasswordCommand,
+        LoginCommand,
+        RotateCsrfCommand,
+        SelectActiveProjectCommand,
+        LogoutCommand,
+        LogoutAllSessionsCommand,
+        RevokeSessionCommand,
+        ChangePasswordCommand,
         ManageProjectMembershipCommand,
     ),
     required_queries=(
         AuthenticateApiTokenQuery,
-        AuthenticateBrowserSessionQuery,
-        ListBrowserSessionsQuery,
+        AuthenticateSessionQuery,
+        ListSessionsQuery,
         ListProjectMembersQuery,
     ),
 )

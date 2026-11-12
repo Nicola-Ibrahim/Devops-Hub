@@ -23,9 +23,9 @@ from identity.application.shared.errors import IdentityUnavailable
 from identity.application.shared.ports import ApiTokenRepository
 from identity.domain.credentials import ApiTokenAuthenticationDetails
 from identity.domain.records import ApiTokenStatus, ProjectMembershipStatus
-from identity.infra.credential_file import PrivateCredentialFile
+from identity.infra.hosts.api_token_operations import IssueApiTokenToFile
 from identity.infra.persistence.store import SQLAlchemyApiTokenRepository
-from identity.infra.token_operations import IssueApiTokenToFile
+from identity.infra.security.credential_file import PrivateCredentialFile
 from infra.composition.factory import create_container
 from infra.http.app import create_app
 from shared.infra.persistence.unit_of_work import DatabaseUnavailable, SqlAlchemyUnitOfWork
@@ -466,7 +466,7 @@ def test_http_commit_failure_returns_503_without_success_response_start(monkeypa
     )
     session = FakeSession(fail_commit=SQLAlchemyError("database detail"))
     monkeypatch.setattr(
-        "identity.infra.token_authentication_host.SQLAlchemyApiTokenRepository",
+        "identity.infra.hosts.api_token_authentication.SQLAlchemyApiTokenRepository",
         lambda active: repository,
     )
 

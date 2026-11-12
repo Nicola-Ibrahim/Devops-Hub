@@ -11,7 +11,7 @@ from developer_platform.application.projects.handler import RegisterProjectHandl
 from developer_platform.application.resource_catalog.catalog import ApprovedPostgresCatalog
 from developer_platform.application.workload_delivery.shared.ports import ResourceProvisioner
 from identity.application.module import IdentityModule
-from identity.domain.project_access import ProjectAccessDirectory
+from identity.domain.interfaces.project_access_directory import ProjectAccessDirectory
 from identity.infra.composition.module import IdentityModuleDispatcher
 from infra.hosts.application_resources import LedgerApplicationResources
 from infra.hosts.project_registration import RegisterProjectCommandHandler

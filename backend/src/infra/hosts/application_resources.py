@@ -25,9 +25,8 @@ from developer_platform.application.workload_delivery.shared.ports import (
     ApplicationDeliveryFailure,
 )
 from developer_platform.authorization import ALL_SCOPES, authorize_platform_action
-from developer_platform.infra.persistence.ledger import SQLAlchemyPlatformLedgerRepository
-from developer_platform.infra.persistence.lifecycle import mark_for_deletion
 from developer_platform.infra.persistence.models import Resource
+from developer_platform.infra.persistence.resource_repository import SQLAlchemyResourceRepository
 from identity.infra.persistence.resource_request_authority import resource_request_role
 
 
@@ -66,7 +65,7 @@ class LedgerApplicationResources:
             )
             authorize_platform_action(RequestTemporaryDatabase(access, request, idempotency_key))
             usecase = RequestTemporaryDatabaseHandler(
-                SQLAlchemyPlatformLedgerRepository(session),
+                SQLAlchemyResourceRepository(session),
                 self.catalog,
                 lambda: datetime.now(UTC),
                 lambda value: hashlib.sha256(
@@ -111,6 +110,8 @@ class LedgerApplicationResources:
                 raise ApplicationDeliveryFailure("resource_identity_mismatch", retryable=False)
             if resource.status == "deleted":
                 return
-            await mark_for_deletion(session, resource, "pr_closed", None, datetime.now(UTC))
+            await SQLAlchemyResourceRepository(session).mark_for_deletion(
+                resource, "pr_closed", None, datetime.now(UTC)
+            )
         # Cleanup completes only after the database worker confirms physical deletion.
         raise ApplicationDeliveryFailure("resource_cleanup_pending")

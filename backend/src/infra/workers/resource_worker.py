@@ -8,12 +8,12 @@ from datetime import UTC, datetime
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from developer_platform.application.workers.resource_operations.handler import ResourceWorkerHandler
-from developer_platform.infra.credentials import FernetResourceCredentialCipher
-from developer_platform.infra.docker_provider import DockerPostgresProvider
 from developer_platform.infra.persistence.worker_queue import (
     PostgresResourceEffectGuard,
     SqlAlchemyProvisioningQueue,
 )
+from developer_platform.infra.providers.docker_postgres import DockerPostgresProvider
+from developer_platform.infra.security.credentials import FernetResourceCredentialCipher
 from infra.composition.schema import registered_metadata
 from shared.infra.persistence.database import create_async_database_engine
 from shared.infra.readiness import SqlAlchemyReadinessProbe

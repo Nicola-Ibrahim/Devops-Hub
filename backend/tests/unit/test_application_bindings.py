@@ -13,12 +13,12 @@ from developer_platform.application.resource_lifecycle.ports import DatabaseCred
 from psycopg.conninfo import conninfo_to_dict
 from sqlalchemy import Select
 
-from developer_platform.infra.application_runtime import managed_resource_container_name
 from developer_platform.infra.persistence.application_bindings import (
     SQLAlchemyApplicationDatabaseBindings,
 )
 from developer_platform.infra.persistence.delivery import ApplicationRow
 from developer_platform.infra.persistence.models import Resource, ResourceSecret
+from developer_platform.infra.providers.application_runtime import managed_resource_container_name
 
 
 class FakeSession:

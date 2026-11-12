@@ -11,9 +11,9 @@ from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.shared.errors import PlatformRequestError
 from identity.application.authenticate_api_token.handler import AuthenticateApiTokenHandler
 from identity.application.authenticate_api_token.query import AuthenticateApiTokenQuery
-from identity.infra.browser_operations import authenticate_browser_operation
+from identity.infra.hosts.identity_sessions import authenticate_browser_operation
 from identity.infra.persistence.store import SQLAlchemyApiTokenRepository
-from identity.infra.tokens import PepperedTokenHasher
+from identity.infra.security.tokens import PepperedTokenHasher
 from shared.infra.settings import Settings
 
 

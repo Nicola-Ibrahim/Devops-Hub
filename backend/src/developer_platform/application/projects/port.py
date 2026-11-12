@@ -6,6 +6,8 @@ from developer_platform.application.projects.result import ProjectRegistrationDe
 
 
 class ProjectRegistrationRepository(Protocol):
+    async def find_project(self, project_id: UUID) -> ProjectRegistrationDetails | None: ...
+
     async def register_project(
         self, command: RegisterProjectCommand, project_id: UUID, team_id: UUID
     ) -> ProjectRegistrationDetails: ...

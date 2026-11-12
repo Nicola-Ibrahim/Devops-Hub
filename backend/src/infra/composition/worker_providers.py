@@ -4,13 +4,11 @@ from dishka import Provider, Scope, provide
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from developer_platform.application.workload_delivery.shared.ports import ResourceProvisioner
-from developer_platform.infra.delivery_adapters import (
-    DockerApplicationAdapter,
-    FilesystemTemplateCatalog,
-    GitHubRepositoryAdapter,
-    StaticApprovedImageCatalog,
-)
 from developer_platform.infra.persistence.worker_queue import PostgresResourceEffectGuard
+from developer_platform.infra.providers.docker_application import DockerApplicationAdapter
+from developer_platform.infra.providers.github import GitHubRepositoryAdapter
+from developer_platform.infra.security.approval import StaticApprovedImageCatalog
+from developer_platform.infra.templates.catalog import FilesystemTemplateCatalog
 from infra.workers.application_host import ApplicationDeliveryHost
 from shared.infra.clock import Clock
 

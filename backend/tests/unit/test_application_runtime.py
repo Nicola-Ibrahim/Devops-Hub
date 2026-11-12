@@ -13,11 +13,12 @@ from developer_platform.application.application_delivery.shared.ports import (
 )
 from psycopg.conninfo import conninfo_to_dict
 
-from developer_platform.infra.application_runtime import (
+from developer_platform.application.workload_delivery.shared.database_binding import (
     ApplicationDatabaseBinding,
-    DockerApplicationRuntime,
 )
-from developer_platform.infra.delivery_adapters import DockerApplicationAdapter
+from developer_platform.infra.providers.docker_application import DockerApplicationAdapter
+
+#
 
 
 class FakeNotFound(Exception):
@@ -214,7 +215,7 @@ def test_database_dsn_is_private_and_archive_uses_read_only_file_permissions() -
     )
     assert "password" not in repr(binding)
     assert conninfo_to_dict(binding.dsn)["host"] == "db"
-    archive = tarfile.open(fileobj=io.BytesIO(DockerApplicationRuntime._archive(binding.dsn)))
+    archive = tarfile.open(fileobj=io.BytesIO(DockerApplicationAdapter._archive(binding.dsn)))
     entry = archive.getmember("database-url")
     assert entry.mode & 0o777 == 0o400
     assert entry.uid == entry.gid == 10001
@@ -242,16 +243,34 @@ def test_deploy_mounts_database_url_file_read_only_and_joins_only_owned_database
         db_name,
         "postgresql://user:secret@db:5432/app",
     )
-    runtime = DockerApplicationRuntime("unix:///var/run/docker.sock", "postgres:16", 1)
+
+    class BindingResolver:
+        async def resolve(self, requested_project, requested_application, requested_resource):
+            assert (requested_project, requested_application, requested_resource) == (
+                project_id,
+                app_id,
+                resource_id,
+            )
+            return binding
+
+    runtime = DockerApplicationAdapter(
+        frozenset({"approved@sha256:" + "a" * 64}),
+        "unix:///var/run/docker.sock",
+        "postgres:16",
+        install_id,
+        BindingResolver(),  # type: ignore[arg-type]
+        1,
+    )
 
     asyncio.run(
         runtime.deploy(
             project_id=project_id,
             application_id=app_id,
             deployment_id=deployment_id,
-            installation_id=install_id,
             image_digest="approved@sha256:" + "a" * 64,
-            binding=binding,
+            target_id="local",
+            resource_id=resource_id,
+            idempotency_key="deploy",
         )
     )
 
@@ -273,7 +292,7 @@ def test_deploy_mounts_database_url_file_read_only_and_joins_only_owned_database
         runtime.remove(
             project_id=project_id,
             application_id=app_id,
-            installation_id=install_id,
+            idempotency_key="remove",
         )
     )
     assert app_container.removed
@@ -299,14 +318,16 @@ def test_remove_validates_every_candidate_before_removing_anything(
     client = FakeClient(FakeObject("db", {}, "db-id"))
     client.containers_by_name.update({owned.name: owned, conflict.name: conflict})
     _install_docker(monkeypatch, client)
-    runtime = DockerApplicationRuntime("unix:///var/run/docker.sock", "postgres:16")
+    runtime = DockerApplicationAdapter(
+        frozenset(), "unix:///var/run/docker.sock", "postgres:16", installation_id, None
+    )
 
     with pytest.raises(ApplicationDeliveryFailure, match="container_ownership_conflict"):
         asyncio.run(
             runtime.remove(
                 project_id=project_id,
                 application_id=application_id,
-                installation_id=installation_id,
+                idempotency_key="remove",
             )
         )
     assert not owned.removed
@@ -340,18 +361,18 @@ def test_application_adapter_resolves_database_binding_and_preserves_deployer_co
             )
             return binding
 
-    class Runtime:
-        async def deploy(self, **kwargs):
-            assert kwargs["binding"] is binding
-            assert kwargs["installation_id"] == installation_id
-            return "http://127.0.0.1:49123", "deployment-container"
-
     adapter = DockerApplicationAdapter(
         frozenset({"approved@sha256:" + "a" * 64}),
-        Runtime(),  # type: ignore[arg-type]
+        "unix:///var/run/docker.sock",
+        "postgres:16",
         installation_id,
         Resolver(),  # type: ignore[arg-type]
     )
+
+    def fake_deploy(*args):
+        return ("http://127.0.0.1:49123", "deployment-container")
+
+    adapter._deploy_runtime = fake_deploy  # type: ignore[method-assign]
     url, reference = asyncio.run(
         adapter.deploy(
             project_id=project_id,
@@ -370,7 +391,8 @@ def test_application_adapter_resolves_database_binding_and_preserves_deployer_co
 def test_application_adapter_fails_closed_without_database_binding_resolver() -> None:
     adapter = DockerApplicationAdapter(
         frozenset({"approved@sha256:" + "a" * 64}),
-        DockerApplicationRuntime("unix:///var/run/docker.sock", "postgres:16"),
+        "unix:///var/run/docker.sock",
+        "postgres:16",
         uuid4(),
         None,
     )
@@ -392,7 +414,9 @@ def test_cancelled_docker_thread_is_drained_before_cancellation_returns() -> Non
     started = asyncio.Event()
 
     async def run() -> None:
-        runtime = DockerApplicationRuntime("unix:///var/run/docker.sock", "postgres:16")
+        runtime = DockerApplicationAdapter(
+            frozenset(), "unix:///var/run/docker.sock", "postgres:16", uuid4(), None
+        )
 
         started_loop = asyncio.get_running_loop()
         import threading

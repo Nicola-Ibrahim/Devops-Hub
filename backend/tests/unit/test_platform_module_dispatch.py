@@ -4,6 +4,22 @@ import asyncio
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from developer_platform.application.database_lifecycle.read_activity.handler import (
+    ListResourceActivityQueryHandler,
+)
+from developer_platform.application.database_lifecycle.read_connection.handler import (
+    GetDatabaseConnectionQueryHandler,
+)
+from developer_platform.application.database_lifecycle.renew_lease.handler import (
+    RenewDatabaseLeaseHandler,
+)
+from developer_platform.application.database_provisioning.read_resources.handler import (
+    ReadResourcesHandler,
+)
+from developer_platform.application.database_provisioning.submit_database_request.handler import (
+    RequestTemporaryDatabaseHandler,
+)
+from developer_platform.application.shared.resource_repository import ResourceRepository
 from developer_platform.authorization import ACTION_PERMISSIONS
 from developer_platform.infra.composition.module import PLATFORM_HANDLER_REGISTRY
 from infra.composition.factory import create_container
@@ -27,6 +43,15 @@ def test_every_platform_handler_resolves_in_operation_scope_without_database_io(
         container = create_container(config)
         try:
             async with container() as scope:
+                repository = await scope.get(ResourceRepository)
+                for handler in (
+                    RequestTemporaryDatabaseHandler,
+                    RenewDatabaseLeaseHandler,
+                    GetDatabaseConnectionQueryHandler,
+                    ListResourceActivityQueryHandler,
+                    ReadResourcesHandler,
+                ):
+                    assert (await scope.get(handler)).repository is repository
                 handlers = (
                     *PLATFORM_HANDLER_REGISTRY.commands.values(),
                     *PLATFORM_HANDLER_REGISTRY.queries.values(),

@@ -5,19 +5,25 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
-from developer_platform.application.project_registration.command import RegisterProjectCommand
-from developer_platform.application.resource_requests.submit_database_request.command import (
-    DatabaseRequest,
-)
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from test_foundation_postgres import async_engine_for
 
+from developer_platform.application.database_provisioning.submit_database_request.command import (
+    DatabaseRequest,
+)
+from developer_platform.application.projects.command import RegisterProjectCommand
 from developer_platform.application.resource_catalog.models import PostgresOption, ResourceSize
 from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.shared.errors import PlatformRequestError
-from developer_platform.infra.persistence.ledger import SQLAlchemyPlatformLedgerRepository
+from developer_platform.domain.aggregates.resource_lifecycle import ResourceLifecycle
+from developer_platform.domain.value_objects.idempotency_key import IdempotencyKey
+from developer_platform.domain.value_objects.resource_name import ResourceName
+from developer_platform.domain.value_objects.resource_spec import ResourceSpec
+from developer_platform.infra.persistence.ledger_projects import (
+    SQLAlchemyProjectRegistrationRepository,
+)
 from developer_platform.infra.persistence.models import (
     IdempotencyRecord,
     Operation,
@@ -27,6 +33,7 @@ from developer_platform.infra.persistence.models import (
     Resource,
     ResourceActivityRow,
 )
+from developer_platform.infra.persistence.resource_repository import SQLAlchemyResourceRepository
 from identity.infra.persistence.models import InternalUserRow, ProjectRow, TeamRow
 
 pytestmark = pytest.mark.postgres
@@ -65,7 +72,7 @@ def option(*, cpu=500, memory=512 * 1024 * 1024, storage=1024 * 1024 * 1024):
 
 async def register(database, command, project_id, team_id):
     async with AsyncSession(database) as session, session.begin():
-        return await SQLAlchemyPlatformLedgerRepository(session).register_project(
+        return await SQLAlchemyProjectRegistrationRepository(session).register_project(
             command, project_id, team_id
         )
 
@@ -74,17 +81,61 @@ async def request(
     database, user_id, project_id, environment_id, *, key="same-key", digest="a" * 64
 ):
     now = datetime.now(UTC)
+    selected = option()
+    request = command_for(project_id, environment_id)
+    lifecycle = ResourceLifecycle.request(
+        resource_id=uuid4(),
+        project_id=project_id,
+        environment_id=environment_id,
+        owner_id=user_id,
+        installation_id=uuid4(),
+        name=ResourceName(request.display_name),
+        specification=ResourceSpec(
+            request.template_id,
+            request.version,
+            request.target_id,
+            selected.size.id,
+            selected.size.cpu_millis,
+            selected.size.memory_bytes,
+            selected.size.storage_bytes,
+            selected.max_lifetime_seconds,
+            selected.size.storage_enforcement,
+        ),
+        now=now,
+        ttl_seconds=request.ttl_seconds,
+        max_lifetime_seconds=selected.max_lifetime_seconds,
+    )
     async with AsyncSession(database) as session, session.begin():
-        return await SQLAlchemyPlatformLedgerRepository(session).accept_database_request(
-            access(user_id, project_id),
-            command_for(project_id, environment_id),
-            option(),
-            key,
-            digest,
-            now,
-            now + timedelta(hours=1),
-            uuid4(),
+        return await SQLAlchemyResourceRepository(session).accept_database_request(
+            access(user_id, project_id), lifecycle, IdempotencyKey(key), digest
         )
+
+
+def lifecycle_for(user_id, project_id, environment_id, now, ttl_seconds=3600):
+    selected = option()
+    request = command_for(project_id, environment_id)
+    return ResourceLifecycle.request(
+        resource_id=uuid4(),
+        project_id=project_id,
+        environment_id=environment_id,
+        owner_id=user_id,
+        installation_id=uuid4(),
+        name=ResourceName(request.display_name),
+        specification=ResourceSpec(
+            request.template_id,
+            request.version,
+            request.target_id,
+            selected.size.id,
+            selected.size.cpu_millis,
+            selected.size.memory_bytes,
+            selected.size.storage_bytes,
+            selected.max_lifetime_seconds,
+            selected.size.storage_enforcement,
+        ),
+        now=now,
+        ttl_seconds=ttl_seconds,
+        max_lifetime_seconds=selected.max_lifetime_seconds,
+    )
 
 
 def test_registration_is_idempotent_configurable_and_creates_only_project_quota(postgres_engine):
@@ -187,9 +238,9 @@ def test_duplicate_requests_replay_and_concurrent_duplicates_allocate_once(postg
 
         async def replay_after_acceptance():
             async with AsyncSession(database) as session:
-                repository = SQLAlchemyPlatformLedgerRepository(session)
+                repository = SQLAlchemyResourceRepository(session)
                 return await repository.replay_request(
-                    access(user_id, project_id), "same-key", "a" * 64
+                    access(user_id, project_id), IdempotencyKey("same-key"), "a" * 64
                 )
 
         assert asyncio.run(replay_after_acceptance()) == first
@@ -268,7 +319,7 @@ def test_quota_boundary_counts_unreleased_reservations_and_scopes_reads(postgres
 
         async def assert_project_scoping():
             async with AsyncSession(database) as session:
-                repository = SQLAlchemyPlatformLedgerRepository(session)
+                repository = SQLAlchemyResourceRepository(session)
                 assert (
                     await repository.find_resource(other_project_id, accepted.resource_id) is None
                 )
@@ -458,17 +509,13 @@ def test_lease_starts_after_quota_lock_wait(postgres_engine):
                             await request_session.execute(
                                 text(f"SET application_name = '{app_name}'")
                             )
-                            return await SQLAlchemyPlatformLedgerRepository(
+                            return await SQLAlchemyResourceRepository(
                                 request_session
                             ).accept_database_request(
                                 access(user_id, project_id),
-                                command_for(project_id, environment_id),
-                                option(),
-                                "lease-after-lock",
+                                lifecycle_for(user_id, project_id, environment_id, accepted_at, 1),
+                                IdempotencyKey("lease-after-lock"),
                                 "e" * 64,
-                                accepted_at,
-                                old_expiry,
-                                uuid4(),
                             )
 
                     request_task = asyncio.create_task(accept_blocked_request())
@@ -534,15 +581,16 @@ def test_acceptance_rolls_back_all_ledger_rows_with_outer_transaction(postgres_e
         async def rolled_back():
             async with AsyncSession(database) as session:
                 async with session.begin():
-                    await SQLAlchemyPlatformLedgerRepository(session).accept_database_request(
+                    await SQLAlchemyResourceRepository(session).accept_database_request(
                         access(user_id, project_id),
-                        command_for(project_id, registration.environments[0].id),
-                        option(),
-                        "rolled-back",
+                        lifecycle_for(
+                            user_id,
+                            project_id,
+                            registration.environments[0].id,
+                            datetime.now(UTC),
+                        ),
+                        IdempotencyKey("rolled-back"),
                         "c" * 64,
-                        datetime.now(UTC),
-                        datetime.now(UTC) + timedelta(hours=1),
-                        uuid4(),
                     )
                     raise RuntimeError("force caller rollback")
 
@@ -586,15 +634,11 @@ def test_request_requires_registered_environment_and_target_quota(postgres_engin
 
             async def invalid_environment():
                 async with AsyncSession(database) as session, session.begin():
-                    await SQLAlchemyPlatformLedgerRepository(session).accept_database_request(
+                    await SQLAlchemyResourceRepository(session).accept_database_request(
                         access(user_id, project_id),
-                        command_for(project_id, uuid4()),
-                        option(),
-                        "invalid-env",
+                        lifecycle_for(user_id, project_id, uuid4(), now),
+                        IdempotencyKey("invalid-env"),
                         "d" * 64,
-                        now,
-                        now + timedelta(hours=1),
-                        uuid4(),
                     )
 
             asyncio.run(invalid_environment())

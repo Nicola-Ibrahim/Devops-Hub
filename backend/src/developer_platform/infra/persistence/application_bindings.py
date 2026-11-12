@@ -14,10 +14,12 @@ from developer_platform.application.workload_delivery.shared.database_binding im
 from developer_platform.application.workload_delivery.shared.ports import (
     ApplicationDeliveryFailure,
 )
-from developer_platform.infra.application_runtime import managed_resource_container_name
-from developer_platform.infra.credentials import FernetResourceCredentialCipher
 from developer_platform.infra.persistence.delivery import ApplicationRow
 from developer_platform.infra.persistence.models import Resource, ResourceSecret
+from developer_platform.infra.providers.application_runtime import (
+    managed_resource_container_name,
+)
+from developer_platform.infra.security.credentials import FernetResourceCredentialCipher
 
 
 class SQLAlchemyApplicationDatabaseBindings(ApplicationDatabaseBindingResolver):

@@ -19,8 +19,6 @@ from test_foundation_postgres import (
     issue,
 )
 
-from developer_platform.infra.credentials import FernetResourceCredentialCipher
-from developer_platform.infra.docker_provider import DockerPostgresProvider
 from developer_platform.infra.persistence.models import (
     Operation,
     QuotaBudget,
@@ -32,6 +30,8 @@ from developer_platform.infra.persistence.worker_queue import (
     PostgresResourceEffectGuard,
     SqlAlchemyProvisioningQueue,
 )
+from developer_platform.infra.providers.docker_postgres import DockerPostgresProvider
+from developer_platform.infra.security.credentials import FernetResourceCredentialCipher
 from shared.infra.settings import Settings
 
 pytestmark = pytest.mark.postgres

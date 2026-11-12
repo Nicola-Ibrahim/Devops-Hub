@@ -49,7 +49,7 @@ from developer_platform.application.resource_catalog.query import ReadCatalog
 from developer_platform.application.shared.dto import AccessContext
 from developer_platform.authorization import ALL_SCOPES, authorize_platform_action
 from identity.application.authenticate_api_token.query import AuthenticateApiTokenQuery
-from identity.application.browser_sessions.query import AuthenticateBrowserSessionQuery
+from identity.application.authenticate_session.query import AuthenticateSessionQuery
 from identity.application.module import IdentityModule
 
 router = APIRouter()
@@ -157,7 +157,7 @@ async def projects(
     module: FromDishka[DeveloperPlatformModule],
 ) -> list[ProjectRegistrationView]:
     if isinstance(credentials, BrowserRequestCredentials):
-        principal = await identity.query(AuthenticateBrowserSessionQuery(credentials.session_token))
+        principal = await identity.query(AuthenticateSessionQuery(credentials.session_token))
         accesses = tuple(
             AccessContext(
                 principal.user_id,

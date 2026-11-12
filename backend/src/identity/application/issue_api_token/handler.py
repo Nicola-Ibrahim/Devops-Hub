@@ -5,9 +5,9 @@ from datetime import datetime, timedelta
 from identity.application.issue_api_token.command import IssueApiTokenCommand
 from identity.application.issue_api_token.result import PreparedApiToken
 from identity.application.shared.ports import TokenGenerator, TokenHasher
-from identity.domain.api_tokens import ApiTokenRepository
 from identity.domain.credentials import require_active_project_member
 from identity.domain.errors import IdentityValidationError
+from identity.domain.interfaces.api_token_repository import ApiTokenRepository
 from identity.domain.records import ApiTokenAuditEvent
 from identity.domain.value_objects.token_scopes import TokenScopes
 

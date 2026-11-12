@@ -1,0 +1,1 @@
+"""Change password use case."""

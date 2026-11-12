@@ -54,8 +54,10 @@ Use this shape when the concepts exist; do not create empty DDD wrappers:
       port.py                    only for use-case-specific external capabilities
     <capability>/<use_case>/     group only several closely related actions
   infra/
-    persistence/       ORM mappings and SQL repository implementations
-    <adapter>.py        provider, security or external-system adapters
+    persistence/       ORM mappings, aggregate/capability stores and read projections
+    providers/         Docker, GitHub or other external-system adapters when present
+    security/          hashing, signatures and credential adapters when present
+    templates/         filesystem template adapters when present
     composition/       context DI providers and explicit module dispatch
 ```
 
@@ -65,6 +67,12 @@ changing state. Keep a command/query beside its handler; do not add a capability
 wrapper around a single action. Use `shared/` only for contracts genuinely shared
 by several use cases. Prefer names such as `renew_lease` and `issue_api_token`
 over generic `service`, `manager` or `utils`.
+
+A repository persists one aggregate root or an explicitly named transactional
+capability; it is not required for every entity or table. Keep read projections,
+worker queues and external provider effects as separate ports. Multiple adapters
+may share one host-owned SQL session when an operation must be atomic. Do not add
+empty infrastructure folders or adapters for unimplemented targets.
 
 ## Application and API contracts
 

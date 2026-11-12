@@ -42,6 +42,10 @@ from developer_platform.application.workload_delivery.shared.models import (
     DeploymentDetails,
     RegisteredRepository,
 )
+from developer_platform.domain.aggregates.application_delivery import ApplicationDelivery
+from developer_platform.domain.entities.application import Application, DeliveryStep
+from developer_platform.domain.errors import DomainError
+from developer_platform.domain.interfaces.application_repository import ApplicationRepository
 from developer_platform.infra.persistence.models import (
     ProjectEnvironmentRow,
     ProjectRegistrationRow,
@@ -208,9 +212,89 @@ def _deployment(row: ApplicationDeploymentRow) -> DeploymentDetails:
     )
 
 
-class SQLAlchemyApplicationDeliveryRepository:
+def _domain_application(row: ApplicationRow) -> Application:
+    return Application(
+        id=row.id,
+        project_id=row.project_id,
+        environment_id=row.environment_id,
+        owner_id=row.owner_id,
+        name=row.name,
+        template_id=row.template_id,
+        template_version=row.template_version,
+        status=row.status,  # type: ignore[arg-type]
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+        resource_id=row.resource_id,
+    )
+
+
+def _domain_step(row: ApplicationDeliveryStepRow) -> DeliveryStep:
+    return DeliveryStep(
+        id=row.id,
+        application_id=row.application_id,
+        kind=row.kind,  # type: ignore[arg-type]
+        status=row.status,  # type: ignore[arg-type]
+        attempts=row.attempts,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+        error_code=row.error_code,
+    )
+
+
+class SQLAlchemyApplicationDeliveryRepository(ApplicationRepository):
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
+
+    async def load_for_update(
+        self, project_id: UUID, application_id: UUID
+    ) -> ApplicationDelivery | None:
+        application = await self.session.scalar(
+            select(ApplicationRow)
+            .where(
+                ApplicationRow.id == application_id,
+                ApplicationRow.project_id == project_id,
+            )
+            .with_for_update()
+        )
+        if application is None:
+            return None
+        steps = await self.session.scalars(
+            select(ApplicationDeliveryStepRow)
+            .where(ApplicationDeliveryStepRow.application_id == application_id)
+            .order_by(ApplicationDeliveryStepRow.created_at, ApplicationDeliveryStepRow.id)
+            .with_for_update()
+        )
+        return ApplicationDelivery(
+            _domain_application(application), tuple(_domain_step(step) for step in steps)
+        )
+
+    async def save(self, delivery: ApplicationDelivery) -> None:
+        application = await self.session.scalar(
+            select(ApplicationRow)
+            .where(ApplicationRow.id == delivery.application.id)
+            .with_for_update()
+        )
+        if application is None:
+            raise PlatformRequestError("application_not_found", "Application was not found", 404)
+        application.status = delivery.application.status
+        application.updated_at = delivery.application.updated_at
+        for step in delivery.steps:
+            row = await self.session.scalar(
+                select(ApplicationDeliveryStepRow)
+                .where(
+                    ApplicationDeliveryStepRow.id == step.id,
+                    ApplicationDeliveryStepRow.application_id == application.id,
+                )
+                .with_for_update()
+            )
+            if row is None:
+                raise PlatformRequestError(
+                    "delivery_step_not_found", "Delivery step was not found", 404
+                )
+            row.status = step.status
+            row.attempts = step.attempts
+            row.error_code = step.error_code
+            row.updated_at = step.updated_at
 
     async def create_application(
         self,
@@ -477,14 +561,24 @@ class SQLAlchemyApplicationDeliveryRepository:
             raise PlatformRequestError(
                 "delivery_step_running", "Delivery step is still running", 409
             )
-        row.status = "pending"
-        row.error_code = None
+        try:
+            updated_delivery = ApplicationDelivery(
+                _domain_application(app), (_domain_step(row),)
+            ).retry(row.id, now)
+        except DomainError as exc:
+            raise PlatformRequestError(
+                "application_closed", "Application cleanup is in progress or complete", 409
+            ) from exc
+        updated_application = updated_delivery.application
+        updated_step = updated_delivery.steps[0]
+        row.status = updated_step.status
+        row.error_code = updated_step.error_code
         row.next_attempt_at = now
         row.claim_token = None
         row.claim_expires_at = None
-        row.updated_at = now
-        app.status = "deleting" if row.kind == "preview_cleanup" else "pending"
-        app.updated_at = now
+        row.updated_at = updated_step.updated_at
+        app.status = updated_application.status
+        app.updated_at = updated_application.updated_at
         if row.kind == "deployment":
             deployment_id = row.request_payload.get("deployment_id")
             if deployment_id:

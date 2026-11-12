@@ -3,22 +3,23 @@ from uuid import uuid4
 
 import pytest
 
-from identity.domain.aggregates.identity_account import IdentityAccount
-from identity.domain.entities.internal_user import InternalUser
+from identity.domain.aggregates.project_membership import ProjectMembership
+from identity.domain.aggregates.session import Session
+from identity.domain.aggregates.user import User
 from identity.domain.errors import AuthenticationRejected
 from identity.domain.services.token_authentication import authenticate_token
 from identity.domain.value_objects.credential_version import CredentialVersion
+from identity.domain.value_objects.project_role import ProjectRole
+from identity.domain.value_objects.session_expiry import SessionExpiry
 from identity.domain.value_objects.user_name import UserName
 
 
 def test_identity_account_preserves_active_and_credential_version_fence() -> None:
-    account = IdentityAccount.from_user(
-        InternalUser(
-            id=uuid4(),
-            user_name=UserName.parse(" Developer "),
-            credential_version=CredentialVersion(3),
-            active=True,
-        )
+    account = User(
+        id=uuid4(),
+        user_name=UserName.parse(" Developer "),
+        credential_version=CredentialVersion(3),
+        active=True,
     )
 
     assert account.accepts_credentials(password_matches=True)
@@ -49,6 +50,34 @@ def test_token_authentication_returns_identity_owned_result() -> None:
         token_id,
     )
     assert identity.scopes == frozenset({"resource:read"})
+
+
+def test_session_rejects_expiry_revocation_and_credential_changes() -> None:
+    from dataclasses import replace
+
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    session = Session(uuid4(), uuid4(), now, now, SessionExpiry.from_login(now), None, 3)
+    assert session.accepts(now=now, user_active=True, credential_version=3)
+    assert not session.accepts(now=now, user_active=False, credential_version=3)
+    assert not session.accepts(now=now, user_active=True, credential_version=4)
+    assert not session.accepts(
+        now=now + timedelta(minutes=30), user_active=True, credential_version=3
+    )
+    assert not replace(session, revoked_at=now).accepts(
+        now=now, user_active=True, credential_version=3
+    )
+
+
+def test_membership_role_change_preserves_identity_and_validates_role() -> None:
+    membership = ProjectMembership(uuid4(), uuid4(), ProjectRole.parse("developer"))
+    updated = membership.change_role("admin")
+    assert (updated.user_id, updated.project_id) == (membership.user_id, membership.project_id)
+    assert updated.role.value == "admin"
+    assert membership.role.value == "developer"
+    from identity.domain.errors import IdentityValidationError
+
+    with pytest.raises(IdentityValidationError):
+        membership.change_role("owner")
 
 
 @pytest.mark.parametrize(

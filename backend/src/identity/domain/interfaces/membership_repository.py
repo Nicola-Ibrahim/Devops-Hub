@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
-from identity.domain.browser_identity import BrowserProjectMember
+from identity.domain.records import ProjectMemberDetails
 
 
 class ProjectMembershipRepository(Protocol):
@@ -20,6 +20,6 @@ class ProjectMembershipRepository(Protocol):
 
     async def list_project_members(
         self, *, actor_id: UUID, project_id: UUID
-    ) -> tuple[BrowserProjectMember, ...]: ...
+    ) -> tuple[ProjectMemberDetails, ...]: ...
 
     async def lock_project_membership_admin_scope(self, project_id: UUID) -> bool: ...

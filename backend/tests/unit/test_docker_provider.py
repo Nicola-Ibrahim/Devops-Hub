@@ -15,8 +15,8 @@ from developer_platform.application.resource_lifecycle.ports import (
     ProvisioningJob,
 )
 
-import developer_platform.infra.docker_provider as docker_provider
-from developer_platform.infra.docker_provider import DockerPostgresProvider
+import developer_platform.infra.providers.docker_postgres as docker_provider
+from developer_platform.infra.providers.docker_postgres import DockerPostgresProvider
 
 
 class FakeImage:

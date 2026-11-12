@@ -1,14 +1,14 @@
 from developer_platform.application.database_lifecycle.read_activity.query import (
     ReadResourceActivity,
 )
-from developer_platform.domain.resource_lifecycle_repository import (
+from developer_platform.application.shared.resource_repository import (
     ResourceActivity,
-    ResourceLifecycleRepository,
+    ResourceRepository,
 )
 
 
 class ListResourceActivityQueryHandler:
-    def __init__(self, repository: ResourceLifecycleRepository) -> None:
+    def __init__(self, repository: ResourceRepository) -> None:
         self.repository = repository
 
     async def execute(self, query: ReadResourceActivity) -> tuple[ResourceActivity, ...]:

@@ -18,7 +18,6 @@ from developer_platform.application.database_lifecycle.ports import (
     ProvisioningJob,
     ResourceCredentialCipher,
 )
-from developer_platform.infra.persistence.lifecycle import mark_for_deletion
 from developer_platform.infra.persistence.models import (
     Operation,
     ProviderOrphanRow,
@@ -26,6 +25,7 @@ from developer_platform.infra.persistence.models import (
     Resource,
     ResourceSecret,
 )
+from developer_platform.infra.persistence.resource_repository import SQLAlchemyResourceRepository
 
 
 class SqlAlchemyProvisioningQueue:
@@ -80,8 +80,7 @@ class SqlAlchemyProvisioningQueue:
                 operation.status = "cancelled"
                 if operation.attempts == 0:
                     operation.provider_outcome_uncertain = False
-                await mark_for_deletion(
-                    session,
+                await SQLAlchemyResourceRepository(session).mark_for_deletion(
                     resource,
                     "expired" if resource.expires_at <= now else "cancelled",
                     None,
@@ -187,8 +186,7 @@ class SqlAlchemyProvisioningQueue:
                 or resource.generation != job.generation
             ):
                 operation.status = "cancelled"
-                await mark_for_deletion(
-                    session,
+                await SQLAlchemyResourceRepository(session).mark_for_deletion(
                     resource,
                     "expired" if resource.expires_at <= now else "cancelled",
                     None,
@@ -211,8 +209,7 @@ class SqlAlchemyProvisioningQueue:
                 or resource.generation != job.generation
             ):
                 operation.status = "cancelled"
-                await mark_for_deletion(
-                    session,
+                await SQLAlchemyResourceRepository(session).mark_for_deletion(
                     resource,
                     "expired" if resource.expires_at <= now else "cancelled",
                     None,
@@ -312,7 +309,9 @@ class SqlAlchemyProvisioningQueue:
                 operation.completed_at = now
                 resource.status = "failed"
                 resource.failure_code = code
-                await mark_for_deletion(session, resource, "provision_failed", None, now)
+                await SQLAlchemyResourceRepository(session).mark_for_deletion(
+                    resource, "provision_failed", None, now
+                )
 
     async def sweep(self) -> None:
         async with self.sessions() as session, session.begin():
@@ -330,7 +329,9 @@ class SqlAlchemyProvisioningQueue:
                 )
             )
             for resource in resources:
-                await mark_for_deletion(session, resource, "expired", None, now)
+                await SQLAlchemyResourceRepository(session).mark_for_deletion(
+                    resource, "expired", None, now
+                )
 
     async def reconcile(self, resource_ids: tuple[UUID, ...]) -> None:
         async with self.sessions() as session, session.begin():
@@ -370,7 +371,9 @@ class SqlAlchemyProvisioningQueue:
                 resource = known[resource_id]
                 if resource.status == "deleted":
                     resource.status = "deleting"
-                    operation = await mark_for_deletion(session, resource, "requested", None, now)
+                    operation = await SQLAlchemyResourceRepository(session).mark_for_deletion(
+                        resource, "requested", None, now
+                    )
                     operation.status = "pending"
                     operation.next_attempt_at = now
             for resource in known.values():

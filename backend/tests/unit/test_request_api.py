@@ -34,11 +34,11 @@ from developer_platform.application.projects.result import (
 from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.shared.errors import PlatformRequestError
 from identity.application.authenticate_api_token.query import AuthenticateApiTokenQuery
-from identity.application.browser_sessions.query import AuthenticateBrowserSessionQuery
+from identity.application.authenticate_session.query import AuthenticateSessionQuery
 from identity.application.module import IdentityModule
 from identity.contracts import AuthenticatedPrincipal
-from identity.domain.browser_identity import BrowserMembership, BrowserPrincipal
 from identity.domain.errors import AuthenticationRejected
+from identity.domain.records import MembershipDetails, SessionPrincipal
 from infra.http.app import create_app
 
 PROJECT_ID = UUID("11111111-1111-4111-8111-111111111111")
@@ -170,9 +170,9 @@ class FakePlatformQueries:
 
 class FakeIdentityModule:
     async def query(self, query):
-        if isinstance(query, AuthenticateBrowserSessionQuery):
+        if isinstance(query, AuthenticateSessionQuery):
             assert query.project_id is None
-            return BrowserPrincipal(
+            return SessionPrincipal(
                 OWNER_ID,
                 "demo-user",
                 uuid4(),
@@ -181,8 +181,8 @@ class FakeIdentityModule:
                 None,
                 (),
                 (
-                    BrowserMembership(PROJECT_ID, "first", "developer"),
-                    BrowserMembership(ENVIRONMENT_ID, "second", "admin"),
+                    MembershipDetails(PROJECT_ID, "first", "developer"),
+                    MembershipDetails(ENVIRONMENT_ID, "second", "admin"),
                 ),
                 "csrf",
             )

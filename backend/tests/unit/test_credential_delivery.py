@@ -4,7 +4,7 @@ import stat
 import pytest
 
 from identity.application.shared.errors import CredentialDeliveryError
-from identity.infra.credential_file import PrivateCredentialFile
+from identity.infra.security.credential_file import PrivateCredentialFile
 
 
 def test_exclusive_private_output(tmp_path):

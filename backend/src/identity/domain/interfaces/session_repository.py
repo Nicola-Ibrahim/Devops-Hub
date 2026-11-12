@@ -4,13 +4,14 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
-from identity.domain.browser_identity import BrowserPrincipal, BrowserSession
+from identity.domain.aggregates.session import Session
+from identity.domain.records import SessionPrincipal
 
 
-class BrowserSessionRepository(Protocol):
+class SessionRepository(Protocol):
     async def authenticate_session(
         self, *, token_digest: str, project_id: UUID | None, now: datetime
-    ) -> tuple[BrowserPrincipal, str] | None: ...
+    ) -> tuple[SessionPrincipal, str] | None: ...
 
     async def authorize_browser_operation(
         self,
@@ -19,13 +20,13 @@ class BrowserSessionRepository(Protocol):
         now: datetime,
         *,
         lock_for_mutation: bool = False,
-    ) -> BrowserPrincipal | None: ...
+    ) -> SessionPrincipal | None: ...
 
     async def rotate_csrf(self, token_digest: str, csrf_digest: str, now: datetime) -> bool: ...
 
     async def select_project(
         self, *, token_digest: str, project_id: UUID, now: datetime
-    ) -> BrowserPrincipal | None: ...
+    ) -> SessionPrincipal | None: ...
 
     async def logout(self, token_digest: str, now: datetime) -> None: ...
 
@@ -33,7 +34,7 @@ class BrowserSessionRepository(Protocol):
 
     async def list_sessions(
         self, user_id: UUID, current_session_id: UUID, now: datetime
-    ) -> tuple[BrowserSession, ...]: ...
+    ) -> tuple[Session, ...]: ...
 
     async def revoke_session(self, user_id: UUID, session_id: UUID, now: datetime) -> bool: ...
 

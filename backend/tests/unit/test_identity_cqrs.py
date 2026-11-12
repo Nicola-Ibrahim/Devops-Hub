@@ -4,18 +4,16 @@ from uuid import uuid4
 
 import pytest
 
-from identity.application.browser_sessions.command import RefreshBrowserSessionCommand
-from identity.application.browser_sessions.handler import RefreshBrowserSessionHandler
-from identity.application.internal_users.command import CreateInternalUserCommand
-from identity.application.internal_users.handler import CreateInternalUserHandler
-from identity.application.project_memberships.command import SetProjectMembershipCommand
-from identity.application.project_memberships.handler import (
-    ListProjectMembersHandler,
-    SetProjectMembershipHandler,
-)
-from identity.application.project_memberships.query import ListProjectMembersByActorQuery
-from identity.domain.browser_identity import BrowserPrincipal
+from identity.application.authenticate_session.handler import AuthenticateSessionHandler
+from identity.application.authenticate_session.query import AuthenticateSessionQuery
+from identity.application.create_user.command import CreateUserCommand
+from identity.application.create_user.handler import CreateUserHandler
+from identity.application.list_project_members.handler import ListProjectMembersHandler
+from identity.application.list_project_members.query import ListProjectMembersByActorQuery
+from identity.application.manage_project_membership.command import SetProjectMembershipCommand
+from identity.application.manage_project_membership.handler import SetProjectMembershipHandler
 from identity.domain.errors import IdentityValidationError
+from identity.domain.records import SessionPrincipal
 
 NOW = datetime(2026, 1, 1, tzinfo=UTC)
 
@@ -36,8 +34,8 @@ def test_create_internal_user_handler_builds_normalized_domain_name() -> None:
 
     repository = Repository()
     asyncio.run(
-        CreateInternalUserHandler(repository, Passwords(), lambda: NOW).execute(
-            CreateInternalUserCommand(" Developer ", "long-enough-password")
+        CreateUserHandler(repository, Passwords(), lambda: NOW).execute(
+            CreateUserCommand(" Developer ", "long-enough-password")
         )
     )
 
@@ -78,7 +76,7 @@ def test_project_member_query_is_read_only_and_receives_authorized_actor() -> No
 
 def test_session_refresh_is_explicitly_a_command() -> None:
     user_id, session_id = uuid4(), uuid4()
-    principal = BrowserPrincipal(user_id, "dev", session_id, None, None, None, (), (), "")
+    principal = SessionPrincipal(user_id, "dev", session_id, None, None, None, (), (), "")
 
     class Repository:
         async def authenticate_session(self, **values):
@@ -87,9 +85,9 @@ def test_session_refresh_is_explicitly_a_command() -> None:
 
     repository = Repository()
     result = asyncio.run(
-        RefreshBrowserSessionHandler(
+        AuthenticateSessionHandler(
             repository, lambda: NOW, lambda value: f"digest:{value}"
-        ).execute(RefreshBrowserSessionCommand("private-session"))
+        ).execute(AuthenticateSessionQuery("private-session"))
     )
 
     assert result == principal
@@ -98,4 +96,4 @@ def test_session_refresh_is_explicitly_a_command() -> None:
         "project_id": None,
         "now": NOW,
     }
-    assert "private-session" not in repr(RefreshBrowserSessionCommand("private-session"))
+    assert "private-session" not in repr(AuthenticateSessionQuery("private-session"))

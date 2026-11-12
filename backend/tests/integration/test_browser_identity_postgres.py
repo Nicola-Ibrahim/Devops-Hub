@@ -11,9 +11,8 @@ from test_foundation_postgres import async_engine_for
 
 from identity.domain.browser_errors import BrowserAuthenticationRejected
 from identity.domain.errors import IdentityValidationError
-from identity.infra.browser_operations import BrowserIdentityService
-from identity.infra.browser_security import ScryptPasswordHasher
-from identity.infra.persistence.browser_identity import SQLAlchemyBrowserIdentityRepository
+from identity.infra.hosts.identity_sessions import BrowserIdentityService
+from identity.infra.persistence.identity_repository import SQLAlchemyIdentityRepository
 from identity.infra.persistence.models import (
     BrowserLoginThrottleRow,
     BrowserSessionRow,
@@ -22,6 +21,7 @@ from identity.infra.persistence.models import (
     ProjectMembershipRow,
     ProjectRow,
 )
+from identity.infra.security.passwords import ScryptPasswordHasher
 
 pytestmark = pytest.mark.postgres
 
@@ -229,9 +229,9 @@ def test_membership_update_and_session_authorization_share_lock_order(postgres_e
 
         async def authorize():
             async with sessions() as session, session.begin():
-                principal = await SQLAlchemyBrowserIdentityRepository(
-                    session
-                ).authorize_browser_operation(digest, project_id, datetime.now(UTC))
+                principal = await SQLAlchemyIdentityRepository(session).authorize_browser_operation(
+                    digest, project_id, datetime.now(UTC)
+                )
                 assert principal is not None
 
         async def update_membership(role: str):
@@ -267,7 +267,7 @@ def test_revocation_during_authority_lock_wait_is_revalidated(postgres_engine, o
 
         async def authorize():
             async with sessions() as session, session.begin():
-                repository = SQLAlchemyBrowserIdentityRepository(session)
+                repository = SQLAlchemyIdentityRepository(session)
                 original = repository._lock_user_projects
 
                 async def paused_lookup(user_id, extra=()):

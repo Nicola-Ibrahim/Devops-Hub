@@ -129,7 +129,7 @@ with tempfile.TemporaryDirectory(prefix="hub-packaged-", dir="/private/tmp") as 
 from pathlib import Path
 from infra.composition.factory import create_container
 from infra.hosts.project_registration import RegisterProjectCommandHandler
-from identity.infra.browser_operations import BrowserIdentityService
+from identity.infra.hosts.identity_sessions import BrowserIdentityService
 from infra.composition.schema import registered_metadata
 from developer_platform.application.ledger import RegisterProjectCommand
 from shared.infra.settings import Settings
@@ -169,7 +169,7 @@ from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 from infra.composition.schema import registered_metadata
 from developer_platform.application.lifecycle import DatabaseCredentials, ProvisioningJob
-from developer_platform.infra.docker_provider import DockerPostgresProvider
+from developer_platform.infra.providers.docker_postgres import DockerPostgresProvider
 from developer_platform.infra.persistence.models import QuotaBudget
 from shared.infra.settings import Settings
 from shared.infra.persistence.database import create_async_database_engine

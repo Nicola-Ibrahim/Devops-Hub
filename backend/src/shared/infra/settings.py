@@ -68,6 +68,7 @@ class Settings(DatabaseSettings):
     local_provider_enabled: bool = False
     cookie_secure: bool = True
     browser_allowed_origins: tuple[str, ...] = ("http://localhost:3000", "http://127.0.0.1:3000")
+    opa_url: str = "http://127.0.0.1:8181"
 
     @field_validator("docker_url")
     @classmethod

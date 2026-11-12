@@ -57,6 +57,7 @@ services:
       PLATFORM_LOCAL_PROVIDER_ENABLED: ${PLATFORM_LOCAL_PROVIDER_ENABLED:-false}
       PLATFORM_COOKIE_SECURE: ${PLATFORM_COOKIE_SECURE:-true}
       PLATFORM_TEMPLATE_ROOT: /app/templates
+      PLATFORM_OPA_URL: http://opa:8181
     secrets:
       - platform_database_url
       - platform_token_pepper
@@ -71,14 +72,30 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      opa:
+        condition: service_healthy
       migrate:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2)"]
+      test: ["CMD", "python", "-c", "import urllib.request; [urllib.request.urlopen('http://127.0.0.1:8000/health/' + path, timeout=3) for path in ('ready', 'authorization')]"]
       interval: 10s
       timeout: 3s
       retries: 10
       start_period: 10s
+    restart: unless-stopped
+    profiles: [app]
+
+  opa:
+    image: openpolicyagent/opa:1.0.1
+    command: ["run", "--server", "--addr=0.0.0.0:8181", "/policies"]
+    volumes:
+      - ./infra/opa:/policies:ro
+    networks: [control]
+    healthcheck:
+      test: ["CMD", "/opa", "eval", "--fail", "--data", "/policies", "data.devops.identity.decision.policy_revision == \"identity-v1\""]
+      interval: 10s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
     profiles: [app]
 

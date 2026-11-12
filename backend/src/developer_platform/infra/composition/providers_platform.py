@@ -26,9 +26,6 @@ from developer_platform.application.database_provisioning.read_resources.handler
     ReadResourceHandler,
     ReadResourcesHandler,
 )
-from developer_platform.application.database_provisioning.read_resources.port import (
-    PlatformResourceReadRepository,
-)
 from developer_platform.application.database_provisioning.submit_database_request.command import (
     DatabaseRequest,
 )
@@ -39,13 +36,12 @@ from developer_platform.application.projects.handler import RegisterProjectHandl
 from developer_platform.application.projects.port import ProjectRegistrationRepository
 from developer_platform.application.resource_catalog.catalog import ApprovedPostgresCatalog
 from developer_platform.application.resource_catalog.handler import ReadCatalogQueryHandler
-from developer_platform.domain.interfaces.resource_request_repository import (
-    ResourceRequestRepository,
+from developer_platform.application.shared.resource_repository import ResourceRepository
+from developer_platform.infra.persistence.ledger_projects import (
+    SQLAlchemyProjectRegistrationRepository,
 )
-from developer_platform.domain.resource_lifecycle_repository import ResourceLifecycleRepository
-from developer_platform.infra.credentials import FernetResourceCredentialCipher
-from developer_platform.infra.persistence.ledger import SQLAlchemyPlatformLedgerRepository
-from developer_platform.infra.persistence.lifecycle import SQLAlchemyResourceLifecycleRepository
+from developer_platform.infra.persistence.resource_repository import SQLAlchemyResourceRepository
+from developer_platform.infra.security.credentials import FernetResourceCredentialCipher
 from shared.infra.clock import Clock
 from shared.infra.settings import Settings
 
@@ -60,32 +56,18 @@ class PlatformProvider(Provider):
     delete_handler = provide(DeleteTemporaryDatabaseHandler, scope=Scope.REQUEST)
     connection_handler = provide(GetDatabaseConnectionQueryHandler, scope=Scope.REQUEST)
     activity_handler = provide(ListResourceActivityQueryHandler, scope=Scope.REQUEST)
-    sql_ledger_repository = provide(SQLAlchemyPlatformLedgerRepository, scope=Scope.REQUEST)
-
-    @provide(scope=Scope.REQUEST)
-    def project_registration_repository(
-        self, repository: SQLAlchemyPlatformLedgerRepository
-    ) -> ProjectRegistrationRepository:
-        return repository
-
-    @provide(scope=Scope.REQUEST)
-    def platform_resource_read_repository(
-        self, repository: SQLAlchemyPlatformLedgerRepository
-    ) -> PlatformResourceReadRepository:
-        return repository
-
-    @provide(scope=Scope.REQUEST)
-    def request_repository(
-        self, repository: SQLAlchemyPlatformLedgerRepository
-    ) -> ResourceRequestRepository:
-        return repository
-
-    register = provide(RegisterProjectHandler, scope=Scope.REQUEST)
-    lifecycle_repository = provide(
-        SQLAlchemyResourceLifecycleRepository,
-        provides=ResourceLifecycleRepository,
+    project_registration_repository = provide(
+        SQLAlchemyProjectRegistrationRepository,
+        provides=ProjectRegistrationRepository,
         scope=Scope.REQUEST,
     )
+    resource_repository = provide(
+        SQLAlchemyResourceRepository,
+        provides=ResourceRepository,
+        scope=Scope.REQUEST,
+    )
+
+    register = provide(RegisterProjectHandler, scope=Scope.REQUEST)
 
     @provide(scope=Scope.REQUEST)
     def credential_cipher(self, settings: Settings) -> ResourceCredentialCipher | None:
@@ -121,7 +103,7 @@ class PlatformProvider(Provider):
     @provide(scope=Scope.REQUEST)
     def request(
         self,
-        repository: ResourceRequestRepository,
+        repository: ResourceRepository,
         catalog: ApprovedPostgresCatalog,
         clock: Clock,
         settings: Settings,

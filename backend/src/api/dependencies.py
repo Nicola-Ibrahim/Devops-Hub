@@ -12,7 +12,7 @@ from developer_platform.application.shared.errors import PlatformRequestError
 from identity.application.authenticate_api_token.query import (
     AuthenticateApiTokenQuery,
 )
-from identity.application.browser_sessions.query import AuthenticateBrowserSessionQuery
+from identity.application.authenticate_session.query import AuthenticateSessionQuery
 from identity.application.module import IdentityModule
 
 
@@ -23,7 +23,7 @@ async def current_principal(
 ) -> PrincipalView:
     if isinstance(credentials, BrowserRequestCredentials):
         principal = await identity.query(
-            AuthenticateBrowserSessionQuery(credentials.session_token, credentials.project_id)
+            AuthenticateSessionQuery(credentials.session_token, credentials.project_id)
         )
         if principal.project_id is None or principal.role not in {"developer", "admin"}:
             raise PlatformRequestError("project_required", "Select an authorized project", 409)

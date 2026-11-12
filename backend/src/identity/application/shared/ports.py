@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from identity.domain.api_tokens import ApiTokenRepository
+from identity.domain.interfaces.api_token_repository import ApiTokenRepository
 
 __all__ = [
     "ApiTokenRepository",

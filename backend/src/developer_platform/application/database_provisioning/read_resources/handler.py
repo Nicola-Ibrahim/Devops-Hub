@@ -1,8 +1,5 @@
 """Read registered projects, resources, and operation projections."""
 
-from developer_platform.application.database_provisioning.read_resources.port import (
-    PlatformResourceReadRepository,
-)
 from developer_platform.application.database_provisioning.read_resources.query import (
     OperationDetails,
     ReadOperation,
@@ -12,12 +9,14 @@ from developer_platform.application.database_provisioning.read_resources.query i
     ReadResources,
     ResourceDetails,
 )
+from developer_platform.application.projects.port import ProjectRegistrationRepository
 from developer_platform.application.projects.result import ProjectRegistrationDetails
 from developer_platform.application.shared.errors import PlatformRequestError, resource_not_found
+from developer_platform.application.shared.resource_repository import ResourceRepository
 
 
 class ReadProjectHandler:
-    def __init__(self, repository: PlatformResourceReadRepository) -> None:
+    def __init__(self, repository: ProjectRegistrationRepository) -> None:
         self.repository = repository
 
     async def execute(self, query: ReadProject) -> ProjectRegistrationDetails:
@@ -28,7 +27,7 @@ class ReadProjectHandler:
 
 
 class ReadProjectsHandler:
-    def __init__(self, repository: PlatformResourceReadRepository) -> None:
+    def __init__(self, repository: ProjectRegistrationRepository) -> None:
         self.repository = repository
 
     async def execute(self, query: ReadProjects) -> tuple[ProjectRegistrationDetails, ...]:
@@ -42,7 +41,7 @@ class ReadProjectsHandler:
 
 
 class ReadResourcesHandler:
-    def __init__(self, repository: PlatformResourceReadRepository) -> None:
+    def __init__(self, repository: ResourceRepository) -> None:
         self.repository = repository
 
     async def execute(self, query: ReadResources) -> tuple[ResourceDetails, ...]:
@@ -52,7 +51,7 @@ class ReadResourcesHandler:
 
 
 class ReadResourceHandler:
-    def __init__(self, repository: PlatformResourceReadRepository) -> None:
+    def __init__(self, repository: ResourceRepository) -> None:
         self.repository = repository
 
     async def execute(self, query: ReadResource) -> ResourceDetails:
@@ -63,7 +62,7 @@ class ReadResourceHandler:
 
 
 class ReadOperationHandler:
-    def __init__(self, repository: PlatformResourceReadRepository) -> None:
+    def __init__(self, repository: ResourceRepository) -> None:
         self.repository = repository
 
     async def execute(self, query: ReadOperation) -> OperationDetails:

@@ -14,8 +14,8 @@ from identity.application.revoke_api_token.handler import RevokeApiTokenHandler
 from identity.domain.credentials import ApiTokenAuthenticationDetails
 from identity.domain.errors import AuthenticationRejected, IdentityValidationError
 from identity.domain.records import ApiTokenStatus, ProjectMembershipStatus
-from identity.infra.credential_file import PrivateCredentialFile
-from identity.infra.tokens import PepperedTokenHasher, token_digest
+from identity.infra.security.credential_file import PrivateCredentialFile
+from identity.infra.security.tokens import PepperedTokenHasher, token_digest
 
 NOW = datetime(2026, 1, 1, tzinfo=UTC)
 TOKEN = "a" * 40

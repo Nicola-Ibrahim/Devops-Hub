@@ -4,9 +4,9 @@ from datetime import datetime
 from identity.application.authenticate_api_token.query import AuthenticateApiTokenQuery
 from identity.application.shared.ports import TokenHasher
 from identity.contracts import AuthenticatedPrincipal
-from identity.domain.api_tokens import ApiTokenRepository
 from identity.domain.credentials import authenticate_api_token_credentials
 from identity.domain.errors import AuthenticationRejected
+from identity.domain.interfaces.api_token_repository import ApiTokenRepository
 
 
 class AuthenticateApiTokenHandler:

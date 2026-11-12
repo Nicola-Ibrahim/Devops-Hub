@@ -7,7 +7,7 @@ from developer_platform.application.projects.handler import (
 )
 from developer_platform.application.projects.result import ProjectRegistrationDetails
 from developer_platform.application.shared.errors import ledger_unavailable
-from identity.domain.project_access import ProjectAccessDirectory
+from identity.domain.interfaces.project_access_directory import ProjectAccessDirectory
 from shared.infra.persistence.unit_of_work import DatabaseUnavailable, SqlAlchemyUnitOfWork
 
 

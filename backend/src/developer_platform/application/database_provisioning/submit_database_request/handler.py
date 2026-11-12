@@ -10,12 +10,10 @@ from developer_platform.application.database_provisioning.submit_database_reques
 )
 from developer_platform.application.resource_catalog.catalog import ApprovedPostgresCatalog
 from developer_platform.application.shared.errors import PlatformRequestError
+from developer_platform.application.shared.resource_repository import ResourceRepository
 from developer_platform.domain.aggregates.resource_lifecycle import ResourceLifecycle
 from developer_platform.domain.entities.operation import AcceptedResourceRequest
 from developer_platform.domain.errors import DomainError
-from developer_platform.domain.interfaces.resource_request_repository import (
-    ResourceRequestRepository,
-)
 from developer_platform.domain.value_objects.idempotency_key import IdempotencyKey
 from developer_platform.domain.value_objects.resource_name import ResourceName
 from developer_platform.domain.value_objects.resource_spec import ResourceSpec
@@ -24,7 +22,7 @@ from developer_platform.domain.value_objects.resource_spec import ResourceSpec
 class RequestTemporaryDatabaseHandler:
     def __init__(
         self,
-        repository: ResourceRequestRepository,
+        repository: ResourceRepository,
         catalog: ApprovedPostgresCatalog,
         clock: Callable[[], datetime],
         fingerprint: Callable[[DatabaseRequest], str],

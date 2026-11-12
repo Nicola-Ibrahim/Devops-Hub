@@ -7,15 +7,11 @@ from starlette.requests import Request
 
 from api.errors import APIError
 from api.identity.browser import browser_credentials
-from identity.application.browser_login.command import (
-    CheckBrowserLoginCommand,
-    VerifyBrowserPasswordChangeCommand,
-)
-from identity.application.browser_login.handler import (
-    CheckBrowserLoginHandler,
-    VerifyBrowserPasswordChangeHandler,
-)
-from identity.application.browser_principal.mapper import principal_for_project
+from identity.application.change_password.command import VerifyPasswordChange
+from identity.application.change_password.handler import VerifyPasswordChangeHandler
+from identity.application.login.command import VerifyLoginCredentials
+from identity.application.login.handler import VerifyLoginCredentialsHandler
+from identity.application.shared.principal import principal_for_project
 from identity.domain.browser_credentials import (
     normalize_user_name,
     session_expiry,
@@ -23,9 +19,9 @@ from identity.domain.browser_credentials import (
     validate_password,
 )
 from identity.domain.browser_errors import BrowserAuthenticationRejected
-from identity.domain.browser_identity import BrowserAccount, BrowserMembership
 from identity.domain.errors import IdentityValidationError
-from identity.infra.browser_security import ScryptPasswordHasher
+from identity.domain.records import AccountCredentials, MembershipDetails
+from identity.infra.security.passwords import ScryptPasswordHasher
 
 
 def request(headers=(), cookies=b""):
@@ -85,7 +81,7 @@ def test_browser_session_expiry_caps_idle_window_and_rejects_disabled_or_revoked
 
 def test_browser_principal_has_only_live_selected_project_authority():
     user_id, session_id, project_id = uuid4(), uuid4(), uuid4()
-    member = BrowserMembership(project_id, "service", "developer")
+    member = MembershipDetails(project_id, "service", "developer")
     selected = principal_for_project(
         user_id=user_id,
         user_name="alice",
@@ -125,15 +121,15 @@ def test_browser_transport_parses_project_header_and_rejects_cookie_bearer_ambig
 def test_browser_login_uses_dummy_hash_for_missing_user_and_requires_active_account():
     hasher = ScryptPasswordHasher()
     dummy_hash = hasher.hash("devops-hub-dummy-password-value")
-    service = CheckBrowserLoginHandler(hasher, dummy_hash)
+    service = VerifyLoginCredentialsHandler(hasher, dummy_hash)
 
     async def check() -> tuple[object, object]:
-        missing = await service.execute(CheckBrowserLoginCommand("unknown", "wrong-password", None))
+        missing = await service.execute(VerifyLoginCredentials("unknown", "wrong-password", None))
         inactive = await service.execute(
-            CheckBrowserLoginCommand(
+            VerifyLoginCredentials(
                 " Alice ",
                 "correct-horse-battery",
-                BrowserAccount(
+                AccountCredentials(
                     uuid4(), "alice", hasher.hash("correct-horse-battery"), 4, False, ()
                 ),
             )
@@ -150,22 +146,20 @@ def test_browser_login_uses_dummy_hash_for_missing_user_and_requires_active_acco
 
 def test_password_change_checks_current_password_and_preserves_version_fence():
     hasher = ScryptPasswordHasher()
-    account = BrowserAccount(uuid4(), "alice", hasher.hash("current-password-value"), 7, True, ())
-    service = VerifyBrowserPasswordChangeHandler(hasher)
+    account = AccountCredentials(
+        uuid4(), "alice", hasher.hash("current-password-value"), 7, True, ()
+    )
+    service = VerifyPasswordChangeHandler(hasher)
 
     async def check() -> None:
         prepared = await service.execute(
-            VerifyBrowserPasswordChangeCommand(
-                account, "current-password-value", "new-password-value"
-            )
+            VerifyPasswordChange(account, "current-password-value", "new-password-value")
         )
         assert prepared.credential_version == 7
         assert hasher.verify("new-password-value", prepared.encoded_password)
         with pytest.raises(BrowserAuthenticationRejected):
             await service.execute(
-                VerifyBrowserPasswordChangeCommand(
-                    account, "incorrect-current-password", "another-new-password"
-                )
+                VerifyPasswordChange(account, "incorrect-current-password", "another-new-password")
             )
 
     asyncio.run(check())

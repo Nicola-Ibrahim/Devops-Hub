@@ -23,13 +23,6 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import Session
 from test_foundation_postgres import async_engine_for
 
-from developer_platform.infra.application_runtime import (
-    DockerApplicationRuntime,
-    managed_resource_container_name,
-)
-from developer_platform.infra.credentials import FernetResourceCredentialCipher
-from developer_platform.infra.delivery_adapters import DockerApplicationAdapter
-from developer_platform.infra.docker_provider import DockerPostgresProvider
 from developer_platform.infra.persistence.application_bindings import (
     SQLAlchemyApplicationDatabaseBindings,
 )
@@ -40,6 +33,12 @@ from developer_platform.infra.persistence.models import (
     Resource,
     ResourceSecret,
 )
+from developer_platform.infra.providers.application_runtime import (
+    managed_resource_container_name,
+)
+from developer_platform.infra.providers.docker_application import DockerApplicationAdapter
+from developer_platform.infra.providers.docker_postgres import DockerPostgresProvider
+from developer_platform.infra.security.credentials import FernetResourceCredentialCipher
 from identity.infra.persistence.models import InternalUserRow, ProjectRow, TeamRow
 
 pytestmark = pytest.mark.postgres
@@ -109,7 +108,16 @@ def test_owned_application_reads_private_database_file_and_runtime_cleanup_leave
             credentials=credentials,
         )
         provider = DockerPostgresProvider(socket, "postgres:16")
-        runtime = DockerApplicationRuntime(socket, "postgres:16", health_timeout_seconds=90)
+        database_engine = async_engine_for(postgres_engine)
+        sessions = async_sessionmaker(database_engine, expire_on_commit=False)
+        adapter = DockerApplicationAdapter(
+            frozenset({application_image_id}),
+            socket,
+            "postgres:16",
+            installation_id,
+            SQLAlchemyApplicationDatabaseBindings(sessions, installation_id, cipher),
+            health_timeout_seconds=90,
+        )
 
         async def diagnostic_threaded(operation, *args):
             task = asyncio.create_task(asyncio.to_thread(operation, *args))
@@ -124,15 +132,7 @@ def test_owned_application_reads_private_database_file_and_runtime_cleanup_leave
                 ]
                 raise AssertionError(f"{type(error).__name__}: {frames}") from None
 
-        runtime._threaded = diagnostic_threaded
-        database_engine = async_engine_for(postgres_engine)
-        sessions = async_sessionmaker(database_engine, expire_on_commit=False)
-        adapter = DockerApplicationAdapter(
-            frozenset({application_image_id}),
-            runtime,
-            installation_id,
-            SQLAlchemyApplicationDatabaseBindings(sessions, installation_id, cipher),
-        )
+        adapter._threaded = diagnostic_threaded
         database_attempted = False
         application_attempted = False
         try:
@@ -228,7 +228,7 @@ def test_owned_application_reads_private_database_file_and_runtime_cleanup_leave
             assert mount.get("Type") == "volume" and mount.get("RW") is False
             assert credentials.password not in app_container.logs().decode(errors="replace")
             assert dsn not in app_container.logs().decode(errors="replace")
-            network_name = runtime._network_name(application_id)
+            network_name = adapter._network_name(application_id)
             network = daemon.networks.get(network_name)
             member_names = {
                 member.get("Name") for member in network.attrs.get("Containers", {}).values()

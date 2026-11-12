@@ -18,8 +18,6 @@ from test_foundation_postgres import async_engine_for
 
 from developer_platform.domain.leases import LeasePolicy
 from developer_platform.domain.resources import DesiredState, ResourceStatus
-from developer_platform.infra.credentials import FernetResourceCredentialCipher
-from developer_platform.infra.persistence.lifecycle import mark_for_deletion
 from developer_platform.infra.persistence.models import (
     Operation,
     ProjectEnvironmentRow,
@@ -30,7 +28,9 @@ from developer_platform.infra.persistence.models import (
     Resource,
     ResourceSecret,
 )
+from developer_platform.infra.persistence.resource_repository import SQLAlchemyResourceRepository
 from developer_platform.infra.persistence.worker_queue import SqlAlchemyProvisioningQueue
+from developer_platform.infra.security.credentials import FernetResourceCredentialCipher
 from identity.infra.persistence.models import InternalUserRow, ProjectRow, TeamRow
 
 pytestmark = pytest.mark.postgres
@@ -200,7 +200,9 @@ def test_late_provision_completion_cannot_override_delete_intent(postgres_engine
         async def request_deletion():
             async with AsyncSession(database) as session, session.begin():
                 resource = await session.get(Resource, resource_id, with_for_update=True)
-                await mark_for_deletion(session, resource, "requested", None, datetime.now(UTC))
+                await SQLAlchemyResourceRepository(session).mark_for_deletion(
+                    resource, "requested", None, datetime.now(UTC)
+                )
 
         asyncio.run(request_deletion())
         asyncio.run(queue.ready(job, DatabaseEndpoint("127.0.0.1", 54321)))
@@ -265,7 +267,9 @@ def test_delete_releases_reservation_only_after_confirmed_absence_and_unknown_re
         async def request_deletion():
             async with AsyncSession(database) as session, session.begin():
                 resource = await session.get(Resource, resource_id, with_for_update=True)
-                await mark_for_deletion(session, resource, "requested", None, datetime.now(UTC))
+                await SQLAlchemyResourceRepository(session).mark_for_deletion(
+                    resource, "requested", None, datetime.now(UTC)
+                )
 
         asyncio.run(request_deletion())
         delete_job = asyncio.run(queue.claim())

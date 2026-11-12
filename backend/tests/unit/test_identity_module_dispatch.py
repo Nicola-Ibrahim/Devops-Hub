@@ -7,52 +7,44 @@ from uuid import uuid4
 import pytest
 
 from identity.application.authenticate_api_token.query import AuthenticateApiTokenQuery
-from identity.application.browser_login.command import (
-    ChangeBrowserPasswordCommand,
-    LoginBrowserSessionCommand,
-)
-from identity.application.browser_sessions.command import (
-    LogoutAllBrowserSessionsCommand,
-    LogoutBrowserSessionCommand,
-    RevokeBrowserSessionCommand,
-    RotateBrowserCsrfCommand,
-    SelectBrowserProjectCommand,
-)
-from identity.application.browser_sessions.query import (
-    AuthenticateBrowserSessionQuery,
-    ListBrowserSessionsQuery,
-)
-from identity.application.project_memberships.command import ManageProjectMembershipCommand
-from identity.application.project_memberships.query import ListProjectMembersQuery
+from identity.application.authenticate_session.query import AuthenticateSessionQuery
+from identity.application.change_password.command import ChangePasswordCommand
+from identity.application.list_project_members.query import ListProjectMembersQuery
+from identity.application.list_sessions.query import ListSessionsQuery
+from identity.application.login.command import LoginCommand
+from identity.application.logout.command import LogoutCommand
+from identity.application.logout_all_sessions.command import LogoutAllSessionsCommand
+from identity.application.manage_project_membership.command import ManageProjectMembershipCommand
+from identity.application.revoke_session.command import RevokeSessionCommand
+from identity.application.rotate_csrf.command import RotateCsrfCommand
+from identity.application.select_active_project.command import SelectActiveProjectCommand
 from identity.domain.credentials import ApiTokenAuthenticationDetails
-from identity.infra.composition.handlers import LoginBrowserSessionHandler
 from identity.infra.composition.module import (
     IDENTITY_HANDLER_REGISTRY,
     IdentityModuleDispatcher,
 )
-from identity.infra.token_authentication_host import TokenAuthenticationHost
+from identity.infra.hosts.api_token_authentication import TokenAuthenticationHost
+from identity.infra.hosts.module_handlers import LoginHandler
 from shared.dispatch import HandlerRegistry, RegistrationError, UnsupportedMessage
 from shared.infra.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 
 def test_identity_messages_have_explicit_complete_registrations() -> None:
-    assert (
-        IDENTITY_HANDLER_REGISTRY.commands[LoginBrowserSessionCommand] is LoginBrowserSessionHandler
-    )
+    assert IDENTITY_HANDLER_REGISTRY.commands[LoginCommand] is LoginHandler
     assert set(IDENTITY_HANDLER_REGISTRY.commands) == {
-        LoginBrowserSessionCommand,
-        RotateBrowserCsrfCommand,
-        SelectBrowserProjectCommand,
-        LogoutBrowserSessionCommand,
-        LogoutAllBrowserSessionsCommand,
-        RevokeBrowserSessionCommand,
-        ChangeBrowserPasswordCommand,
+        LoginCommand,
+        RotateCsrfCommand,
+        SelectActiveProjectCommand,
+        LogoutCommand,
+        LogoutAllSessionsCommand,
+        RevokeSessionCommand,
+        ChangePasswordCommand,
         ManageProjectMembershipCommand,
     }
     assert set(IDENTITY_HANDLER_REGISTRY.queries) == {
         AuthenticateApiTokenQuery,
-        AuthenticateBrowserSessionQuery,
-        ListBrowserSessionsQuery,
+        AuthenticateSessionQuery,
+        ListSessionsQuery,
         ListProjectMembersQuery,
     }
 
@@ -60,14 +52,14 @@ def test_identity_messages_have_explicit_complete_registrations() -> None:
 def test_identity_registry_rejects_incomplete_or_ambiguous_bindings() -> None:
     with pytest.raises(RegistrationError, match="more than one"):
         HandlerRegistry(
-            commands=[(LoginBrowserSessionCommand, LoginBrowserSessionHandler)] * 2,
+            commands=[(LoginCommand, LoginHandler)] * 2,
             queries=[],
         )
     with pytest.raises(RegistrationError, match="required command"):
         HandlerRegistry(
             commands=[],
             queries=[],
-            required_commands=[LoginBrowserSessionCommand],
+            required_commands=[LoginCommand],
         )
 
 
@@ -75,10 +67,10 @@ def test_identity_dispatch_resolves_only_selected_handler() -> None:
     resolved: list[type[object]] = []
 
     class SelectedHandler:
-        async def execute(self, command: LoginBrowserSessionCommand) -> str:
+        async def execute(self, command: LoginCommand) -> str:
             return command.user_name
 
-    instances = {LoginBrowserSessionHandler: SelectedHandler()}
+    instances = {LoginHandler: SelectedHandler()}
 
     class Container:
         async def get(self, handler: type[object]) -> object:
@@ -90,12 +82,12 @@ def test_identity_dispatch_resolves_only_selected_handler() -> None:
 
     async def run() -> None:
         dispatcher = IdentityModuleDispatcher(Container())
-        command = LoginBrowserSessionCommand("alice", "secret", None, None)
+        command = LoginCommand("alice", "secret", None, None)
         assert await dispatcher.execute(command) == "alice"
-        assert resolved == [LoginBrowserSessionHandler]
+        assert resolved == [LoginHandler]
         with pytest.raises(UnsupportedMessage, match="Unsupported query"):
             await dispatcher.query(UnknownQuery())
-        assert resolved == [LoginBrowserSessionHandler]
+        assert resolved == [LoginHandler]
 
     asyncio.run(run())
 
@@ -145,7 +137,7 @@ def test_bearer_query_uses_its_own_transaction_and_leaves_platform_unit_unused(m
             return "digest"
 
     monkeypatch.setattr(
-        "identity.infra.token_authentication_host.SQLAlchemyApiTokenRepository", Repository
+        "identity.infra.hosts.api_token_authentication.SQLAlchemyApiTokenRepository", Repository
     )
     platform_unit = SqlAlchemyUnitOfWork(Session())
     host = TokenAuthenticationHost(lambda: Session(), Hasher(), lambda: now)

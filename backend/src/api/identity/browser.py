@@ -5,33 +5,25 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from dishka.integrations.fastapi import FromDishka, inject
-from fastapi import APIRouter, Header, Request, Response
+from fastapi import APIRouter, Depends, Header, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from api.errors import APIError
+from api.identity.authorization import require_identity_permission
 from api.identity.cookie_policy import BrowserCookiePolicy
-from identity.application.browser_login.command import (
-    ChangeBrowserPasswordCommand,
-    LoginBrowserSessionCommand,
-)
-from identity.application.browser_sessions.command import (
-    LogoutAllBrowserSessionsCommand,
-    LogoutBrowserSessionCommand,
-    RevokeBrowserSessionCommand,
-    RotateBrowserCsrfCommand,
-    SelectBrowserProjectCommand,
-)
-from identity.application.browser_sessions.query import (
-    ListBrowserSessionsQuery,
-)
+from identity.application.authorization.port import AuthorizationDecisionPort
+from identity.application.change_password.command import ChangePasswordCommand
+from identity.application.list_project_members.query import ListProjectMembersQuery
+from identity.application.list_sessions.query import ListSessionsQuery
+from identity.application.login.command import LoginCommand
+from identity.application.logout.command import LogoutCommand
+from identity.application.logout_all_sessions.command import LogoutAllSessionsCommand
+from identity.application.manage_project_membership.command import ManageProjectMembershipCommand
 from identity.application.module import IdentityModule
-from identity.application.project_memberships.command import ManageProjectMembershipCommand
-from identity.application.project_memberships.query import (
-    ListProjectMembersQuery,
-)
-from identity.domain.browser_identity import (
-    BrowserPrincipal,
-)
+from identity.application.revoke_session.command import RevokeSessionCommand
+from identity.application.rotate_csrf.command import RotateCsrfCommand
+from identity.application.select_active_project.command import SelectActiveProjectCommand
+from identity.domain.records import SessionPrincipal
 
 SESSION_COOKIE = "devops_session"
 PROJECT_HEADER = "X-Project-ID"
@@ -91,7 +83,7 @@ class MembershipBody(BaseModel):
     role: Literal["developer", "admin"]
 
 
-def _principal(principal: BrowserPrincipal) -> dict[str, object]:
+def _principal(principal: SessionPrincipal) -> dict[str, object]:
     return {
         "userId": str(principal.user_id),
         "userName": principal.user_name,
@@ -112,7 +104,64 @@ def _principal(principal: BrowserPrincipal) -> dict[str, object]:
     }
 
 
-router = APIRouter()
+_IDENTITY_ACTIONS = {
+    "browser_me": "identity.sessions.read",
+    "select_project": "identity.project.select",
+    "logout": "identity.logout",
+    "logout_all": "identity.logout_all",
+    "sessions": "identity.sessions.read",
+    "revoke_session": "identity.sessions.revoke",
+    "change_password": "identity.password.change",
+    "list_project_members": "identity.members.read",
+    "set_project_member": "identity.members.write",
+    "remove_project_member": "identity.members.write",
+}
+
+
+@inject
+async def identity_route_permission(
+    request: Request,
+    module: FromDishka[IdentityModule],
+    authorizer: FromDishka[AuthorizationDecisionPort],
+) -> None:
+    route_name = request.scope["route"].name
+    if route_name == "login":
+        return
+    action = _IDENTITY_ACTIONS.get(route_name)
+    if action is None:
+        raise APIError(403, "forbidden", "Permission denied")
+    try:
+        project_id = (
+            UUID(str(request.path_params["project_id"]))
+            if "project_id" in request.path_params
+            else None
+        )
+        session_id = (
+            UUID(str(request.path_params["session_id"]))
+            if "session_id" in request.path_params
+            else None
+        )
+    except ValueError:
+        raise APIError(422, "invalid_request", "Request validation failed") from None
+    if route_name == "select_project":
+        try:
+            project_id = ProjectBody.model_validate(await request.json()).project_id
+        except ValueError:
+            raise APIError(422, "invalid_request", "Request validation failed") from None
+    await require_identity_permission(
+        module=module,
+        authorizer=authorizer,
+        session_token=require_cookie_session(browser_credentials(request)),
+        action=action,
+        resource_kind="project_membership"
+        if "members" in route_name or "member" in route_name
+        else "session",
+        resource_id=session_id,
+        project_id=project_id,
+    )
+
+
+router = APIRouter(dependencies=[Depends(identity_route_permission)])
 
 
 @router.post("/api/v1/auth/login", tags=["identity"])
@@ -125,9 +174,7 @@ async def login(
     cookie_policy: FromDishka[BrowserCookiePolicy],
 ) -> dict[str, object]:
     result = await module.execute(
-        LoginBrowserSessionCommand(
-            body.user_name, body.password, body.project_id, request.headers.get("origin")
-        )
+        LoginCommand(body.user_name, body.password, body.project_id, request.headers.get("origin"))
     )
     response.set_cookie(
         SESSION_COOKIE,
@@ -152,7 +199,7 @@ async def browser_me(
     request: Request, response: Response, module: FromDishka[IdentityModule]
 ) -> dict[str, object]:
     principal = await module.execute(
-        RotateBrowserCsrfCommand(require_cookie_session(browser_credentials(request)))
+        RotateCsrfCommand(require_cookie_session(browser_credentials(request)))
     )
     response.headers["Cache-Control"] = "no-store"
     return {"csrfToken": principal.csrf_token, "principal": _principal(principal)}
@@ -167,7 +214,7 @@ async def select_project(
     module: FromDishka[IdentityModule],
 ) -> dict[str, object]:
     principal = await module.execute(
-        SelectBrowserProjectCommand(
+        SelectActiveProjectCommand(
             require_cookie_session(browser_credentials(request)),
             body.project_id,
             csrf_token,
@@ -187,7 +234,7 @@ async def logout(
     cookie_policy: FromDishka[BrowserCookiePolicy],
 ) -> Response:
     await module.execute(
-        LogoutBrowserSessionCommand(
+        LogoutCommand(
             require_cookie_session(browser_credentials(request)),
             csrf_token,
             request.headers.get("origin"),
@@ -214,7 +261,7 @@ async def logout_all(
     cookie_policy: FromDishka[BrowserCookiePolicy],
 ) -> dict[str, int]:
     count = await module.execute(
-        LogoutAllBrowserSessionsCommand(
+        LogoutAllSessionsCommand(
             require_cookie_session(browser_credentials(request)),
             csrf_token,
             request.headers.get("origin"),
@@ -239,7 +286,7 @@ async def sessions(
 ) -> list[dict[str, object]]:
     response.headers["Cache-Control"] = "no-store"
     values = await module.query(
-        ListBrowserSessionsQuery(require_cookie_session(browser_credentials(request)))
+        ListSessionsQuery(require_cookie_session(browser_credentials(request)))
     )
     return [
         {
@@ -264,7 +311,7 @@ async def revoke_session(
     module: FromDishka[IdentityModule],
 ) -> Response:
     await module.execute(
-        RevokeBrowserSessionCommand(
+        RevokeSessionCommand(
             require_cookie_session(browser_credentials(request)),
             session_id,
             csrf_token,
@@ -286,7 +333,7 @@ async def change_password(
     cookie_policy: FromDishka[BrowserCookiePolicy],
 ) -> Response:
     await module.execute(
-        ChangeBrowserPasswordCommand(
+        ChangePasswordCommand(
             require_cookie_session(browser_credentials(request)),
             body.current_password,
             body.new_password,

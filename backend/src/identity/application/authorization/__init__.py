@@ -1,0 +1,1 @@
+"""Authorization decision contracts."""

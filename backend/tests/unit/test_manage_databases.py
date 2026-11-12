@@ -14,8 +14,8 @@ from developer_platform.application.database_lifecycle.read_connection.query imp
 )
 from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.shared.errors import CatalogForbidden, PlatformRequestError
+from developer_platform.application.shared.resource_repository import ResourceConnectionSecret
 from developer_platform.authorization import authorize_platform_action
-from developer_platform.domain.resource_lifecycle_repository import ResourceConnectionSecret
 
 
 def test_connection_requires_scope_and_cipher_before_sensitive_read():
@@ -44,7 +44,7 @@ def test_connection_encodes_credential_components_without_exposing_repr():
     class Repository:
         async def connection(self, **kwargs):
             assert kwargs["resource_id"] == resource_id
-            assert kwargs["project_id"] == project_id
+            assert kwargs["access"].project_id == project_id
             return ResourceConnectionSecret(resource_id, "::1", 5432, b"encrypted", "key-1")
 
     class Cipher:

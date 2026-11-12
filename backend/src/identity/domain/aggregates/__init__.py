@@ -1,5 +1,5 @@
-"""Identity aggregates coordinating account invariants."""
+from identity.domain.aggregates.project_membership import ProjectMembership
+from identity.domain.aggregates.session import Session
+from identity.domain.aggregates.user import User
 
-from identity.domain.aggregates.identity_account import IdentityAccount
-
-__all__ = ["IdentityAccount"]
+__all__ = ["User", "Session", "ProjectMembership"]

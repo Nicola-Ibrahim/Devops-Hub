@@ -20,14 +20,14 @@ from sqlalchemy.pool import NullPool
 from developer_platform.infra.persistence.models import Resource
 from identity.application.issue_api_token.command import IssueApiTokenCommand
 from identity.application.shared.errors import CredentialDeliveryError
-from identity.infra.credential_file import PrivateCredentialFile
+from identity.infra.hosts.api_token_operations import IssueApiTokenToFile, RevokeApiTokenOperation
 from identity.infra.persistence.models import (
     ApiAccessTokenRow,
     InternalUserRow,
     ProjectMembershipRow,
     ProjectRow,
 )
-from identity.infra.token_operations import IssueApiTokenToFile, RevokeApiTokenOperation
+from identity.infra.security.credential_file import PrivateCredentialFile
 from infra.composition.factory import create_container
 from infra.composition.schema import registered_metadata
 from infra.hosts.project_registration import RegisterProjectCommandHandler

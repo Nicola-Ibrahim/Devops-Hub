@@ -2,7 +2,7 @@ from collections.abc import Callable
 from datetime import datetime
 
 from identity.application.revoke_api_token.command import RevokeApiTokenCommand
-from identity.domain.api_tokens import ApiTokenRepository
+from identity.domain.interfaces.api_token_repository import ApiTokenRepository
 from identity.domain.records import ApiTokenAuditEvent
 
 
