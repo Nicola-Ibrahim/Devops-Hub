@@ -16,6 +16,8 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import NullPool
 
+from api.app import create_app
+from composition.factory import create_container
 from identity.application.issue_api_token.command import IssueApiTokenCommand
 from identity.application.issue_api_token.result import PreparedApiToken
 from identity.application.module import IdentityModule
@@ -26,8 +28,6 @@ from identity.domain.records import ApiTokenStatus, ProjectMembershipStatus
 from identity.infra.hosts.api_token_operations import IssueApiTokenToFile
 from identity.infra.persistence.store import SQLAlchemyApiTokenRepository
 from identity.infra.security.credential_file import PrivateCredentialFile
-from infra.composition.factory import create_container
-from infra.http.app import create_app
 from shared.infra.persistence.unit_of_work import DatabaseUnavailable, SqlAlchemyUnitOfWork
 from shared.infra.settings import Settings
 

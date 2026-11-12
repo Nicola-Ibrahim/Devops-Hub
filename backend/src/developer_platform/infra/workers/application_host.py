@@ -9,8 +9,6 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from api.credentials import RequestIdentity
-from developer_platform.application.shared.dto import AccessContext
 from developer_platform.application.shared.errors import PlatformRequestError
 from developer_platform.application.workload_delivery.execute_delivery_step.handler import (
     ExecuteDeliveryStepHandler,
@@ -33,7 +31,6 @@ from shared.infra.persistence.unit_of_work import DatabaseUnavailable, SqlAlchem
 T = TypeVar("T")
 R = TypeVar("R")
 Clock = Callable[[], datetime]
-AuthenticateRequest = Callable[[AsyncSession, RequestIdentity], Awaitable[AccessContext]]
 
 
 class ApplicationDeliveryHost:

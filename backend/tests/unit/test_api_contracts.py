@@ -9,6 +9,7 @@ from fastapi import Query
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+from api.app import create_app
 from api.platform.schemas import RenewRequest, ResourceRequest, ResourceView
 from developer_platform.application.module import DeveloperPlatformModule
 from developer_platform.application.resource_catalog.handler import ReadCatalogQueryHandler
@@ -18,7 +19,6 @@ from identity.application.authenticate_api_token.query import AuthenticateApiTok
 from identity.application.module import IdentityModule
 from identity.domain.credentials import ApiTokenAuthenticationDetails
 from identity.infra.security.tokens import token_digest
-from infra.http.app import create_app
 from shared.infra.readiness import ReadinessProbe
 from shared.infra.settings import Settings
 

@@ -1,10 +1,15 @@
-"""HTTP assembly from application capabilities; no concrete infrastructure imports."""
+"""FastAPI application, error mapping, routing and configured app factory."""
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
+from dishka import AsyncContainer
+from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncEngine
 from starlette.exceptions import HTTPException
 from starlette.types import Lifespan
 
@@ -17,10 +22,12 @@ from api.middleware import request_boundary
 from api.platform.applications import router as applications_router
 from api.platform.routes import router as platform_router
 from api.schemas import ErrorResponse
+from composition.factory import create_container
 from developer_platform.application.shared.errors import CatalogForbidden, PlatformRequestError
 from developer_platform.domain import DomainError
 from identity.application.shared.errors import CredentialDeliveryError, IdentityUnavailable
 from identity.domain.errors import AuthenticationRejected, IdentityValidationError
+from shared.infra.settings import Settings
 
 
 @dataclass(frozen=True)
@@ -109,3 +116,33 @@ class DevOpsHubAPI(FastAPI):
         app.include_router(identity_router)
         app.include_router(platform_router)
         app.include_router(applications_router)
+
+
+def create_app(
+    settings: Settings | None = None,
+    *,
+    engine: AsyncEngine | None = None,
+    container: AsyncContainer | None = None,
+    api_config: APIConfiguration | None = None,
+) -> FastAPI:
+    """Build the HTTP app and its process composition; injected resources stay caller-owned."""
+    runtime = (
+        container
+        if container is not None
+        else create_container(
+            settings if settings is not None else Settings(),  # type: ignore[call-arg]
+            engine=engine,
+        )
+    )
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        try:
+            yield
+        finally:
+            if container is None:
+                await runtime.close()
+
+    app = DevOpsHubAPI(api_config, lifespan=lifespan)
+    setup_dishka(runtime, app)
+    return app

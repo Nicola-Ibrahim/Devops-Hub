@@ -3,8 +3,8 @@
 import argparse
 import asyncio
 
-from infra.composition.factory import create_container
-from infra.workers.application_host import (
+from composition.factory import create_container
+from developer_platform.infra.workers.application_host import (
     ApplicationDeliveryHost,
     run_application_worker,
 )

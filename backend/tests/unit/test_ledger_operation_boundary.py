@@ -10,6 +10,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy.exc import SQLAlchemyError
 from test_operation_lifecycle import CapturedResponses, FakeSession
 
+from api.app import create_app
+from composition.factory import create_container
 from developer_platform.application.database_provisioning.read_resources.handler import (
     ReadResourcesHandler,
 )
@@ -21,8 +23,6 @@ from developer_platform.application.shared.errors import PlatformRequestError
 from identity.application.authenticate_api_token.query import AuthenticateApiTokenQuery
 from identity.application.module import IdentityModule
 from identity.contracts import AuthenticatedPrincipal
-from infra.composition.factory import create_container
-from infra.http.app import create_app
 from shared.infra.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from shared.infra.settings import Settings
 
@@ -73,7 +73,7 @@ def test_http_ledger_authentication_and_commit_precede_success(outcome, monkeypa
         events.append("authenticate")
         return AccessContext(user, project, "developer", frozenset({"resources:write"}))
 
-    monkeypatch.setattr("infra.http.platform_module.authenticate_request", authenticate)
+    monkeypatch.setattr("api.platform.module.authenticate_platform_access", authenticate)
 
     class Requester:
         async def execute(self, message):

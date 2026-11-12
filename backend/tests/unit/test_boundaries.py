@@ -10,12 +10,12 @@ from pathlib import Path
 
 import pytest
 
-from infra.http.app import create_app
+from api.app import create_app
 from shared.infra.settings import Settings
 
 BACKEND = Path(__file__).parents[2]
 SRC = BACKEND / "src"
-ROOTS = {"api", "identity", "developer_platform", "shared", "infra"}
+ROOTS = {"api", "identity", "developer_platform", "shared", "composition"}
 CONTEXTS = {"identity", "developer_platform"}
 RETIRED_ROOTS = {
     "containers",
@@ -24,6 +24,7 @@ RETIRED_ROOTS = {
     "provisioning",
     "platform_runtime",
     "platform_infrastructure",
+    "infra",
 }
 IO_LIBRARIES = {
     "fastapi",
@@ -66,9 +67,16 @@ def violation(module, target):
     if other in RETIRED_ROOTS:
         return True
     if root in CONTEXTS:
+        if module.startswith(root + ".infra.workers.") and other == "composition":
+            return False
         if target == "shared.dispatch" or target.startswith("shared.dispatch."):
             return False  # Pure cross-context message/handler contract.
-        if other in CONTEXTS - {root} or other in {"api", "infra", "containers", "entrypoints"}:
+        if other in CONTEXTS - {root} or other in {
+            "api",
+            "composition",
+            "containers",
+            "entrypoints",
+        }:
             return True
         if module_parts[1:2] in (["domain"], ["application"]) or module == "identity.contracts":
             if other == "shared" or "infra" in target_parts[1:]:
@@ -76,21 +84,59 @@ def violation(module, target):
             if other in IO_LIBRARIES:
                 return True
         if module_parts[1:2] == ["infra"]:
-            if other in CONTEXTS - {root} or other in {"api", "infra", "containers", "entrypoints"}:
+            if other in CONTEXTS - {root} or other in {
+                "api",
+                "composition",
+                "containers",
+                "entrypoints",
+            }:
                 return True
             if other == "shared":
                 return len(target_parts) > 1 and target_parts[1] != "infra"
             return False
         return False
     if root == "shared":
-        return other in CONTEXTS | {"api", "infra", "containers", "entrypoints"}
+        return other in CONTEXTS | {"api", "composition", "containers", "entrypoints"}
     if root == "api":
         if target.startswith("shared.infra.readiness"):
             return False
+        if target == "shared.dispatch" or target.startswith("shared.dispatch."):
+            return False
+        api_adapters = {
+            "api.app",
+            "api.platform.module",
+            "api.health.metrics_adapter",
+        }
+        is_api_composition = module.startswith("api.composition.")
+        if module in api_adapters or is_api_composition:
+            is_context_infrastructure = other in CONTEXTS and "infra" in target_parts[1:]
+            if is_context_infrastructure or target.startswith("shared.infra."):
+                return False
+            if module == "api.app" and other == "composition":
+                return False
+            if (
+                module in {"api.app", "api.health.metrics_adapter"} or is_api_composition
+            ) and other in {
+                "dishka",
+                "sqlalchemy",
+            }:
+                return False
         return (
             other
-            in {"shared", "infra", "containers", "entrypoints", "sqlalchemy", "psycopg", "docker"}
+            in {
+                "shared",
+                "composition",
+                "containers",
+                "entrypoints",
+                "sqlalchemy",
+                "psycopg",
+                "docker",
+            }
             or "infra" in target_parts[1:]
+        )
+    if root == "composition":
+        return other in {"containers", "entrypoints"} or (
+            other == "api" and not target.startswith("api.composition.")
         )
     return False
 
@@ -167,6 +213,7 @@ def test_indirect_package_reexport_cannot_smuggle_infrastructure_into_core():
         ("identity.application.flow", "from shared.dispatch import Command", False),
         ("developer_platform.application.flow", "from identity import contracts", True),
         ("api.platform.routes", "from developer_platform.infra import persistence", True),
+        ("api.platform.module", "from developer_platform.infra.composition import module", False),
         ("shared.infra.database", "import containers.http", True),
         ("identity.contracts", "from .infra import tokens", True),
         ("identity.infra.security.tokens", "from shared.infra import database", False),

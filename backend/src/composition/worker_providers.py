@@ -9,7 +9,7 @@ from developer_platform.infra.providers.docker_application import DockerApplicat
 from developer_platform.infra.providers.github import GitHubRepositoryAdapter
 from developer_platform.infra.security.approval import StaticApprovedImageCatalog
 from developer_platform.infra.templates.catalog import FilesystemTemplateCatalog
-from infra.workers.application_host import ApplicationDeliveryHost
+from developer_platform.infra.workers.application_host import ApplicationDeliveryHost
 from shared.infra.clock import Clock
 
 

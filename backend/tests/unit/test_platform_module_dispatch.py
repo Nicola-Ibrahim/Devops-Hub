@@ -4,6 +4,7 @@ import asyncio
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from composition.factory import create_container
 from developer_platform.application.database_lifecycle.read_activity.handler import (
     ListResourceActivityQueryHandler,
 )
@@ -22,7 +23,6 @@ from developer_platform.application.database_provisioning.submit_database_reques
 from developer_platform.application.shared.resource_repository import ResourceRepository
 from developer_platform.authorization import ACTION_PERMISSIONS
 from developer_platform.infra.composition.module import PLATFORM_HANDLER_REGISTRY
-from infra.composition.factory import create_container
 from shared.infra.settings import Settings
 
 

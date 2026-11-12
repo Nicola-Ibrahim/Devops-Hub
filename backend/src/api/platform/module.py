@@ -7,6 +7,7 @@ from typing import Any, Literal, TypeVar, cast
 from dishka import AsyncContainer
 from fastapi import Request
 
+from api.composition.platform_access import authenticate_platform_access
 from api.credentials import BrowserRequestCredentials, RequestIdentity
 from developer_platform.application.database_provisioning.read_resources.query import ReadProjects
 from developer_platform.application.module import DeveloperPlatformModule
@@ -34,7 +35,6 @@ from developer_platform.application.workload_delivery.retry_delivery_step.comman
 from developer_platform.authorization import ALL_SCOPES, authorize_platform_action
 from developer_platform.infra.composition.module import _DeveloperPlatformDispatcher
 from identity.infra.hosts.identity_sessions import authenticate_browser_operation
-from infra.http.authentication import authenticate_request
 from shared.dispatch import Command, Query
 from shared.infra.clock import Clock
 from shared.infra.persistence.unit_of_work import DatabaseUnavailable, SqlAlchemyUnitOfWork
@@ -55,7 +55,9 @@ _DELIVERY_MESSAGES = (
 )
 
 
-class PlatformHttpModule(DeveloperPlatformModule):
+class PlatformRequestModule(DeveloperPlatformModule):
+    """HTTP boundary that revalidates credentials and authorizes in one transaction."""
+
     def __init__(
         self, container: AsyncContainer, request: Request, settings: Settings, clock: Clock
     ) -> None:
@@ -116,7 +118,7 @@ class PlatformHttpModule(DeveloperPlatformModule):
                 )
                 current = cast(MessageT, replace(message, accesses=accesses))
             else:
-                access = await authenticate_request(
+                access = await authenticate_platform_access(
                     unit.session, token, self._settings, self._clock
                 )
                 if isinstance(message, ReadProjects):

@@ -13,29 +13,34 @@ See [operations](../docs/operations.md) for packaging, release and recovery asse
 
 ```text
 src/
-  api/                       HTTP routes, schemas, context module calls and errors
+  api/                       FastAPI app/factory, HTTP routes, schemas and errors
+    composition/             HTTP-to-context adapters and API-specific providers
+    health/                   Health routes and operational metrics adapter
+    platform/                 Platform routes, schemas and HTTP module facade
   identity/
     domain/                  Identity entities, value objects, aggregates, repository interfaces and policies
     application/             Identity use-case packages with command/query handlers
     infra/persistence/       Identity-owned ORM rows and account/session/membership/token adapters
     infra/composition/       Identity module dispatch and Dishka providers
-    infra/                   Token operations, hashing and private file delivery
+    infra/authorization/     Identity-owned OPA adapter
+    infra/security/          Password, token and private credential adapters
+    infra/hosts/              Identity HTTP and worker authentication adapters
   developer_platform/
     domain/                  Platform entities, value objects, aggregates, repository interfaces and policies
     application/             Capability-owned command/query handlers for catalog, requests, lifecycle and delivery
     infra/persistence/       Platform-owned ORM rows, transactional stores and read projections
     infra/composition/       Platform module dispatch and capability providers
     infra/observability/     Platform metric projections
+    infra/workers/           Resource and application worker processes
     infra/providers/         Docker database/application and GitHub adapters
     infra/security/          Credential, approval, fingerprint and signature adapters
     infra/templates/         Filesystem template catalog
   shared/dispatch.py         Pure typed message/registry dispatch contract
-  shared/infra/              Technical engine/session/UoW, metadata and readiness
-  infra/composition/        Process DI and migration metadata registration
-  infra/http/               HTTP host, authentication, metrics and ASGI startup
-  infra/hosts/              Cross-context project/resource bridges
-  infra/workers/            Resource and application worker hosts/entrypoints
-  shared/infra/settings.py    Runtime and database configuration
+  composition/               Process DI and migration metadata registration
+    integrations/            Cross-context bridges and their DI provider
+  migrations/                Alembic configuration and revision scripts
+  shared/infra/              Technical engine/session/UoW and readiness
+  shared/infra/settings.py   Runtime and database configuration
 ```
 
 Application services receive repositories, clocks and narrow capability ports.
@@ -70,7 +75,7 @@ an uncertain outcome; a rollback attempt does not prove that commit never occurr
 Resource request acceptance writes only the control-plane ledger. Workers use
 short explicit operation scopes around database phases, outside Docker/provider waits.
 
-`infra.http.app:create_app` owns its normally created container/engine. A supplied
+`api.app:create_app` owns its normally created container/engine. A supplied
 `AsyncEngine` remains caller-owned. A supplied container is also caller-owned and
 must be closed explicitly on its owning event loop before that loop shuts down.
 SQLAlchemy runtime persistence is async; Alembic uses
@@ -139,7 +144,7 @@ Startup never creates tables or runs migrations. Start the API on loopback:
 uv run fastapi dev --host 127.0.0.1 --port 8000
 ```
 
-`[tool.fastapi]` selects `infra.http.asgi:app`. The `DevOpsHubAPI` class owns HTTP
+`[tool.fastapi]` selects `api.asgi:app`. The `DevOpsHubAPI` class owns HTTP
 assembly and accepts `APIConfiguration` for metadata/documentation routes. The host
 keeps DI and lifecycle ownership; tests can still inject settings, engines and
 containers through `create_app`. For production use `uv run fastapi run` (no reload).
@@ -151,7 +156,7 @@ worker readiness. OpenAPI is available at `/openapi.json` and `/docs`.
 ## Trusted administration services
 
 Project registration, account bootstrap, password recovery and token administration
-remain service capabilities at the infrastructure host boundary (`infra/`). There is
+remain service capabilities at the HTTP host boundary (`api/composition/`). There is
 currently no operator CLI or replacement administrative HTTP API for these actions.
 A fresh installation therefore needs a separately authorized bootstrap integration;
 guest dashboard access does not create an account or grant project permissions.
@@ -204,7 +209,7 @@ former operator command has been removed. Do not enable an unverified target.
 For an already configured target, start the durable worker separately:
 
 ```bash
-uv run python -m infra.workers.resource_worker
+uv run python -m developer_platform.infra.workers.resource_worker
 ```
 
 API requests never call Docker. The worker claims durable operations, stores encrypted
@@ -248,7 +253,7 @@ and drift acceptance remain pending in
 is not proof that the entire application deployment flow works. Missing configuration
 fails closed, and disabled adapters report failure rather than external success.
 
-Run `uv run python -m infra.workers.application_worker` separately for application steps.
+Run `uv run python -m developer_platform.infra.workers.application_worker` separately for application steps.
 Resources are requested through the same quota/idempotency ledger and database
 worker. Preview events require a configured signing secret and registered repository;
 untrusted forks are rejected. External GitHub/cloud end-to-end acceptance is separate

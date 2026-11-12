@@ -17,6 +17,10 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import NullPool
 
+from api.app import create_app
+from composition.factory import create_container
+from composition.integrations.project_registration import RegisterProjectCommandHandler
+from composition.schema import registered_metadata
 from developer_platform.infra.persistence.models import Resource
 from identity.application.issue_api_token.command import IssueApiTokenCommand
 from identity.application.shared.errors import CredentialDeliveryError
@@ -28,10 +32,6 @@ from identity.infra.persistence.models import (
     ProjectRow,
 )
 from identity.infra.security.credential_file import PrivateCredentialFile
-from infra.composition.factory import create_container
-from infra.composition.schema import registered_metadata
-from infra.hosts.project_registration import RegisterProjectCommandHandler
-from infra.http.app import create_app
 from shared.infra.persistence.audit import AuditEvent
 from shared.infra.settings import SCHEMA_REVISION, Settings
 

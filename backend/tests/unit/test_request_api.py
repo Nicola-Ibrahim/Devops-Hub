@@ -10,6 +10,7 @@ from dishka.integrations.fastapi import FastapiProvider
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+from api.app import create_app
 from api.platform.schemas import (
     AcceptedOperation,
     ResourceRequest,
@@ -39,7 +40,6 @@ from identity.application.module import IdentityModule
 from identity.contracts import AuthenticatedPrincipal
 from identity.domain.errors import AuthenticationRejected
 from identity.domain.records import MembershipDetails, SessionPrincipal
-from infra.http.app import create_app
 
 PROJECT_ID = UUID("11111111-1111-4111-8111-111111111111")
 ENVIRONMENT_ID = UUID("22222222-2222-4222-8222-222222222222")

@@ -10,7 +10,7 @@ from developer_platform.application.application_delivery.shared.ports import (
     DeliveryResult,
 )
 
-from infra.workers.application_host import ApplicationDeliveryHost
+from developer_platform.infra.workers.application_host import ApplicationDeliveryHost
 
 
 def test_application_effect_and_completion_keep_exclusive_ownership():

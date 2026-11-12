@@ -4,17 +4,19 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
 import httpx
-from dishka import Provider, Scope, provide
+from dishka import AsyncContainer, Provider, Scope, provide
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from identity.application.authenticate_api_token.handler import AuthenticateApiTokenHandler
 from identity.application.authorization.port import AuthorizationDecisionPort
 from identity.application.issue_api_token.handler import IssueApiTokenHandler
+from identity.application.module import IdentityModule
 from identity.application.revoke_api_token.handler import RevokeApiTokenHandler
 from identity.application.shared.ports import TokenGenerator, TokenHasher
 from identity.domain.interfaces.api_token_repository import ApiTokenRepository
 from identity.domain.interfaces.project_access_directory import ProjectAccessDirectory
 from identity.infra.authorization.opa import OpaAuthorizationClient
+from identity.infra.composition.module import IdentityModuleDispatcher
 from identity.infra.hosts.api_token_authentication import TokenAuthenticationHost
 from identity.infra.hosts.api_token_operations import (
     IssueApiTokenToFile,
@@ -49,6 +51,10 @@ class IdentityTokenScopePolicy:
 
 class IdentityProvider(Provider):
     token_authentication_host = provide(TokenAuthenticationHost, scope=Scope.APP)
+
+    @provide(scope=Scope.REQUEST)
+    def identity_module(self, container: AsyncContainer) -> IdentityModule:
+        return IdentityModuleDispatcher(container)
 
     @provide(scope=Scope.APP)
     async def opa_http_client(self) -> AsyncIterator[httpx.AsyncClient]:

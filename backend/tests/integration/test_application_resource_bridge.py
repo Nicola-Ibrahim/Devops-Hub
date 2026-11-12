@@ -15,11 +15,11 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import Session
 from test_foundation_postgres import async_engine_for, client_for, issue
 
+from composition.integrations.application_resources import LedgerApplicationResources
 from developer_platform.application.resource_catalog.catalog import ApprovedPostgresCatalog
 from developer_platform.application.resource_catalog.models import PostgresOption
 from developer_platform.infra.persistence.models import QuotaBudget, Reservation, Resource
 from identity.infra.persistence.models import ProjectMembershipRow
-from infra.hosts.application_resources import LedgerApplicationResources
 
 pytestmark = pytest.mark.postgres
 

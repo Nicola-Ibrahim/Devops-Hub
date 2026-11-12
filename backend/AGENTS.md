@@ -8,7 +8,8 @@ SQLAlchemy and Alembic over PostgreSQL. See [README.md](README.md) for commands.
 ```text
 api  ->  context module contract  ->  application  ->  domain
 context infra  ->  implements application/domain ports and owns context DI
-root infra  ->  composes HTTP/worker hosts and both bounded contexts
+composition  ->  assembles process dependencies and both bounded contexts
+api/composition -> adapts HTTP requests to context capabilities
 ```
 
 - `domain` is pure Python business language. It imports no FastAPI, Dishka,
@@ -21,7 +22,11 @@ root infra  ->  composes HTTP/worker hosts and both bounded contexts
   to application commands/queries and maps results to responses. It contains no
   domain state transitions or direct ORM access.
 - Context `infra/composition` registers handlers, ports and concrete module
-  dispatchers. Root `infra` assembles cross-context HTTP and worker hosts.
+  dispatchers. The top-level `composition` package assembles process dependencies
+  and schema metadata. Cross-context bridges and their bindings live under
+  `composition/integrations`; API request adapters and their provider live under
+  `api/composition`; resource and application workers live with their owning
+  context under `infra/workers`.
   Dishka constructs the selected handler lazily; providers contain no use-case
   or transaction logic.
 - `shared/infra` contains technical primitives only. Business rules remain in the
@@ -94,8 +99,9 @@ empty infrastructure folders or adapters for unimplemented targets.
 - Each bounded context exposes a typed module contract with async `execute(command)`
   and `query(query)` entry points. The context owns an explicit message-to-handler
   registry and adapters under context `infra/composition/`; a request-scoped dispatcher resolves
-  only the selected handler. The composition root binds an HTTP host wrapper to the
-  module contract. Routes do not select or construct handlers. Application messages
+  only the selected handler. `api.composition` binds an HTTP host wrapper to the
+  module contract; the process composition root registers its provider. Routes do not
+  select or construct handlers. Application messages
   and results contain no FastAPI/Pydantic types, and unknown messages fail closed.
 
 ## Transaction ownership
@@ -113,18 +119,23 @@ Organize `src/api/` by HTTP-facing capability:
 
 ```text
 api/
-  app.py                 FastAPI setup and router registration
+  app.py                 FastAPI setup, factory and router registration
+  asgi.py                ASGI startup entrypoint
+  composition/           HTTP-to-context adapters and API-specific DI provider
   dependencies.py        authentication and shared request dependencies
   errors.py              domain/application error-to-HTTP mapping
   identity/              internal users, sessions, tokens, memberships
   platform/              projects, catalog, resources, operations, workloads
   health/                liveness, readiness and metrics
+composition/             Process composition root and schema metadata assembly
+  integrations/          Cross-context bridges and their provider bindings
 ```
 
 Within a capability, group routes and request/response schemas by resource or
 workflow when files grow; avoid one giant router or schema module. Keep common
-API plumbing at the API root. DI bindings remain in context/root infrastructure, not
-in route modules. API routes call the context module contract; migrate affected
+API plumbing at the API root. API provider bindings live in `api/composition`, while
+context providers live in each context's `infra/composition`; neither belongs in route
+modules. API routes call the context module contract; migrate affected
 callers together when changing an existing contract.
 
 ## Invariants

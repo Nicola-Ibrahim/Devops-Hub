@@ -1,4 +1,4 @@
-"""Same-transaction cross-context authentication, at the composition boundary."""
+"""Revalidate identity credentials and produce trusted platform access."""
 
 from collections.abc import Callable
 from datetime import datetime
@@ -17,7 +17,7 @@ from identity.infra.security.tokens import PepperedTokenHasher
 from shared.infra.settings import Settings
 
 
-async def authenticate_request(
+async def authenticate_platform_access(
     session: AsyncSession,
     identity: RequestIdentity,
     settings: Settings,

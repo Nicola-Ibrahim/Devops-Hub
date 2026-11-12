@@ -6,13 +6,14 @@ from dishka import AsyncContainer, Provider, Scope, from_context, make_async_con
 from dishka.integrations.fastapi import FastapiProvider
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from api.composition.providers import ApiCompositionProvider
+from composition.integrations.providers import CrossContextIntegrationProvider
+from composition.schema import registered_metadata
+from composition.worker_providers import ApplicationWorkerProvider
 from developer_platform.authorization import ALL_SCOPES
 from developer_platform.infra.composition.providers_delivery import ApplicationDeliveryProvider
 from developer_platform.infra.composition.providers_platform import PlatformProvider
 from identity.infra.composition.providers import IdentityProvider, IdentityTokenScopePolicy
-from infra.composition.schema import registered_metadata
-from infra.composition.worker_providers import ApplicationWorkerProvider
-from infra.http.providers import HttpCompositionProvider
 from shared.infra.providers import DatabaseProvider, ExternalDatabase, RuntimeClockProvider
 from shared.infra.settings import Settings
 
@@ -29,7 +30,8 @@ def create_container(
     registered_metadata()
     return make_async_container(
         RuntimeContext(),
-        HttpCompositionProvider(),
+        ApiCompositionProvider(),
+        CrossContextIntegrationProvider(),
         DatabaseProvider(),
         RuntimeClockProvider(),
         IdentityProvider(),

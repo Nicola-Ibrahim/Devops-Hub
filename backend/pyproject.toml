@@ -25,7 +25,7 @@ requires = ["hatchling>=1.27,<2"]
 build-backend = "hatchling.build"
 
 [tool.fastapi]
-entrypoint = "infra.http.asgi:app"
+entrypoint = "api.asgi:app"
 
 [tool.hatch.build.targets.wheel]
 packages = [
@@ -33,7 +33,7 @@ packages = [
     "src/identity",
     "src/developer_platform",
     "src/shared",
-    "src/infra",
+    "src/composition",
 ]
 
 [tool.pytest.ini_options]
