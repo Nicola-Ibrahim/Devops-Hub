@@ -19,38 +19,38 @@ from api.platform.application_delivery.schemas import (
     TemplateView,
     WebhookResponse,
 )
-from devops_hub.platform.application.module import DeveloperPlatformModule
-from devops_hub.platform.application.shared.dto import AccessContext
-from devops_hub.platform.application.workload_delivery.attach_database.command import (
+from devops_platform.application.module import DeveloperPlatformModule
+from devops_platform.application.shared.dto import AccessContext
+from devops_platform.application.workload_delivery.attach_database.command import (
     AttachDatabase,
     ResourceAttachmentSpec,
 )
-from devops_hub.platform.application.workload_delivery.create_workload.command import (
+from devops_platform.application.workload_delivery.create_workload.command import (
     ApplicationRegistration,
     CreateApplication,
 )
-from devops_hub.platform.application.workload_delivery.deploy_workload.command import (
+from devops_platform.application.workload_delivery.deploy_workload.command import (
     DeployApplication,
     DeploymentSpec,
 )
-from devops_hub.platform.application.workload_delivery.handle_preview_webhook.command import (
+from devops_platform.application.workload_delivery.handle_preview_webhook.command import (
     ProcessGithubPreviewWebhook,
 )
-from devops_hub.platform.application.workload_delivery.read_templates.query import ReadTemplates
-from devops_hub.platform.application.workload_delivery.read_workloads.query import (
+from devops_platform.application.workload_delivery.read_templates.query import ReadTemplates
+from devops_platform.application.workload_delivery.read_workloads.query import (
     ReadApplication,
     ReadApplications,
     ReadDeploymentHistory,
 )
-from devops_hub.platform.application.workload_delivery.retry_delivery_step.command import (
+from devops_platform.application.workload_delivery.retry_delivery_step.command import (
     RetryDeliveryStep,
 )
-from devops_hub.platform.application.workload_delivery.shared.models import (
+from devops_platform.application.workload_delivery.shared.models import (
     ApplicationDetails,
     DeliveryStepDetails,
     DeploymentDetails,
 )
-from devops_hub.platform.authorization import authorize_platform_action
+from devops_platform.authorization import authorize_platform_action
 
 router = APIRouter()
 PlatformAccess = Annotated[AccessContext, Depends(platform_access)]

@@ -11,8 +11,8 @@ from api.core.security.request_identity import (
     request_identity,
 )
 from api.identity.principal.schemas import PrincipalView
-from devops_hub.platform.application.shared.dto import AccessContext
-from devops_hub.platform.application.shared.errors import PlatformRequestError
+from devops_platform.application.shared.dto import AccessContext
+from devops_platform.application.shared.errors import PlatformRequestError
 from identity.application.authenticate_api_token.query import (
     AuthenticateApiTokenQuery,
 )

@@ -10,21 +10,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from test_foundation_postgres import async_engine_for
 
-from devops_hub.platform.application.database_provisioning.submit_database_request.command import (
+from devops_platform.application.database_provisioning.submit_database_request.command import (
     DatabaseRequest,
 )
-from devops_hub.platform.application.projects.command import RegisterProjectCommand
-from devops_hub.platform.application.resource_catalog.models import PostgresOption, ResourceSize
-from devops_hub.platform.application.shared.dto import AccessContext
-from devops_hub.platform.application.shared.errors import PlatformRequestError
-from devops_hub.platform.domain.aggregates.resource_lifecycle import ResourceLifecycle
-from devops_hub.platform.domain.value_objects.idempotency_key import IdempotencyKey
-from devops_hub.platform.domain.value_objects.resource_name import ResourceName
-from devops_hub.platform.domain.value_objects.resource_spec import ResourceSpec
-from devops_hub.platform.infra.persistence.ledger_projects import (
+from devops_platform.application.projects.command import RegisterProjectCommand
+from devops_platform.application.resource_catalog.models import PostgresOption, ResourceSize
+from devops_platform.application.shared.dto import AccessContext
+from devops_platform.application.shared.errors import PlatformRequestError
+from devops_platform.domain.aggregates.resource_lifecycle import ResourceLifecycle
+from devops_platform.domain.value_objects.idempotency_key import IdempotencyKey
+from devops_platform.domain.value_objects.resource_name import ResourceName
+from devops_platform.domain.value_objects.resource_spec import ResourceSpec
+from devops_platform.infra.persistence.ledger_projects import (
     SQLAlchemyProjectRegistrationRepository,
 )
-from devops_hub.platform.infra.persistence.models import (
+from devops_platform.infra.persistence.models import (
     IdempotencyRecord,
     Operation,
     ProjectRegistrationRow,
@@ -33,7 +33,7 @@ from devops_hub.platform.infra.persistence.models import (
     Resource,
     ResourceActivityRow,
 )
-from devops_hub.platform.infra.persistence.resource_repository import SQLAlchemyResourceRepository
+from devops_platform.infra.persistence.resource_repository import SQLAlchemyResourceRepository
 from identity.infra.persistence.models import InternalUserRow, ProjectRow, TeamRow
 
 pytestmark = pytest.mark.postgres

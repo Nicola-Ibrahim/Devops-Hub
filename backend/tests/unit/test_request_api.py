@@ -12,7 +12,7 @@ from pydantic import ValidationError
 
 from api.app import create_app
 from api.platform.resources.schemas import AcceptedOperation, ResourceRequest
-from devops_hub.platform.application.database_provisioning.read_resources.query import (
+from devops_platform.application.database_provisioning.read_resources.query import (
     OperationDetails,
     ReadOperation,
     ReadProject,
@@ -21,16 +21,16 @@ from devops_hub.platform.application.database_provisioning.read_resources.query 
     ReadResources,
     ResourceDetails,
 )
-from devops_hub.platform.application.database_provisioning.submit_database_request.command import (
+from devops_platform.application.database_provisioning.submit_database_request.command import (
     RequestTemporaryDatabase,
 )
-from devops_hub.platform.application.module import DeveloperPlatformModule
-from devops_hub.platform.application.projects.result import (
+from devops_platform.application.module import DeveloperPlatformModule
+from devops_platform.application.projects.result import (
     EnvironmentDetails,
     ProjectRegistrationDetails,
 )
-from devops_hub.platform.application.shared.dto import AccessContext
-from devops_hub.platform.application.shared.errors import PlatformRequestError
+from devops_platform.application.shared.dto import AccessContext
+from devops_platform.application.shared.errors import PlatformRequestError
 from identity.application.authenticate_api_token.query import AuthenticateApiTokenQuery
 from identity.application.authenticate_session.query import AuthenticateSessionQuery
 from identity.application.module import IdentityModule
@@ -147,7 +147,7 @@ class FakePlatformQueries:
         result = await self.request_database(
             command.access, command.request, command.idempotency_key
         )
-        from devops_hub.platform.domain.entities.operation import AcceptedResourceRequest
+        from devops_platform.domain.entities.operation import AcceptedResourceRequest
 
         return AcceptedResourceRequest(result.resource_id, result.operation_id)
 

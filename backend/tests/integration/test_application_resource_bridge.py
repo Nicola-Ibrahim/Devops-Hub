@@ -4,10 +4,10 @@ import asyncio
 from uuid import UUID, uuid4
 
 import pytest
-from devops_hub.platform.application.application_delivery.attach_resource.command import (
+from devops_platform.application.application_delivery.attach_resource.command import (
     ResourceAttachmentSpec,
 )
-from devops_hub.platform.application.application_delivery.shared.ports import (
+from devops_platform.application.application_delivery.shared.ports import (
     ApplicationDeliveryFailure,
 )
 from sqlalchemy import func, select
@@ -16,9 +16,9 @@ from sqlalchemy.orm import Session
 from test_foundation_postgres import async_engine_for, client_for, issue
 
 from composition.integrations.application_resources import LedgerApplicationResources
-from devops_hub.platform.application.resource_catalog.catalog import ApprovedPostgresCatalog
-from devops_hub.platform.application.resource_catalog.models import PostgresOption
-from devops_hub.platform.infra.persistence.models import QuotaBudget, Reservation, Resource
+from devops_platform.application.resource_catalog.catalog import ApprovedPostgresCatalog
+from devops_platform.application.resource_catalog.models import PostgresOption
+from devops_platform.infra.persistence.models import QuotaBudget, Reservation, Resource
 from identity.infra.persistence.models import ProjectMembershipRow
 
 pytestmark = pytest.mark.postgres

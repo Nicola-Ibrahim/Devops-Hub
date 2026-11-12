@@ -2,7 +2,7 @@ import asyncio
 from uuid import uuid4
 
 import pytest
-from devops_hub.platform.application.resource_requests.submit_database_request.result import (
+from devops_platform.application.resource_requests.submit_database_request.result import (
     AcceptedDatabaseRequest,
 )
 from dishka import Provider, Scope, provide
@@ -12,14 +12,14 @@ from test_operation_lifecycle import CapturedResponses, FakeSession
 
 from api.app import create_app
 from composition.container import BackendContainer
-from devops_hub.platform.application.database_provisioning.read_resources.handler import (
+from devops_platform.application.database_provisioning.read_resources.handler import (
     ReadResourcesHandler,
 )
-from devops_hub.platform.application.database_provisioning.submit_database_request.handler import (
+from devops_platform.application.database_provisioning.submit_database_request.handler import (
     RequestTemporaryDatabaseHandler,
 )
-from devops_hub.platform.application.shared.dto import AccessContext
-from devops_hub.platform.application.shared.errors import PlatformRequestError
+from devops_platform.application.shared.dto import AccessContext
+from devops_platform.application.shared.errors import PlatformRequestError
 from identity.application.authenticate_api_token.query import AuthenticateApiTokenQuery
 from identity.application.module import IdentityModule
 from identity.contracts import AuthenticatedPrincipal

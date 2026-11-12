@@ -72,9 +72,12 @@ jobs:
           uv run --frozen python - <<'PYTHON'
           import os
           from pathlib import Path
-          from devops_hub.platform.infra.templates.catalog import FilesystemTemplateCatalog
+          from devops_platform.infra.templates.catalog import FilesystemTemplateCatalog
           target = Path(os.environ["RUNNER_TEMP"]) / "generated-fastapi"
-          catalog = FilesystemTemplateCatalog(Path("../templates"), os.environ["GITHUB_REPOSITORY"])
+          catalog = FilesystemTemplateCatalog(
+              Path("src/devops_platform/infra/templates/catalogs"),
+              os.environ["GITHUB_REPOSITORY"],
+          )
           for item in catalog.render("python-fastapi", "1.0.0", {"application_name": "ci-demo"}):
               path = target / item.path
               path.parent.mkdir(parents=True, exist_ok=True)

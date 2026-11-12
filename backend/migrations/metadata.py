@@ -7,8 +7,8 @@ from shared.infra.persistence.base import Base
 
 def registered_metadata() -> MetaData:
     # Alembic owns metadata discovery; runtime processes never call this helper.
-    from devops_hub.platform.infra.persistence import delivery as delivery_models
-    from devops_hub.platform.infra.persistence import models as platform_models
+    from devops_platform.infra.persistence import delivery as delivery_models
+    from devops_platform.infra.persistence import models as platform_models
     from identity.infra.persistence import models as identity_models
     from shared.infra.persistence import audit
 

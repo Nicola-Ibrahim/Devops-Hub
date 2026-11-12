@@ -14,13 +14,13 @@ from api.core.security.request_identity import (
     request_identity,
 )
 from api.platform.projects.schemas import ProjectRegistrationView
-from devops_hub.platform.application.database_provisioning.read_resources.query import (
+from devops_platform.application.database_provisioning.read_resources.query import (
     ReadProject,
     ReadProjects,
 )
-from devops_hub.platform.application.module import DeveloperPlatformModule
-from devops_hub.platform.application.shared.dto import AccessContext
-from devops_hub.platform.authorization import ALL_SCOPES, authorize_platform_action
+from devops_platform.application.module import DeveloperPlatformModule
+from devops_platform.application.shared.dto import AccessContext
+from devops_platform.authorization import ALL_SCOPES, authorize_platform_action
 from identity.application.authenticate_api_token.query import AuthenticateApiTokenQuery
 from identity.application.authenticate_session.query import AuthenticateSessionQuery
 from identity.application.module import IdentityModule

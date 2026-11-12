@@ -2,7 +2,7 @@
 
 import inspect
 
-from devops_hub.platform.infra.workers import resource_worker
+from devops_platform.infra.workers import resource_worker
 
 
 def test_worker_does_not_register_migration_metadata_at_runtime():

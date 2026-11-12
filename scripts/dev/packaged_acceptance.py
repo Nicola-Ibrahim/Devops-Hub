@@ -130,7 +130,7 @@ from pathlib import Path
 from composition.container import BackendContainer
 from composition.integrations.project_registration import RegisterProjectCommandHandler
 from identity.infra.hosts.identity_sessions import BrowserIdentityService
-from devops_hub.platform.application.ledger import RegisterProjectCommand
+from devops_platform.application.ledger import RegisterProjectCommand
 from shared.infra.settings import Settings
 
 async def seed():
@@ -163,9 +163,9 @@ asyncio.run(seed())
         probe_fixture = r"""import asyncio, secrets
 from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
-from devops_hub.platform.application.lifecycle import DatabaseCredentials, ProvisioningJob
-from devops_hub.platform.infra.providers.docker_postgres import DockerPostgresProvider
-from devops_hub.platform.infra.persistence.models import QuotaBudget
+from devops_platform.application.lifecycle import DatabaseCredentials, ProvisioningJob
+from devops_platform.infra.providers.docker_postgres import DockerPostgresProvider
+from devops_platform.infra.persistence.models import QuotaBudget
 from shared.infra.settings import Settings
 from shared.infra.persistence.database import create_async_database_engine
 

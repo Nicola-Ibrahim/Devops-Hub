@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from api.composition.providers import ApiCompositionProvider
 from composition.integrations.providers import CrossContextIntegrationProvider
-from devops_hub.platform.authorization import ALL_SCOPES
-from devops_hub.platform.infra.composition.container import DeveloperPlatformContainer
+from devops_platform.authorization import ALL_SCOPES
+from devops_platform.infra.composition.container import DeveloperPlatformContainer
 from identity.infra.composition.container import IdentityContainer
 from identity.infra.composition.providers import IdentityTokenScopePolicy
 from shared.infra.providers import DatabaseProvider, ExternalDatabase, RuntimeClockProvider

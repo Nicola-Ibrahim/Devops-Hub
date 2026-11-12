@@ -11,10 +11,10 @@ from uuid import uuid4
 import docker
 import pytest
 from cryptography.fernet import Fernet
-from devops_hub.platform.application.application_delivery.shared.ports import (
+from devops_platform.application.application_delivery.shared.ports import (
     ApplicationDeliveryFailure,
 )
-from devops_hub.platform.application.resource_lifecycle.ports import (
+from devops_platform.application.resource_lifecycle.ports import (
     DatabaseCredentials,
     ProvisioningJob,
 )
@@ -23,22 +23,22 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import Session
 from test_foundation_postgres import async_engine_for
 
-from devops_hub.platform.infra.persistence.application_bindings import (
+from devops_platform.infra.persistence.application_bindings import (
     SQLAlchemyApplicationDatabaseBindings,
 )
-from devops_hub.platform.infra.persistence.delivery import ApplicationRow
-from devops_hub.platform.infra.persistence.models import (
+from devops_platform.infra.persistence.delivery import ApplicationRow
+from devops_platform.infra.persistence.models import (
     ProjectEnvironmentRow,
     ProjectRegistrationRow,
     Resource,
     ResourceSecret,
 )
-from devops_hub.platform.infra.providers.application_runtime import (
+from devops_platform.infra.providers.application_runtime import (
     managed_resource_container_name,
 )
-from devops_hub.platform.infra.providers.docker_application import DockerApplicationAdapter
-from devops_hub.platform.infra.providers.docker_postgres import DockerPostgresProvider
-from devops_hub.platform.infra.security.credentials import FernetResourceCredentialCipher
+from devops_platform.infra.providers.docker_application import DockerApplicationAdapter
+from devops_platform.infra.providers.docker_postgres import DockerPostgresProvider
+from devops_platform.infra.security.credentials import FernetResourceCredentialCipher
 from identity.infra.persistence.models import InternalUserRow, ProjectRow, TeamRow
 
 pytestmark = pytest.mark.postgres

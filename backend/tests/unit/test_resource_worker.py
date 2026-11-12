@@ -4,14 +4,14 @@ import asyncio
 from contextlib import asynccontextmanager
 from uuid import uuid4
 
-from devops_hub.platform.application.resource_lifecycle.ports import (
+from devops_platform.application.resource_lifecycle.ports import (
     DatabaseCredentials,
     DatabaseEndpoint,
     DeletionObservation,
     ProviderFailure,
     ProvisioningJob,
 )
-from devops_hub.platform.application.resource_worker.handler import ResourceWorkerHandler
+from devops_platform.application.resource_worker.handler import ResourceWorkerHandler
 
 
 def job(action: str = "provision") -> ProvisioningJob:

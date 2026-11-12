@@ -7,7 +7,7 @@ from api.health.metrics import OperationalMetrics
 from api.health.metrics_adapter import DatabaseOperationalMetrics
 from api.platform.module import PlatformRequestModule
 from api.settings.config import BrowserCookiePolicy
-from devops_hub.platform.application.module import DeveloperPlatformModule
+from devops_platform.application.module import DeveloperPlatformModule
 from shared.infra.clock import Clock
 from shared.infra.settings import Settings
 

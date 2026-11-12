@@ -30,11 +30,12 @@ src/
     infra/authorization/     Identity-owned OPA adapter
     infra/security/          Password, token and private credential adapters
     infra/hosts/              Identity HTTP and worker authentication adapters
-  devops_hub.platform/
+  devops_platform/
     domain/                  Platform entities, value objects, aggregates, repository interfaces and policies
     application/             Capability-owned command/query handlers for catalog, requests, lifecycle and delivery
     infra/persistence/       Platform-owned ORM rows, transactional stores and read projections
     infra/composition/       Platform dispatch, providers and API/worker container registrations
+    infra/templates/catalogs/ Versioned Python, Node.js and ASP.NET starter templates
     infra/observability/     Platform metric projections
     infra/workers/           Resource and application worker processes
     infra/providers/         Docker database/application and GitHub adapters
@@ -107,8 +108,9 @@ Business names distinguish `ProjectMembershipStatus`, `ApiTokenStatus`,
 `InternalUserRow` and `ProjectMembershipRow`. No speculative entity/value-object
 wrappers were added. The OpenAPI snapshot intentionally extends the API with
 request/read contracts; existing token and health response shapes remain unchanged.
-The platform package remains `devops_hub.platform` to avoid shadowing Python's
-standard-library `platform` module. Cross-context actor mapping stays at the host/composition boundary;
+The bounded-context package is `devops_platform`, avoiding a top-level `platform`
+package that would shadow Python's standard-library module. Cross-context actor
+mapping stays at the host/composition boundary;
 neither context imports the other's internals.
 
 Previous `bootstrap.*`, `platform_api.*`, `provisioning.*`, `platform_runtime.*` and
@@ -231,7 +233,7 @@ former operator command has been removed. Do not enable an unverified target.
 For an already configured target, start the durable worker separately:
 
 ```bash
-uv run python -m devops_hub.platform.infra.workers.resource_worker
+uv run python -m devops_platform.infra.workers.resource_worker
 ```
 
 API requests never call Docker. The worker claims durable operations, stores encrypted
@@ -265,9 +267,11 @@ and password change. Browser permissions are revalidated within each operation.
 ## Application delivery
 
 The API exposes approved `/api/v1/templates`, applications, resource attachment,
-deployment history and durable step retry. Set `PLATFORM_TEMPLATE_ROOT` to the
-versioned template directory and `PLATFORM_TEMPLATE_WORKFLOW_REPOSITORY` to the
-approved company workflow repository. GitHub repository operations require configured
+deployment history and durable step retry. The versioned catalog is packaged under
+`devops_platform/infra/templates/catalogs`; set `PLATFORM_TEMPLATE_ROOT` only to
+override that directory. Set `PLATFORM_TEMPLATE_WORKFLOW_REPOSITORY` to the
+approved company workflow repository. Reusable workflow entrypoints remain under
+`.github/workflows` for GitHub Actions discovery. GitHub repository operations require configured
 organization/token; deployment requires an explicit digest allowlist. Application/database
 association and private-file runtime adapters are present. Complete attachment cleanup
 and drift acceptance remain pending in
@@ -275,7 +279,7 @@ and drift acceptance remain pending in
 is not proof that the entire application deployment flow works. Missing configuration
 fails closed, and disabled adapters report failure rather than external success.
 
-Run `uv run python -m devops_hub.platform.infra.workers.application_worker` separately for application steps.
+Run `uv run python -m devops_platform.infra.workers.application_worker` separately for application steps.
 Resources are requested through the same quota/idempotency ledger and database
 worker. Preview events require a configured signing secret and registered repository;
 untrusted forks are rejected. External GitHub/cloud end-to-end acceptance is separate

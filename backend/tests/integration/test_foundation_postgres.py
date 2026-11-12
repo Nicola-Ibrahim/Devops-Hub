@@ -9,7 +9,7 @@ from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from conftest import migration_config
-from devops_hub.platform.application.project_registration.command import RegisterProjectCommand
+from devops_platform.application.project_registration.command import RegisterProjectCommand
 from fastapi.testclient import TestClient
 from sqlalchemy import event, func, inspect, select, text
 from sqlalchemy.exc import IntegrityError
@@ -20,7 +20,7 @@ from sqlalchemy.pool import NullPool
 from api.app import create_app
 from composition.container import BackendContainer
 from composition.integrations.project_registration import RegisterProjectCommandHandler
-from devops_hub.platform.infra.persistence.models import Resource
+from devops_platform.infra.persistence.models import Resource
 from identity.application.issue_api_token.command import IssueApiTokenCommand
 from identity.application.shared.errors import CredentialDeliveryError
 from identity.infra.hosts.api_token_operations import IssueApiTokenToFile, RevokeApiTokenOperation

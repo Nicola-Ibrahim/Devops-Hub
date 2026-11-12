@@ -6,7 +6,7 @@ from uuid import UUID
 from pydantic import AwareDatetime, Field
 
 from api.core.schemas import Contract
-from devops_hub.platform.domain import DesiredState, ResourceStatus
+from devops_platform.domain import DesiredState, ResourceStatus
 
 Identifier = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_-]{0,63}$")]
 

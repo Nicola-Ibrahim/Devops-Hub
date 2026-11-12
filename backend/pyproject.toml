@@ -31,7 +31,7 @@ entrypoint = "api.asgi:app"
 packages = [
     "src/api",
     "src/identity",
-    "src/devops_hub",
+    "src/devops_platform",
     "src/shared",
     "src/composition",
 ]
@@ -54,6 +54,7 @@ select = ["E", "F", "I", "UP", "B"]
 python_version = "3.12"
 files = ["src"]
 strict = true
+exclude = ["^src/devops_platform/infra/templates/catalogs/"]
 
 
 # ====================================================================================

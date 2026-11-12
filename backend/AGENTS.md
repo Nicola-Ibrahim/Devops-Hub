@@ -36,7 +36,7 @@ api/composition -> adapts HTTP requests to context capabilities
 - `shared/infra` contains technical primitives only. Business rules remain in the
   context that owns them.
 
-`identity` and `devops_hub.platform` are independent bounded contexts. Identity
+`identity` and `devops_platform` are independent bounded contexts. Identity
 owns users, credentials, sessions, tokens and project membership. Developer
 platform owns registered projects, catalog choices, resource requests, leases,
 operations and workload delivery. Cross-context actor mapping belongs in the
@@ -95,7 +95,7 @@ empty infrastructure folders or adapters for unimplemented targets.
   caller-supplied ownership fields. Domain rules still enforce resource ownership,
   valid state transitions, quotas and lease limits, including for worker callers.
 - Platform developer-action scope/project rules live in
-  `devops_hub.platform/authorization.py`. API routes check them before dispatch;
+  `devops_platform/authorization.py`. API routes check them before dispatch;
   HTTP and non-HTTP hosts check again using freshly authenticated access. Platform
   application handlers do not repeat these transport permission checks. Loaded
   resource/application ownership, readiness, quota and idempotency remain enforced

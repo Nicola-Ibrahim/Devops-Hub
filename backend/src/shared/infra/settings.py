@@ -78,7 +78,7 @@ class Settings(DatabaseSettings):
         return value
 
     metrics_token: SecretStr | None = None
-    template_root: str = "../templates"
+    template_root: str | None = None
     template_workflow_repository: str | None = None
     github_organization: str | None = None
     github_token: SecretStr | None = None

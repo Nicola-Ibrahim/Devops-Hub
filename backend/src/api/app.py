@@ -18,8 +18,8 @@ from api.core.schemas import ErrorResponse
 from api.router import router as api_router
 from api.settings.config import APISettings, get_api_settings
 from composition.runtime import BackendRuntime
-from devops_hub.platform.application.shared.errors import CatalogForbidden, PlatformRequestError
-from devops_hub.platform.domain import DomainError
+from devops_platform.application.shared.errors import CatalogForbidden, PlatformRequestError
+from devops_platform.domain import DomainError
 from identity.application.shared.errors import CredentialDeliveryError, IdentityUnavailable
 from identity.domain.errors import AuthenticationRejected, IdentityValidationError
 from shared.infra.settings import Settings

@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
-from devops_hub.platform.application.resource_lifecycle.ports import (
+from devops_platform.application.resource_lifecycle.ports import (
     DatabaseCredentials,
     DatabaseEndpoint,
     DeletionObservation,
@@ -16,9 +16,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Session
 from test_foundation_postgres import async_engine_for
 
-from devops_hub.platform.domain.leases import LeasePolicy
-from devops_hub.platform.domain.resources import DesiredState, ResourceStatus
-from devops_hub.platform.infra.persistence.models import (
+from devops_platform.domain.leases import LeasePolicy
+from devops_platform.domain.resources import DesiredState, ResourceStatus
+from devops_platform.infra.persistence.models import (
     Operation,
     ProjectEnvironmentRow,
     ProjectRegistrationRow,
@@ -28,9 +28,9 @@ from devops_hub.platform.infra.persistence.models import (
     Resource,
     ResourceSecret,
 )
-from devops_hub.platform.infra.persistence.resource_repository import SQLAlchemyResourceRepository
-from devops_hub.platform.infra.persistence.worker_queue import SqlAlchemyProvisioningQueue
-from devops_hub.platform.infra.security.credentials import FernetResourceCredentialCipher
+from devops_platform.infra.persistence.resource_repository import SQLAlchemyResourceRepository
+from devops_platform.infra.persistence.worker_queue import SqlAlchemyProvisioningQueue
+from devops_platform.infra.security.credentials import FernetResourceCredentialCipher
 from identity.infra.persistence.models import InternalUserRow, ProjectRow, TeamRow
 
 pytestmark = pytest.mark.postgres

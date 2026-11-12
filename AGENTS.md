@@ -22,7 +22,7 @@ The [platform requirements](docs/platform-requirements.md) define the intended c
 - `backend/` contains the API foundation, pure lifecycle rules, control-plane schema/migrations, internal token administration services and focused tests. See `backend/README.md` for setup and verification.
 - Backend business context and API ownership are described in [backend/AGENTS.md](backend/AGENTS.md). Do not create a top-level Python package named `platform`, which would shadow the standard library.
 - `docs/` contains onboarding and operations guides; [infra/AGENTS.md](infra/AGENTS.md) covers hosting configuration.
-- `frontend/`, resource/application worker entrypoints, Docker provider adapters, `templates/`, Compose and delivery/operations assets are present in the working tree. Their presence does not establish integrated readiness or completed milestones. Check current wiring, authorization, provider verification and actual acceptance evidence before claiming support. Do not claim queued ledger rows are provisioned databases.
+- `frontend/`, resource/application worker entrypoints, Docker provider adapters, the Platform-owned template catalog, Compose and delivery/operations assets are present in the working tree. Their presence does not establish integrated readiness or completed milestones. Check current wiring, authorization, provider verification and actual acceptance evidence before claiming support. Do not claim queued ledger rows are provisioned databases.
 
 ## Delivery responsibilities
 
@@ -63,8 +63,8 @@ For cross-cutting work, load the relevant skills together. Use
 - Inspect existing code before changing it. State assumptions where the implementation does not yet exist.
 - Keep frontend, backend, and platform responsibilities separate. Agree on API contracts and resource states before implementing cross-cutting flows.
 - Keep identity and platform independent; [backend/AGENTS.md](backend/AGENTS.md) defines DDD and FastAPI boundaries.
-  The Python package is namespaced as `devops_hub.platform` to avoid shadowing
-  the standard library.
+  The Python context package is `devops_platform`, avoiding a top-level `platform`
+  package that would shadow the standard library.
 - Every temporary resource must have an owner, creation time, expiry, status, and cleanup path. Provisioning and deletion must be safe to retry.
 - Never commit credentials or return a database password in logs, CI output, or ordinary API list responses.
 - Use focused tests for lifecycle and failure behavior. Run relevant checks and report what was verified.

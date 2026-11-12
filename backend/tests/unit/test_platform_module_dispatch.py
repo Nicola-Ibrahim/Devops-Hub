@@ -5,24 +5,24 @@ import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from composition.container import BackendContainer
-from devops_hub.platform.application.database_lifecycle.read_activity.handler import (
+from devops_platform.application.database_lifecycle.read_activity.handler import (
     ListResourceActivityQueryHandler,
 )
-from devops_hub.platform.application.database_lifecycle.read_connection.handler import (
+from devops_platform.application.database_lifecycle.read_connection.handler import (
     GetDatabaseConnectionQueryHandler,
 )
-from devops_hub.platform.application.database_lifecycle.renew_lease.handler import (
+from devops_platform.application.database_lifecycle.renew_lease.handler import (
     RenewDatabaseLeaseHandler,
 )
-from devops_hub.platform.application.database_provisioning.read_resources.handler import (
+from devops_platform.application.database_provisioning.read_resources.handler import (
     ReadResourcesHandler,
 )
-from devops_hub.platform.application.database_provisioning.submit_database_request.handler import (
+from devops_platform.application.database_provisioning.submit_database_request.handler import (
     RequestTemporaryDatabaseHandler,
 )
-from devops_hub.platform.application.shared.resource_repository import ResourceRepository
-from devops_hub.platform.authorization import ACTION_PERMISSIONS
-from devops_hub.platform.infra.composition.module import PLATFORM_HANDLER_REGISTRY
+from devops_platform.application.shared.resource_repository import ResourceRepository
+from devops_platform.authorization import ACTION_PERMISSIONS
+from devops_platform.infra.composition.module import PLATFORM_HANDLER_REGISTRY
 from shared.infra.settings import Settings
 
 
@@ -30,7 +30,7 @@ def test_every_platform_message_is_registered_once() -> None:
     registered = set(PLATFORM_HANDLER_REGISTRY.commands) | set(PLATFORM_HANDLER_REGISTRY.queries)
     assert set(ACTION_PERMISSIONS) == registered
     assert all(
-        message.__module__ != "devops_hub.platform.application.module" for message in registered
+        message.__module__ != "devops_platform.application.module" for message in registered
     )
 
 

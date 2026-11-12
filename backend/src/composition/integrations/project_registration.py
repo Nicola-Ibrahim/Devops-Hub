@@ -1,12 +1,12 @@
 """Host-side transaction joining identity references and platform registration."""
 
-from devops_hub.platform.application.projects.command import RegisterProjectCommand
-from devops_hub.platform.application.projects.handler import (
+from devops_platform.application.projects.command import RegisterProjectCommand
+from devops_platform.application.projects.handler import (
     RegisterProjectHandler,
     validate_registration,
 )
-from devops_hub.platform.application.projects.result import ProjectRegistrationDetails
-from devops_hub.platform.application.shared.errors import ledger_unavailable
+from devops_platform.application.projects.result import ProjectRegistrationDetails
+from devops_platform.application.shared.errors import ledger_unavailable
 from identity.domain.interfaces.project_access_directory import ProjectAccessDirectory
 from shared.infra.persistence.unit_of_work import DatabaseUnavailable, SqlAlchemyUnitOfWork
 

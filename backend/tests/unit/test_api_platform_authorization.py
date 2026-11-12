@@ -7,8 +7,8 @@ import pytest
 
 from api.platform.application_delivery.routes import applications
 from api.platform.catalog.routes import catalog
-from devops_hub.platform.application.shared.dto import AccessContext
-from devops_hub.platform.application.shared.errors import CatalogForbidden, PlatformRequestError
+from devops_platform.application.shared.dto import AccessContext
+from devops_platform.application.shared.errors import CatalogForbidden, PlatformRequestError
 
 
 class RecordingModule:
