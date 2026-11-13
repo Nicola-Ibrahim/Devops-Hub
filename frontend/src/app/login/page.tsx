@@ -1,5 +1,1 @@
-import Dashboard from "@/components/dashboard";
-
-export default function LoginPage() {
-  return <Dashboard />;
-}
+import { Suspense } from "react";import LoginForm from "@/features/identity/login-form";export default function LoginPage(){return <Suspense fallback={<main className="center-screen">Loading sign in…</main>}><LoginForm/></Suspense>}

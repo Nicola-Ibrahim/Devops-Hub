@@ -1,7 +1,8 @@
 "use client";
-
-export default function GuestDashboard({ onSignIn }: { onSignIn: () => void }) {
-  return <main className="shell">
+export default function GuestDashboard({ onSignIn }: {
+    onSignIn: () => void;
+}) {
+    return <main className="shell">
     <aside className="sidebar">
       <div className="brand"><span className="brand-mark">D</span><span>devops<span className="brand-light">hub</span></span></div>
       <div className="workspace-label">EXPLORE THE PLATFORM</div>

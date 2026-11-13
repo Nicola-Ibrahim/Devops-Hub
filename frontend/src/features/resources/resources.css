@@ -1,0 +1,22 @@
+.request-form,.request-form label{display:grid;gap:9px}
+.request-form{gap:18px}
+.request-form label{font-size:11px}
+.request-form input,.request-form select,.modal select{height:42px;min-width:0;border:1px solid #cbd7df;background:#fff;border-radius:6px;padding:0 11px;color:var(--ink);font-size:12px}
+.option-specs{display:flex;gap:14px;padding:12px;background:var(--canvas);font-size:10px;color:var(--muted);border-radius:6px}
+.option-specs b{color:var(--ink)}
+.form-footer{display:flex;flex-direction:column;gap:15px}
+.policy-note{font-size:10px;color:var(--muted)}
+.resource-list{display:grid;gap:13px}
+.resource-card{border:1px solid var(--line);border-radius:8px;padding:16px;min-width:0}
+.resource-card-top{display:flex;gap:10px;align-items:center}
+.db-icon{width:35px;height:35px;display:grid;place-items:center;background:#edf4f4;color:var(--green);border-radius:7px;flex-shrink:0;font-size:18px}
+.resource-title{display:grid;gap:4px;min-width:0;flex:1}
+.resource-title strong{font-size:12px;overflow-wrap:anywhere}
+.resource-title>span{font-size:9px;color:var(--muted);overflow-wrap:anywhere}
+.resource-meta{display:grid;grid-template-columns:1fr 1.2fr .8fr;gap:10px;padding:19px 0 14px}
+.resource-meta>span{display:grid;gap:5px;min-width:0}
+.resource-meta small,.preview-meta small{font-size:8px;letter-spacing:.1em;color:var(--muted)}
+.resource-meta b{font-size:10px;font-weight:500;overflow-wrap:anywhere}
+.resource-actions{display:flex;gap:5px;justify-content:space-between;border-top:1px solid var(--line);padding-top:11px}
+.resource-actions button{background:transparent;color:var(--muted);font-size:10px;min-height:34px;padding:4px 7px}
+.resource-actions .delete-action{color:var(--red)}

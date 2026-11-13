@@ -6,14 +6,14 @@ store session or bearer tokens in web storage.
 
 ## Local development
 
-The public landing page is `/`. Open workspace checks the existing browser session
-before entering `/dashboard` or continuing to `/login`. Workspace navigation has
-separate Resources, Applications, Account, Project Settings and Activity pages;
-resource and application IDs have read-only detail URLs. `/demo` contains only
+The public landing page is `/`. Workspace navigation has explicit Overview,
+Resources, Applications, Account, Project Settings and Activity pages. Resource
+and application details have direct URLs; `/dashboard/overview` aliases Overview.
+Protected workspace routes check the browser session, preserve safe return paths,
+and distinguish an expired session from an API outage. `/demo` contains only
 synthetic preview data. Account settings cover the current identity, password and
 sessions; editable profile fields and public registration are not supported by
-the current backend contracts. A backend outage shows a retry state separately
-from an expired session.
+the current backend contracts.
 
 Use Node.js 22 or newer. From this directory:
 
@@ -40,17 +40,33 @@ all mutations except login also require the in-memory CSRF token returned by the
 browser identity API. The identity service owns the HttpOnly session cookie.
 
 The resource form follows the typed catalog. It remains disabled while an
-option is not requestable, so a queued API ledger entry is never presented as a
-ready database. Connection details are fetched only after the developer chooses
-Connect and are held in page memory until the dialog is closed. Deletion asks for
-confirmation and explains that the database volume and its data will be removed.
+option is not requestable. An accepted request remains queued until operations
+report provisioning status. Connection details are fetched only after the
+developer chooses Connect and are held in page memory until the dialog closes,
+the project changes, or the session ends. Lease extension stays within catalog
+limits; deletion asks for confirmation and explains that the database volume and
+its data will be removed.
 
 ## Checks
 
 ```sh
 npm run typecheck
 npm run build
+node --test tests/client.test.mjs
 ```
+
+## Source ownership
+
+`src/app` composes explicit routes and the persistent workspace layout.
+`src/features` owns identity, workspace, resources, applications and activity UI,
+hooks and API types. `src/lib/api` contains UI-independent browser transport and
+pagination primitives; the server-side proxy remains under `app/api`.
+Feature styles live beside their owners and are imported by `app/globals.css`,
+which holds shared tokens and responsive composition. See [AGENTS.md](AGENTS.md)
+and [DESIGN.md](DESIGN.md) before extending the frontend.
+
+The transport tests use mocked fetch responses. They verify CSRF, stale-response
+rejection and expiry/error handling; they do not establish backend/provider readiness.
 
 ## Account and project administration
 

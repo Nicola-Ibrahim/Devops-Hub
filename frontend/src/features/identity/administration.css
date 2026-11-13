@@ -1,0 +1,21 @@
+.identity-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px}
+.identity-column{min-width:0}
+.identity-subheading{display:flex;gap:12px;justify-content:space-between;margin-bottom:18px}
+.identity-subheading h3{font-size:15px;margin-bottom:7px}
+.identity-subheading p,.identity-add-form p{font-size:11px;color:var(--muted);margin-bottom:0}
+.identity-muted{color:var(--muted);font-size:12px}
+.identity-session-list,.identity-member-list{display:grid;gap:10px}
+.identity-session,.identity-member{display:flex;gap:10px;align-items:center;border:1px solid var(--line);border-radius:6px;padding:12px}
+.identity-session>div,.identity-member-name{display:grid;gap:4px;flex:1;min-width:0}
+.identity-session strong,.identity-member strong{font-size:11px}
+.identity-session span,.identity-session small,.identity-member small{font-size:9px;color:var(--muted);overflow-wrap:anywhere}
+.identity-danger-button{padding:8px 10px;background:#fff5f5;color:var(--red);border:1px solid #ecd4d7;border-radius:5px;font-size:10px}
+.identity-revoke-all{margin-top:14px}
+.identity-password-form,.identity-add-form{display:grid;gap:14px;margin-top:25px;padding-top:20px;border-top:1px solid var(--line)}
+.identity-password-form label small{font-size:10px;font-weight:400;color:var(--muted)}
+.identity-password-form button,.identity-add-form button{justify-self:start}
+.identity-member select{width:110px}
+.identity-member em{font-size:9px;color:var(--amber)}
+.identity-message{padding:12px;border-radius:6px;font-size:12px}
+.identity-error{background:#fff1f2;color:var(--red)}
+.identity-success{background:var(--mint);color:var(--green)}
