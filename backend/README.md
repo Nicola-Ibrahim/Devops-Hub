@@ -93,11 +93,11 @@ overrides without real services.
 Each context owns its mappings, repository implementations and schema changes in
 its infrastructure; domain/application packages contain no SQLAlchemy. Both
 contexts share a control-plane database and the central Alembic revision sequence.
-The frozen foundation migration remains unchanged. Forward revision
-`0002_request_ledger` adds teams, platform project registration/environments and
-resource activity (15 tables total), plus a nullable legacy resource environment
-reference. Existing project IDs survive; legacy registrations have unknown
-team/repository and no invented environments until an operator configures them.
+The fresh `0001_initial_schema` baseline creates all 25 mapped tables for new
+installations. It replaces the prior revision chain; existing databases stamped
+with older revisions need a separately planned, data-preserving transition and
+must not be stamped to the new head without schema verification. Resource
+environment references remain nullable for unassigned records.
 Shared `audit_events` remains a documented compatibility exception; identity
 repositories write its legacy adapter in the same transaction as token changes.
 A future context-owned audit-storage transition needs forward migrations, backfill
@@ -293,9 +293,8 @@ and password change. Browser permissions are revalidated within each operation.
 The API exposes approved `/api/v1/templates`, applications, resource attachment,
 deployment history and durable step retry. The versioned catalog is packaged under
 `devops_platform/infra/templates/catalogs`; set `PLATFORM_TEMPLATE_ROOT` only to
-override that directory. Set `PLATFORM_TEMPLATE_WORKFLOW_REPOSITORY` to the
-approved company workflow repository. Reusable workflow entrypoints remain under
-`.github/workflows` for GitHub Actions discovery. GitHub repository operations require configured
+override that directory. Each versioned template includes its own GitHub Actions
+CI workflow. GitHub repository operations require configured
 organization/token; deployment requires an explicit digest allowlist. Application/database
 association and private-file runtime adapters are present. Complete attachment cleanup
 and drift acceptance remain pending in

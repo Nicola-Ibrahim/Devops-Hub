@@ -4,4 +4,40 @@ permissions:
   contents: read
 jobs:
   ci:
-    uses: __PLATFORM_WORKFLOWS_REPOSITORY__/.github/workflows/reusable-ci-dotnet.yml@main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.100
+      - name: Restore dependencies
+        run: dotnet restore src/App.csproj
+      - name: Build application
+        run: dotnet build src/App.csproj --no-restore --configuration Release
+      - name: Check application health
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet run --no-build --no-restore --configuration Release \
+            --project src/App.csproj --urls http://127.0.0.1:5080 \
+            > "$RUNNER_TEMP/template-app.log" 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:5080/healthz; then
+              exit 0
+            fi
+            if ! kill -0 "$app_pid" 2>/dev/null; then
+              echo "Application exited before its health endpoint became ready" >&2
+              exit 1
+            fi
+            sleep 1
+          done
+
+          echo "Application stayed running but /healthz did not become ready within 30 seconds" >&2
+          exit 1

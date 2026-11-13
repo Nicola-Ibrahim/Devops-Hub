@@ -81,9 +81,7 @@ class ApplicationDeliveryProvider(Provider):
             if settings.template_root is not None
             else Path(str(files("devops_platform.infra.templates") / "catalogs"))
         )
-        return FilesystemTemplateCatalog(
-            template_root, settings.template_workflow_repository
-        )
+        return FilesystemTemplateCatalog(template_root)
 
     @provide(scope=Scope.APP)
     def template_catalog(self, templates: FilesystemTemplateCatalog) -> TemplateCatalog:

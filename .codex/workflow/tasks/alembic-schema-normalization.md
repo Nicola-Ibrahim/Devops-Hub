@@ -3,11 +3,11 @@
 ## Current state
 
 - **Updated:** 2026-11-13.
-- **Authorized phase and scope:** Planning only. This record authorizes no schema edits, migration execution, or database deletion.
+- **Authorized phase and scope:** Implementation authorized by the user's 2026-11-13 request for this task's stated scope. Live resources, deployment, production secrets, staging and commits remain excluded.
 - **Next step:** Finalize the 25-table ERD and cross-project integrity rules before rebuilding the Alembic environment.
 - **Open decisions:** Confirm whether any installed database with old revisions must retain data. Decide whether project registration is a separate lifecycle record or should be merged into identity's project; decide how to enforce project/environment/resource consistency at the database boundary.
-- **Baseline:** `main` at `756ff31`. Existing staged changes include intentional removal of `backend/migrations/` to start fresh, plus README, settings, tests and Compose edits. Preserve unrelated work. Do not restore the old revision chain.
-- **Latest verification:** Read-only inspection of ORM mappings and Git status. No PostgreSQL comparison, migration execution, or normalization proof has run.
+- **Baseline:** Current HEAD `aa46bd9`; worktree clean at implementation start, and `backend/migrations/` absent. Earlier staged-change description was stale. Do not restore the old revision chain.
+- **Latest verification:** Generated `0001_initial_schema` with Alembic autogenerate against a disposable local PostgreSQL database; upgrade, `alembic check`, downgrade, and second upgrade passed. Full normalization decisions and ERD remain open.
 
 ## Goal and evidence
 
@@ -116,17 +116,23 @@ Identity owns user, project membership, session, token, and team mappings. Platf
 | --- | --- | --- |
 | ORM and repository inspection | 25 mapped tables; registration names duplicated; delivery validates environment/project in code; orphan rows intentionally have no resource FK | Full column-level ERD and PostgreSQL constraints not yet verified |
 | Git baseline | `main` / `756ff31`; migration directory intentionally absent and deletions staged | Existing staged work preserved |
+| Implementation baseline | HEAD `aa46bd9`; clean worktree; migration directory absent | Supersedes stale staged-change description above |
+| Alembic baseline | `alembic revision --autogenerate -m 'initial schema' --rev-id 0001_initial_schema`; upgrade, check, downgrade base, second upgrade passed | Disposable local PostgreSQL; `alembic check`: no new upgrade operations; normalization review incomplete |
 
-Review status: not performed.
+Review status: independent reviewer `01a1d230-4e98-7d12-8b7c-21ed3c3124c8` reviewed the actual diff read-only. It confirmed an incomplete normalization/ERD acceptance gap and stale migration history in README. README was corrected; normalization/ERD remains open. Reviewer ran no checks.
 
 ### Agent activity
 
 | Runtime agent/thread | Role and instruction source | Assigned scope and baseline | Actual findings and checks |
 | --- | --- | --- | --- |
 | None | No separate agent ran | Coordinator read-only planning | Source and Git inspection only |
+| `01a1d22d-dbff-77a0-9f20-923b109fa324` | coder | Owns Alembic environment, metadata discovery, template, ini | Scaffold; 25 tables imported; Ruff, compilation, offline SQL check reported |
+| `01a1d230-4e98-7d12-8b7c-21ed3c3124c8` | reviewer | Read-only actual diff review | Found incomplete ERD/normalization and stale README migration history; no checks run |
 
 ## Handoff
 
 - Completed: planning and initial normalization risk inventory.
-- Remaining: repository behavior trace, ERD, decisions, Alembic scaffold/baseline, and PostgreSQL verification.
-- Next concrete action: inspect the index/worktree migration state and trace project/environment consistency rules before selecting schema changes.
+- Remaining: full column-level ERD, canonical name and cross-project integrity decisions, justified model/repository adjustments, final checks and independent re-review after those edits. The generated baseline is a candidate until those decisions are resolved.
+- Next concrete action: trace project registration and environment write/read contracts, decide the canonical fields and composite FK policy, then regenerate the baseline on a fresh disposable database.
+
+Implementation evidence (2026-11-13): `docker info` passed with approved daemon access; started uniquely named `devops-hub-alembic-20261113` with database `devops_hub_test_alembic`. `alembic revision --autogenerate -m 'initial schema' --rev-id 0001_initial_schema` passed against its empty database; `alembic upgrade head`, `alembic check` (no new operations), `alembic downgrade base`, and a second `alembic upgrade head` passed. `pytest -q tests/unit/test_boundaries.py` passed (22 tests). Initial Ruff check found generated import/order and long strings plus an unused test import; fixes applied, final Ruff recheck pending. Disposable container removed with `docker rm -f devops-hub-alembic-20261113`. No live database or deployment was touched.

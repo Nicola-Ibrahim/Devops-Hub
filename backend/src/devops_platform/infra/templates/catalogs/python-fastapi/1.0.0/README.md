@@ -4,7 +4,7 @@ Company-approved Python/FastAPI starter. Run `uv sync --locked`, `uv run ruff ch
 
 Container builds run as a non-root user. Logs are structured JSON and should contain operational fields only. Never log credentials, connection strings, request authorization headers, or secret environment values.
 
-The CI workflow calls the centrally maintained workflow configured by the platform. Edit application files directly; template updates are proposed through pull requests and preserve files changed locally.
+The generated repository runs its own GitHub Actions CI workflow. It installs the locked dependencies with Python 3.12, checks formatting and lint with Ruff, and runs the test suite. Edit application files directly; template updates are proposed through pull requests and preserve files changed locally.
 
 When a database is attached, the platform mounts a private read-only file and sets
 `DATABASE_URL_FILE` to its path. No password or connection string belongs in an

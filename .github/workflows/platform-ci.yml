@@ -76,7 +76,6 @@ jobs:
           target = Path(os.environ["RUNNER_TEMP"]) / "generated-fastapi"
           catalog = FilesystemTemplateCatalog(
               Path("src/devops_platform/infra/templates/catalogs"),
-              os.environ["GITHUB_REPOSITORY"],
           )
           for item in catalog.render("python-fastapi", "1.0.0", {"application_name": "ci-demo"}):
               path = target / item.path

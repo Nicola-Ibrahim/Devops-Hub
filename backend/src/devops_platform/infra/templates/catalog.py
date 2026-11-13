@@ -30,9 +30,8 @@ class FilesystemTemplateCatalog(TemplateCatalog):
     _MAX_FILES = 500
     _MAX_FILE_BYTES = 1024 * 1024
 
-    def __init__(self, root: Path, workflow_repository: str | None = None) -> None:
+    def __init__(self, root: Path) -> None:
         self.root = root.resolve()
-        self.workflow_repository = workflow_repository
 
     def list_templates(self) -> tuple[TemplateVersion, ...]:
         found: list[TemplateVersion] = []
@@ -68,10 +67,6 @@ class FilesystemTemplateCatalog(TemplateCatalog):
         self, template_id: str, version: str, values: dict[str, str]
     ) -> tuple[GeneratedFile, ...]:
         self.get(template_id, version)
-        if self.workflow_repository is None or not re.fullmatch(
-            r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", self.workflow_repository
-        ):
-            raise ApplicationDeliveryFailure("template_workflow_not_configured", retryable=False)
         directory = self.root / template_id / version
         result: list[GeneratedFile] = []
         paths = sorted(path for path in directory.rglob("*") if path.is_file())
@@ -97,9 +92,6 @@ class FilesystemTemplateCatalog(TemplateCatalog):
             except UnicodeDecodeError:
                 content = None
             if content is not None:
-                content = content.replace(
-                    "__PLATFORM_WORKFLOWS_REPOSITORY__", self.workflow_repository
-                )
                 for key, value in values.items():
                     token_key = key.upper()
                     if not re.fullmatch(r"[A-Z][A-Z0-9_]{0,63}", token_key):

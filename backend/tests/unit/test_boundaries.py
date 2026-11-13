@@ -1,7 +1,6 @@
 """Import contracts protect context/layer boundaries, including relative imports."""
 
 import ast
-import hashlib
 import importlib.util
 import json
 import subprocess
@@ -294,7 +293,10 @@ def test_public_openapi_matches_versioned_ledger_contract():
     assert create_app(settings).openapi() == expected
 
 
-def test_initial_migration_is_metadata_driven():
+def test_initial_migration_is_explicit_snapshot():
     source = (BACKEND / "migrations/versions/0001_initial_schema.py").read_text()
-    assert "registered_metadata().create_all" in source
-    assert "registered_metadata().drop_all" in source
+    assert source.count("op.create_table(") == 25
+    assert "op.drop_table(" in source
+    assert "create_all(" not in source
+    assert "drop_all(" not in source
+    assert "registered_metadata" not in source

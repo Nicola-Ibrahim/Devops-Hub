@@ -1,88 +1,29 @@
-# GitHub Reusable Workflows Reference
+# GitHub Actions ownership
 
-This repository provides standardized, reusable GitHub Action workflows. By using these, every service in the TOB ecosystem inherits high-quality CI/CD logic with minimal configuration.
+The root `.github/workflows/` directory contains workflows for the DevOps Hub
+platform: CI, image publishing, and manual deployment. Those jobs build and
+operate this repository only.
 
----
+Each approved application template owns its generated project's CI workflow:
 
-## 🐍 Python CI (`reusable-ci-python.yml`)
-Standardized pipeline for Python services using **uv**.
+| Template | Generated workflow | Checks |
+| --- | --- | --- |
+| Python/FastAPI | `catalogs/python-fastapi/1.0.0/.github/workflows/ci.yml` | Frozen uv install, Ruff, pytest |
+| Node.js HTTP | `catalogs/nodejs-http/1.0.0/.github/workflows/ci.yml` | Frozen npm install and tests |
+| ASP.NET Core | `catalogs/aspnet-core/1.0.0/.github/workflows/ci.yml` | Restore, build, health endpoint |
 
-### Inputs
-| Name | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `python-version` | string | `3.12` | Version of Python to install. |
-| `working-directory` | string | `.` | Root of the Python project. |
-| `run-lint` | boolean | `true` | Whether to run Ruff check/format. |
-| `run-test` | boolean | `true` | Whether to run Pytest. |
-| `environment` | string | `production` | Sets the `ENV` variable for tests. |
+The catalog copies these hidden workflow files into the generated repository and
+records them in `.platform-template.json` for managed updates. Generated projects
+do not need access to a shared workflow repository or platform publishing secrets.
+Changes to existing generated repositories follow the managed-file conflict
+rules. Review template workflow changes together with the template's package
+scripts and runtime version.
 
-### Example Usage
-```yaml
-jobs:
-  ci:
-    uses: Nicola-Ibrahim/Tracing-Objectives-Backwards-Devops/.github/workflows/reusable-ci-python.yml@main
-    with:
-      working-directory: ./backend
-      python-version: '3.12'
-```
+Application image publishing and deployment are separate operations. The platform
+image publishing and deployment workflows in this repository do not grant generated
+projects permission to publish images or deploy infrastructure.
 
----
-
-## 📦 Node.js CI (`reusable-ci-node.yml`)
-Standardized pipeline for JavaScript/TypeScript services using **pnpm**.
-
-### Inputs
-| Name | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `node-version` | string | `20` | Version of Node.js. |
-| `package-manager` | string | `pnpm` | Choice of `pnpm`, `npm`, or `yarn`. |
-| `working-directory` | string | `.` | Root of the Node project. |
-| `run-lint` | boolean | `true` | Runs `pnpm lint`. |
-| `run-test` | boolean | `true` | Runs `pnpm test`. |
-
-### Example Usage
-```yaml
-jobs:
-  ci:
-    uses: Nicola-Ibrahim/Tracing-Objectives-Backwards-Devops/.github/workflows/reusable-ci-node.yml@main
-    with:
-      package-manager: 'pnpm'
-      run-test: true
-```
-
----
-
-## 🐳 Docker CD (`reusable-cd-docker.yml`)
-Automated image builds and distribution to **GitHub Container Registry (GHCR)**.
-
-### Inputs
-| Name | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `image-name` | string | **Required** | The name of the image (e.g., `tob-backend`). |
-| `dockerfile` | string | `./Dockerfile` | Path to the Dockerfile. |
-| `context` | string | `.` | Docker build context reach. |
-| `build-args` | string | - | Multi-line string of build arguments. |
-
-### Tagging Strategy
-This workflow automatically generates tags based on:
-- `sha-<hash>`: For every commit.
-- `latest`: Only for commits to the default branch (`main`).
-- `vX.Y.Z`: When a semver tag is pushed.
-
-### Example Usage
-```yaml
-jobs:
-  deploy:
-    uses: Nicola-Ibrahim/Tracing-Objectives-Backwards-Devops/.github/workflows/reusable-cd-docker.yml@main
-    with:
-      image-name: my-app
-      dockerfile: ./infra/Dockerfile
-    secrets:
-      registry-password: ${{ secrets.GITHUB_TOKEN }}
-```
-
----
-
-## 🛠 Best Practices
-1. **Always use `@main`**: For active internal development, or use specific tags (e.g., `@v1.0.0`) for strict stability.
-2. **Secrets**: Most workflows default to using the repository's `GITHUB_TOKEN` for package access. If you need external registries, provide an explicit `registry-password` secret.
+The former generic Docker publisher is retained as an inactive example at
+`infra/workflows/examples/reusable-cd-docker.yml`. It has no caller and is not
+discoverable by GitHub Actions from that location. A generated project needs an
+explicitly designed publishing policy and credentials before adopting it.

@@ -62,7 +62,7 @@ def test_delivery_aggregate_retry_resets_failed_step_and_application_state() -> 
 
 
 def test_catalog_lists_and_renders_only_versioned_templates() -> None:
-    catalog = FilesystemTemplateCatalog(TEMPLATE_ROOT, "company/platform-workflows")
+    catalog = FilesystemTemplateCatalog(TEMPLATE_ROOT)
 
     found = {(item.template_id, item.version) for item in catalog.list_templates()}
     assert found == {
@@ -82,14 +82,17 @@ def test_catalog_lists_and_renders_only_versioned_templates() -> None:
     assert "README.md" in provenance["managed_files"]
 
 
-def test_catalog_rejects_unapproved_workflow_reference() -> None:
+def test_catalog_renders_self_contained_workflows() -> None:
     catalog = FilesystemTemplateCatalog(TEMPLATE_ROOT)
-    with pytest.raises(ApplicationDeliveryFailure, match="template_workflow_not_configured"):
-        catalog.render("python-fastapi", "1.0.0", {"application_name": "demo"})
+    for template_id in ("python-fastapi", "nodejs-http", "aspnet-core"):
+        files = catalog.render(template_id, "1.0.0", {"application_name": "demo"})
+        workflow = next(item.content for item in files if item.path == ".github/workflows/ci.yml")
+        assert b"__PLATFORM_WORKFLOWS_REPOSITORY__" not in workflow
+        assert b"reusable-ci-" not in workflow
 
 
 def test_catalog_rejects_path_traversal() -> None:
-    catalog = FilesystemTemplateCatalog(TEMPLATE_ROOT, "company/platform-workflows")
+    catalog = FilesystemTemplateCatalog(TEMPLATE_ROOT)
     with pytest.raises(ApplicationDeliveryFailure, match="template_not_found"):
         catalog.get("../secrets", "1.0.0")
 
@@ -124,7 +127,7 @@ def test_template_file_symlink_is_rejected(tmp_path: Path) -> None:
     outside = tmp_path / "outside.txt"
     outside.write_text("not template data")
     (version / "README.md").symlink_to(outside)
-    catalog = FilesystemTemplateCatalog(tmp_path, "company/workflows")
+    catalog = FilesystemTemplateCatalog(tmp_path)
 
     with pytest.raises(ApplicationDeliveryFailure, match="template_invalid"):
         catalog.render("python-fastapi", "1.0.0", {})
