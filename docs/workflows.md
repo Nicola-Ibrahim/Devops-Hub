@@ -1,7 +1,7 @@
 # GitHub Actions ownership
 
 The root `.github/workflows/` directory contains workflows for the DevOps Hub
-platform: CI, image publishing, and manual deployment. Those jobs build and
+platform: CI and image publishing. Those jobs build and
 operate this repository only.
 
 Each approved application template owns its generated project's CI workflow:
@@ -23,7 +23,6 @@ Application image publishing and deployment are separate operations. The platfor
 image publishing and deployment workflows in this repository do not grant generated
 projects permission to publish images or deploy infrastructure.
 
-The former generic Docker publisher is retained as an inactive example at
-`infra/workflows/examples/reusable-cd-docker.yml`. It has no caller and is not
-discoverable by GitHub Actions from that location. A generated project needs an
-explicitly designed publishing policy and credentials before adopting it.
+The unused generic Docker publisher example and the legacy server deployment
+workflow were removed. Compose is local-only. Server delivery requires a separately
+authorized deployment contract with readiness and rollback before a workflow is added.

@@ -3,6 +3,15 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import IdentityAdministration from "./identity-administration";
 import GuestDashboard from "./guest-dashboard";
+import Link from "next/link";
+
+export type DashboardSection = "overview" | "resources" | "applications" | "account" | "settings" | "activity";
+const dashboardSections: DashboardSection[] = ["overview", "resources", "applications", "account", "settings", "activity"];
+function safeDashboardNext() {
+  const queryNext = new URLSearchParams(window.location.search).get("next");
+  const candidate = window.location.pathname === "/login" ? queryNext ?? "/dashboard" : `${window.location.pathname}${window.location.search}`;
+  return /^\/dashboard(?:\/(?:overview|resources|applications|account|settings|activity)|\/(?:resources|applications)\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})?(?:\?.*)?$/i.test(candidate) ? candidate : "/dashboard";
+}
 
 type Environment = { id: string; name: string };
 type Project = { project_id: string; name: string; owning_team_name?: string | null; repository?: string | null; configured: boolean; environments: Environment[] };
@@ -10,7 +19,7 @@ type Option = { template_id: string; version: string; target_id: string; size: {
 type Resource = { id: string; project_id: string; owner_id: string; environment_id?: string | null; display_name: string; template_id: string; target_id: string; size_id: string; desired_state: string; status: string; revision: number; created_at: string; expires_at: string; failure_code?: string | null };
 type Operation = { id: string; resource_id: string; action: string; status: string; attempts: number; error_code?: string | null };
 type Page<T> = { items: T[]; next_after?: string | null };
-type Activity = { id: string; actor_id: string; resource_id: string; operation_id: string; action: string; created_at: string };
+type Activity = { id: string; actor_id: string | null; resource_id: string; operation_id: string; action: string; created_at: string };
 type ConnectionDetails = { connection_string: string; host: string; port: number; database: string; user: string; instructions: string };
 type BrowserPrincipal = { userId: string; userName: string; sessionId: string; projectId?: string | null; projectName?: string | null; role?: string | null; scopes: string[]; csrfToken: string; memberships: { projectId: string; projectName: string; role: string }[] };
 type BrowserEnvelope = { csrfToken?: string; principal: BrowserPrincipal; absoluteExpiresAt?: string };
@@ -18,9 +27,8 @@ type AppTemplate = { id: string; version: string; language: string; name: string
 type App = { id: string; project_id: string; environment_id: string; name: string; template_id: string; template_version: string; repository_url: string | null; status: string; created_at: string; expires_at?: string | null; resource_id?: string | null };
 type DeliveryStep = { id: string; application_id: string; kind: string; status: string; attempts: number; error_code: string | null; created_at: string; updated_at: string };
 type AppDetails = { application: App; steps: DeliveryStep[] };
-type PreviewApplication = Pick<App, "id" | "name" | "environment_id" | "status" | "created_at" | "expires_at" | "resource_id">;
 type PreviewDeployment = { id: string; status: string; url?: string | null; created_at?: string; image_digest?: string | null; target_id?: string };
-type LocalPreview = { application: PreviewApplication; deployments: PreviewDeployment[]; steps?: DeliveryStep[] };
+type LocalPreview = { application: App; deployments: PreviewDeployment[]; steps?: DeliveryStep[] };
 let csrfToken = "";
 let onAuthenticationExpired: (() => void) | null = null;
 let apiGeneration = 0;
@@ -92,7 +100,7 @@ function formatDate(value: string) { return new Intl.DateTimeFormat(undefined, {
 function formatDuration(seconds: number) { return seconds < 3600 ? `${Math.floor(seconds / 60)} minutes` : seconds % 3600 === 0 ? `${seconds / 3600} hour${seconds === 3600 ? "" : "s"}` : `${Math.floor(seconds / 3600)}h ${Math.floor(seconds % 3600 / 60)}m`; }
 function makeIdempotencyKey() { return crypto.randomUUID(); }
 
-export default function Dashboard() {
+export default function Dashboard({ section = "overview" }: { section?: DashboardSection }) {
   const [guest, setGuest] = useState(false);
   const [principal, setPrincipal] = useState<BrowserPrincipal | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -101,7 +109,14 @@ export default function Dashboard() {
   const [options, setOptions] = useState<Option[]>([]);
   const [operations, setOperations] = useState<Record<string, Operation>>({});
   const [activity, setActivity] = useState<Activity[]>([]);
+  const [resourceAfter, setResourceAfter] = useState<string | null>(null);
+  const [activityVisible, setActivityVisible] = useState(10);
+  const [activityError, setActivityError] = useState("");
+  const [catalogError, setCatalogError] = useState("");
+  const [historyErrors, setHistoryErrors] = useState<Record<string, string>>({});
+  const resourcePagesRef = useRef<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [bootstrapError, setBootstrapError] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -117,6 +132,7 @@ export default function Dashboard() {
   const [applications, setApplications] = useState<AppDetails[]>([]);
   const [appName, setAppName] = useState("");
   const [appTemplate, setAppTemplate] = useState("");
+  const [appEnvironment, setAppEnvironment] = useState("");
   const [pendingApplication, setPendingApplication] = useState<{ key: string; body: string } | null>(null);
   const [localPreviews, setLocalPreviews] = useState<LocalPreview[]>([]);
   const [previewName, setPreviewName] = useState("");
@@ -129,6 +145,8 @@ export default function Dashboard() {
   const identityMutationLock = useRef<symbol | null>(null);
   const previewIdempotencyKeys = useRef<Record<string, string>>({});
   const pendingAttachmentRequests = useRef<Record<string, { key: string; body: string }>>({});
+  const dialogRef = useRef<HTMLElement | null>(null);
+  const modalReturnFocus = useRef<HTMLElement | null>(null);
 
   function previewMutationKey(operation: string, applicationId: string, body: string) {
     const identity = `${operation}:${applicationId}:${body}`;
@@ -145,6 +163,7 @@ export default function Dashboard() {
     setLoading(false);
     setPrincipal(null); setProjects([]); setProject(null); setResources([]); setOptions([]);
     setOperations({}); setOperationIds({}); setActivity([]); setConnection(null); setRenewing(null);
+    resourcePagesRef.current = []; setResourceAfter(null); setActivityVisible(10); setActivityError(""); setCatalogError(""); setHistoryErrors({});
     setApplications([]); setAppTemplates([]); setPendingRequest(null); setPendingApplication(null);
     setLocalPreviews([]); setPendingPreview(null);
     setPreviewDigests({}); setPreviewBusyId(""); pendingAttachmentRequests.current = {}; previewIdempotencyKeys.current = {};
@@ -181,11 +200,43 @@ export default function Dashboard() {
       if (cause instanceof StaleApiRequest || !isCurrentGeneration(generation)) return;
       csrfToken = ""; activeProjectId = null;
       setPrincipal(null); setProjects([]); setProject(null); setResources([]); setOptions([]); setOperations({}); setOperationIds({}); setActivity([]); setConnection(null); setApplications([]); setAppTemplates([]);
-      if (cause instanceof ApiError && cause.status !== 401) setError(cause.message);
+      if (!(cause instanceof ApiError && cause.status === 401)) { setBootstrapError(cause instanceof Error ? cause.message : "Could not connect to the workspace API"); setError(""); }
     } finally { if (isCurrentGeneration(generation)) setLoading(false); }
   }, []);
 
   useEffect(() => { void loadSession(); }, [loadSession]);
+
+  useEffect(() => {
+    if (loading || principal || guest || bootstrapError || typeof window === "undefined") return;
+    const next = safeDashboardNext();
+    if (window.location.pathname !== "/login") window.location.replace(`/login?next=${encodeURIComponent(next)}`);
+  }, [loading, principal, guest, bootstrapError]);
+
+  useEffect(() => {
+    if (principal && !loading && typeof window !== "undefined" && window.location.pathname === "/login") window.location.replace(safeDashboardNext());
+  }, [principal, loading]);
+
+  useEffect(() => {
+    if (!connection && !renewing) return;
+    modalReturnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const dialog = dialogRef.current;
+    const focusable = () => dialog?.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])') ?? [];
+    focusable()[0]?.focus();
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") { event.preventDefault(); setConnection(null); setRenewing(null); return; }
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      if (!items.length) { event.preventDefault(); return; }
+      if (event.shiftKey && document.activeElement === items[0]) { event.preventDefault(); items[items.length - 1].focus(); }
+      else if (!event.shiftKey && document.activeElement === items[items.length - 1]) { event.preventDefault(); items[0].focus(); }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      modalReturnFocus.current?.focus();
+      modalReturnFocus.current = null;
+    };
+  }, [connection, renewing]);
 
   const refreshApplications = useCallback(async () => {
     if (!project) { if (activeProjectId === null) { setApplications([]); setAppTemplates([]); } return; }
@@ -205,23 +256,19 @@ export default function Dashboard() {
       if (activeProjectId !== projectId) throw new StaleApiRequest();
       setApplications(details.filter((item) => item.application.template_id !== "local-image"));
       const detailsById = new Map(details.map((item) => [item.application.id, item]));
-      const previews = await Promise.all(rows.map(async (app) => {
-        try {
-          const deployments = await api<PreviewDeployment[]>(`applications/${app.id}/deployments`);
-          const localDeployments = deployments.filter((item) => item.target_id === "local");
-          const detail = detailsById.get(app.id);
-          return app.template_id === "local-image" && detail ? { application: detail.application, steps: detail.steps, deployments: localDeployments } as LocalPreview : null;
-        } catch { return null; }
+      const previewResults = await Promise.all(rows.map(async (app) => {
+        try { return { id: app.id, history: await api<PreviewDeployment[]>(`applications/${app.id}/deployments`), error: "" }; }
+        catch (cause) {
+          if (cause instanceof StaleApiRequest) throw cause;
+          return { id: app.id, history: [] as PreviewDeployment[], error: cause instanceof Error ? cause.message : "Could not load deployment history" };
+        }
       }));
       rejectIfStale(generation);
+      const previewErrors = Object.fromEntries(previewResults.filter((result) => result.error).map((result) => [result.id, result.error]));
+      setHistoryErrors(previewErrors);
+      const histories = new Map(previewResults.map((result) => [result.id, result.history.filter((deployment) => deployment.target_id === "local")]));
       setLocalPreviews((current) => {
-        const discovered = previews.filter((item): item is LocalPreview => item !== null);
-        const ids = new Set(discovered.map((item) => item.application.id));
-        const latestDetails = new Map(details.map((item) => [item.application.id, item]));
-        return [...discovered, ...current.filter((item) => !ids.has(item.application.id)).map((item) => {
-          const latest = latestDetails.get(item.application.id);
-          return latest ? { ...item, application: latest.application, steps: latest.steps } : item;
-        })];
+        return details.map((detail) => ({ application: detail.application, steps: detail.steps, deployments: histories.get(detail.application.id) ?? current.find((item) => item.application.id === detail.application.id)?.deployments ?? [] }));
       });
       if (!appTemplate && catalog.length) setAppTemplate(`${catalog[0].id}@${catalog[0].version}`);
     } catch (cause) {
@@ -241,6 +288,7 @@ export default function Dashboard() {
     rejectIfStale(generation);
     if (activeProjectId !== projectId) throw new StaleApiRequest();
     const deployments = history.filter((item) => item.target_id === "local");
+    setHistoryErrors((current) => { const updated = { ...current }; delete updated[preview.application.id]; return updated; });
     setLocalPreviews((current) => current.map((item) => item.application.id === preview.application.id ? { ...item, application: details.application, steps: details.steps, deployments } : item));
   }
 
@@ -253,7 +301,7 @@ export default function Dashboard() {
     const key = pendingPreview?.body === body ? pendingPreview.key : makeIdempotencyKey();
     setPendingPreview({ key, body }); setBusy(true); setError(""); setNotice("");
     try {
-      const accepted = await api<{ application: PreviewApplication }>("applications/local-preview", { method: "POST", headers: { "Idempotency-Key": key }, body });
+      const accepted = await api<{ application: App }>("applications/local-preview", { method: "POST", headers: { "Idempotency-Key": key }, body });
       rejectIfStale(generation);
       const preview: LocalPreview = { application: accepted.application, deployments: [] };
       setLocalPreviews((current) => [preview, ...current.filter((item) => item.application.id !== preview.application.id)]);
@@ -268,7 +316,7 @@ export default function Dashboard() {
   async function attachPreviewDatabase(preview: LocalPreview) {
     const localOption = options.find((option) => option.target_id === "local" && option.requestable);
     if (!project || !localOption) { setError("No approved local PostgreSQL option is available. You can deploy without a database."); return; }
-    const remainingLease = preview.application.expires_at ? Math.floor((Date.parse(preview.application.expires_at) - Date.now()) / 1000) - 10 : 0;
+    const remainingLease = preview.application.expires_at ? Math.floor((Date.parse(preview.application.expires_at) - Date.now()) / 1000) - 10 : Math.min(3600, localOption.max_lifetime_seconds);
     if (remainingLease < 60) { setError("This preview has less than 70 seconds remaining. Register a new preview or deploy without a database."); return; }
     const generation = apiGeneration;
     setPreviewBusyId(preview.application.id); setError("");
@@ -316,7 +364,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (!localPreviews.length || !project) return;
     const timer = window.setInterval(() => {
-      for (const preview of localPreviews) void refreshPreview(preview).catch(() => undefined);
+      for (const preview of localPreviews) void refreshPreview(preview).catch((cause) => { if (!(cause instanceof StaleApiRequest)) setHistoryErrors((current) => ({ ...current, [preview.application.id]: cause instanceof Error ? cause.message : "Could not load deployment history" })); });
     }, 5000);
     return () => window.clearInterval(timer);
   }, [localPreviews, project]);
@@ -329,13 +377,13 @@ export default function Dashboard() {
 
   async function createApplication(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!project || !appName.trim() || !appTemplate || !project.environments[0]) return;
+    if (!project || !appName.trim() || !appTemplate || !appEnvironment) return;
     const lock = acquireFlowLock(); if (!lock) return;
     const generation = apiGeneration;
     const projectId = project.project_id;
     const [template_id, template_version] = appTemplate.split("@");
     setBusy(true); setError(""); setNotice("");
-    const body = JSON.stringify({ name: appName.trim(), environment_id: project.environments[0].id, template_id, template_version });
+    const body = JSON.stringify({ name: appName.trim(), environment_id: appEnvironment, template_id, template_version });
     const key = pendingApplication?.body === body ? pendingApplication.key : makeIdempotencyKey();
     setPendingApplication({ key, body });
     try {
@@ -356,6 +404,22 @@ export default function Dashboard() {
     } finally { releaseFlowLock(lock); if (isCurrentGeneration(generation)) setBusy(false); }
   }
 
+  async function retryDeliveryStep(application: App, step: DeliveryStep) {
+    if (step.status !== "failed" || busy || identityBusy) return;
+    const lock = acquireFlowLock(); if (!lock) return;
+    const generation = apiGeneration;
+    setError(""); setNotice("");
+    try {
+      await api<DeliveryStep>(`applications/${application.id}/steps/${step.id}/retry`, { method: "POST" });
+      rejectIfStale(generation);
+      setNotice(`Retry requested for ${step.kind.replaceAll("_", " ")}.`);
+      await refreshApplications();
+    } catch (cause) {
+      if (cause instanceof StaleApiRequest || !isCurrentGeneration(generation)) return;
+      setError(cause instanceof Error ? cause.message : "Could not retry delivery step");
+    } finally { releaseFlowLock(lock); if (isCurrentGeneration(generation)) setBusy(false); }
+  }
+
 
   const refreshProject = useCallback(async () => {
     if (!project) { if (activeProjectId === null) { setResources([]); setOptions([]); } return; }
@@ -363,31 +427,65 @@ export default function Dashboard() {
     const projectId = project.project_id;
     if (activeProjectId !== projectId) return;
     try {
-      const [catalog, page, activityPage] = await Promise.all([
-        api<{ templates: Option[] }>("catalog").catch(() => ({ templates: [] })),
-        api<Page<Resource>>(`projects/${project.project_id}/resources?limit=100`),
-        api<Page<Activity>>(`projects/${project.project_id}/activity?limit=10`).catch(() => ({ items: [] as Activity[] })),
+      const requestedCursors: (string | null)[] = [null, ...resourcePagesRef.current];
+      const catalogResult = await Promise.allSettled([
+        api<{ templates: Option[] }>("catalog"),
+        api<{ items: Activity[] }>(`projects/${project.project_id}/activity`),
       ]);
+      const pages: Page<Resource>[] = [];
+      for (let pageIndex = 0; pageIndex < requestedCursors.length; pageIndex += 1) {
+        const cursor = pages.at(-1)?.next_after ?? null;
+        const query = new URLSearchParams({ limit: "25" });
+        if (cursor) query.set("after", cursor);
+        const page = await api<Page<Resource>>(`projects/${project.project_id}/resources?${query}`);
+        pages.push(page);
+        if (!page.next_after) break;
+      }
       rejectIfStale(generation);
       if (activeProjectId !== projectId) throw new StaleApiRequest();
-      setOptions(catalog.templates ?? []);
-      setResources(page.items);
-      setActivity(activityPage.items);
-      const current = page.items.filter((item) => item.status === "queued" || item.status === "provisioning" || item.status === "deleting" || item.status === "pending");
-      const ops = await Promise.all(current.map(async (resource) => {
-        const operationId = operationIds[resource.id];
-        if (!operationId) return null;
-        try { const op = await api<Operation>(`operations/${operationId}`); return [resource.id, op] as const; }
-        catch { return null; }
+      const resourceRows = pages.flatMap((page) => page.items);
+      const cursorsUsed = pages.slice(0, Math.max(0, pages.length - 1)).map((page) => page.next_after).filter((cursor): cursor is string => !!cursor);
+      resourcePagesRef.current = cursorsUsed;
+      setResourceAfter(pages.at(-1)?.next_after ?? null);
+      setResources(resourceRows);
+      if (catalogResult[0].status === "fulfilled") { setOptions(catalogResult[0].value.templates ?? []); setCatalogError(""); }
+      else if (!(catalogResult[0].reason instanceof StaleApiRequest)) setCatalogError(catalogResult[0].reason instanceof Error ? catalogResult[0].reason.message : "Could not load resource catalog");
+      if (catalogResult[1].status === "fulfilled") { setActivity(catalogResult[1].value.items); setActivityError(""); }
+      else if (!(catalogResult[1].reason instanceof StaleApiRequest)) setActivityError(catalogResult[1].reason instanceof Error ? catalogResult[1].reason.message : "Could not load project activity");
+      const operationsToLoad = new Map<string, string>();
+      for (const resource of resourceRows) {
+        const id = operationIds[resource.id];
+        if (id) operationsToLoad.set(resource.id, id);
+      }
+      for (const event of (catalogResult[1].status === "fulfilled" ? catalogResult[1].value.items : []).slice(0, activityVisible)) {
+        if (event.resource_id && event.operation_id && !operationsToLoad.has(event.resource_id)) operationsToLoad.set(event.resource_id, event.operation_id);
+      }
+      const ops = await Promise.all([...operationsToLoad].map(async ([resourceId, operationId]) => {
+        const op = await api<Operation>(`operations/${operationId}`);
+        return [resourceId, op] as const;
       }));
       rejectIfStale(generation);
       if (activeProjectId !== projectId) throw new StaleApiRequest();
-      setOperations(Object.fromEntries(ops.filter((item): item is readonly [string, Operation] => item !== null)));
+      setOperations(Object.fromEntries(ops));
     } catch (cause) {
       if (cause instanceof StaleApiRequest || !isCurrentGeneration(generation) || activeProjectId !== projectId) return;
       setError(cause instanceof Error ? cause.message : "Could not load project resources");
     }
-  }, [project, operationIds]);
+  }, [project, operationIds, activityVisible]);
+
+  async function loadMoreResources() {
+    if (!project || !resourceAfter) return;
+    const cursor = resourceAfter;
+    const generation = apiGeneration;
+    const query = new URLSearchParams({ limit: "25", after: cursor });
+    try {
+      const page = await api<Page<Resource>>(`projects/${project.project_id}/resources?${query}`);
+      rejectIfStale(generation);
+      resourcePagesRef.current = [...resourcePagesRef.current, cursor];
+      setResources((current) => [...current, ...page.items.filter((item) => !current.some((existing) => existing.id === item.id))]);
+      setResourceAfter(page.next_after ?? null);
+    } catch (cause) { if (!(cause instanceof StaleApiRequest) && isCurrentGeneration(generation)) setError(cause instanceof Error ? cause.message : "Could not load more resources"); }
+  }
 
   function extensionChoices(resource: Resource) { return leaseExtensionChoices(resource, options); }
 
@@ -399,6 +497,7 @@ export default function Dashboard() {
       const selected = options.find((option) => optionKey(option) === current.option && option.requestable) ?? options.find((option) => option.requestable);
       return { ...current, environment_id: project.environments.some((env) => env.id === current.environment_id) ? current.environment_id : project.environments[0]?.id ?? "", option: selected ? optionKey(selected) : "", ttl_seconds: selected ? Math.min(current.ttl_seconds, selected.max_lifetime_seconds) : current.ttl_seconds };
     });
+    setAppEnvironment((current) => project.environments.some((env) => env.id === current) ? current : project.environments[0]?.id ?? "");
   }, [project, options]);
 
   const selectedOption = useMemo(() => options.find((item) => optionKey(item) === form.option), [options, form.option]);
@@ -431,6 +530,8 @@ export default function Dashboard() {
       rejectIfStale(generation);
       csrfToken = result.csrfToken ?? result.principal.csrfToken;
       setPassword(""); setPrincipal(result.principal); await loadSession();
+      const next = safeDashboardNext();
+      window.location.replace(next);
     } catch (cause) {
       if (cause instanceof StaleApiRequest || !isCurrentGeneration(generation)) return;
       setError(cause instanceof Error ? cause.message : "Sign in failed");
@@ -551,6 +652,7 @@ export default function Dashboard() {
     const previousProjectId = activeProjectId;
     activeProjectId = projectId;
     setConnection(null); setResources([]); setOptions([]); setOperations({}); setActivity([]);
+    resourcePagesRef.current = []; setResourceAfter(null); setActivityVisible(10); setActivityError(""); setCatalogError(""); setHistoryErrors({});
     setApplications([]); setAppTemplates([]); setRenewing(null); setLocalPreviews([]); setPreviewDigests({}); setPreviewBusyId("");
     pendingAttachmentRequests.current = {}; previewIdempotencyKeys.current = {};
     setBusy(true); setError("");
@@ -573,6 +675,7 @@ export default function Dashboard() {
 
   if (guest && !principal) return <GuestDashboard onSignIn={() => setGuest(false)} />;
   if (loading) return <main className="center-screen"><div className="loader" aria-label="Loading" /></main>;
+  if (bootstrapError) return <main className="center-screen"><section className="panel"><h1>Workspace unavailable</h1><p role="alert">{bootstrapError}</p><button className="primary-button" onClick={() => { setBootstrapError(""); setLoading(true); void loadSession(); }}>Retry</button><Link href="/">Home</Link></section></main>;
   if (!principal) return <Login visitAsGuest={() => { setPassword(""); setError(""); setGuest(true); }} username={username} password={password} setUsername={setUsername} setPassword={setPassword} submit={login} error={error} busy={busy} />;
 
   return <main className="shell">
@@ -583,19 +686,20 @@ export default function Dashboard() {
       <select id="project-select" className="project-select" value={project?.project_id ?? ""} onChange={(event) => void switchProject(event.target.value)} disabled={busy || identityBusy || projects.length === 0}>
         {projects.map((item) => <option key={item.project_id} value={item.project_id}>{item.name}</option>)}
       </select>
-      <nav className="nav"><span className="nav-item active"><span>▦</span> Resources</span><span className="nav-item disabled" title="Available in a later platform release"><span>◇</span> App templates <small>Coming later</small></span><span className="nav-item disabled" title="Available in a later platform release"><span>↗</span> Deployments <small>Coming later</small></span></nav>
-      <div className="sidebar-bottom"><span className="avatar">{principal.userName.slice(0, 1).toUpperCase()}</span><div className="user-copy"><strong>{principal.userName}</strong><span>{principal.role ?? "Developer"}</span></div><button className="icon-button" onClick={() => void signOut()} disabled={identityBusy} title="Sign out" aria-label="Sign out">↪</button></div>
+      <nav className="nav">{dashboardSections.map((item) => <Link key={item} className={`nav-item ${section === item ? "active" : ""}`} aria-current={section === item ? "page" : undefined} href={item === "overview" ? "/dashboard" : `/dashboard/${item}`}>{item === "overview" ? "Overview" : item[0].toUpperCase() + item.slice(1)}</Link>)}</nav>
+      <div className="sidebar-bottom"><Link href="/" className="nav-item">Home</Link><Link href="/dashboard/account" className="avatar" aria-label="Account">{principal.userName.slice(0, 1).toUpperCase()}</Link><div className="user-copy"><strong>{principal.userName}</strong><span>{principal.role ?? "Developer"}</span></div><button className="icon-button" onClick={() => void signOut()} disabled={identityBusy} title="Sign out" aria-label="Sign out">↪</button></div>
     </aside>
 
     <section className="main-content">
-      <header className="topbar"><div className="breadcrumb">Workspace <span>/</span> Resources</div><div className="topbar-right"><span className="secure-label"><i /> Internal workspace</span><button className="user-menu" onClick={() => void signOut()} disabled={identityBusy} aria-label="Sign out">{principal.userName.slice(0, 1).toUpperCase()}</button></div></header>
+      <header className="topbar"><div className="breadcrumb">Workspace <span>/</span> {section}</div><div className="topbar-right"><span className="secure-label">{project?.name ?? "No project selected"}</span><Link href="/dashboard/account" className="user-menu" aria-label="Account">{principal.userName.slice(0, 1).toUpperCase()}</Link></div></header>
       <div className="content-wrap">
-        <div className="page-heading"><div><div className="eyebrow">DEVELOPER PLATFORM</div><h1>Your resources</h1><p>Temporary development environments managed by your team.</p></div><span className="environment-pill"><i /> Local platform</span></div>
+        <div className="page-heading"><div><div className="eyebrow">DEVELOPER PLATFORM</div><h1>{{ overview: "Workspace overview", resources: "Your resources", applications: "Applications", account: "Account security", settings: "Project settings", activity: "Project activity" }[section]}</h1><p>{section === "resources" ? "Temporary development environments managed by your team." : section === "applications" ? "Approved templates, local previews and delivery progress." : section === "account" ? "Manage your identity security and active sessions." : section === "settings" ? "Manage membership for the selected project." : "Project resources, application delivery and recent activity."}</p></div><span className="environment-pill">{project?.configured ? "Project configured" : "Setup required"}</span></div>
         {error && <div role="alert" className="alert error"><span>!</span><p>{error}</p><button onClick={() => setError("")} aria-label="Dismiss">×</button></div>}
         {notice && <div role="status" className="alert success"><span>✓</span><p>{notice}</p><button onClick={() => setNotice("")} aria-label="Dismiss">×</button></div>}
         {project && <div className="project-context"><div className="project-symbol">{project.name.slice(0, 1).toUpperCase()}</div><div><strong>{project.name}</strong><span>{project.owning_team_name || "Team not specified"}{project.repository ? ` · ${project.repository}` : ""}</span></div><div className="project-envs">{project.environments.map((env) => <span key={env.id}>{env.name}</span>)}</div></div>}
 
-        <div className="dashboard-grid">
+        {section === "overview" && <section className="dashboard-stats" aria-label="Workspace summary"><article className="panel"><strong>{resources.length}</strong><span>Loaded resources</span></article><article className="panel"><strong>{localPreviews.length}</strong><span>Applications and previews</span></article><article className="panel"><strong>{activity.length}</strong><span>Recent activity</span></article></section>}
+        {(section === "resources" || section === "overview") && <div className="dashboard-grid">
           <section className="panel request-panel">
             <div className="panel-heading"><div><div className="eyebrow">RESOURCE CATALOG</div><h2>Request a database</h2></div><span className="catalog-icon">＋</span></div>
             {!project?.configured && <div className="notice-box"><strong>Project setup needed</strong><span>This project is not configured for self-service resources yet. Ask your platform administrator to finish project setup.</span></div>}
@@ -613,36 +717,39 @@ export default function Dashboard() {
 
           <section className="panel resources-panel">
             <div className="panel-heading resources-heading"><div><div className="eyebrow">PROJECT ENVIRONMENTS</div><h2>Active resources <span className="count">{resources.length}</span></h2></div><button className="refresh-button" onClick={() => void refreshProject()} title="Refresh resources">↻</button></div>
+          {catalogError && <div role="alert" className="failure-line">Resource catalog unavailable: {catalogError} <button type="button" onClick={() => void refreshProject()}>Retry</button></div>}
           {resources.length === 0 ? <div className="empty-state"><div className="empty-illustration"><span>▱</span><i /></div><strong>No resources yet</strong><p>When your team requests a development database, it will appear here with its status and expiry.</p></div> : <div className="resource-list">{resources.map((resource) => <ResourceCard key={resource.id} resource={resource} project={project} operation={operations[resource.id]} connection={connection?.resourceId === resource.id ? connection.value : null} canExtend={extensionChoices(resource).length > 0} onConnect={() => void revealConnection(resource)} onRenew={() => { setRenewing(resource); setRenewSeconds(extensionChoices(resource)[0] ?? 0); }} onDelete={() => void deleteResource(resource)} busy={busy || identityBusy} />)}</div>}
+          {resourceAfter && <button className="secondary-button" type="button" onClick={() => void loadMoreResources()}>Load more resources</button>}
           </section>
-        </div>
+        </div>}
 
-        <section className="panel applications-panel">
+        {(section === "applications" || section === "overview") && <><section className="panel applications-panel">
           <div className="panel-heading"><div><div className="eyebrow">APP STARTER</div><h2>Applications <span className="count">{applications.length}</span></h2></div></div>
           <form className="application-create" onSubmit={createApplication}>
             <label>Approved template<select value={appTemplate} onChange={(event) => setAppTemplate(event.target.value)} required>
               <option value="">Select a template</option>
               {appTemplates.map((item) => <option key={`${item.id}@${item.version}`} value={`${item.id}@${item.version}`}>{item.name} · {item.language} · v{item.version}</option>)}
             </select></label>
+            <label>Environment<select value={appEnvironment} onChange={(event) => setAppEnvironment(event.target.value)} required><option value="">Choose an environment</option>{project?.environments.map((environment) => <option key={environment.id} value={environment.id}>{environment.name}</option>)}</select></label>
             <label>Application name<input value={appName} onChange={(event) => setAppName(event.target.value)} maxLength={64} placeholder="e.g. checkout-service" required /></label>
             <button className="primary-button" disabled={busy || identityBusy || !project?.configured || !appTemplates.length || !project.environments.length}>{busy ? "Working…" : "Create application →"}</button>
           </form>
           {applications.length === 0 ? <p className="applications-empty">Choose an approved template to start a project. Repository creation runs asynchronously and its progress is recorded below.</p> : <div className="application-list">{applications.map(({ application, steps }) => <article className="application-card" key={application.id}>
-            <div className="application-heading"><div><strong>{application.name}</strong><small>{application.template_id} · v{application.template_version} · {application.repository_url ?? "Repository pending"}</small></div><span className={`status status-${application.status}`}><i />{application.status}</span></div>
-            <div className="delivery-steps">{steps.map((step) => <div className="delivery-step" key={step.id}><span className={`step-dot step-${step.status}`} /><span>{step.kind.replaceAll("_", " ")}</span><b>{step.status}</b><small>{step.attempts ? `attempt ${step.attempts}` : "queued"}{step.error_code ? ` · ${step.error_code}` : ""}</small></div>)}</div>
+            <div className="application-heading"><div><Link href={`/dashboard/applications/${application.id}`}><strong>{application.name}</strong></Link><small>{application.template_id} · v{application.template_version} · {application.repository_url ?? "Repository pending"}</small></div><span className={`status status-${application.status}`}><i />{application.status}</span></div>
+            <div className="delivery-steps">{steps.map((step) => <div className="delivery-step" key={step.id}><span className={`step-dot step-${step.status}`} /><span>{step.kind.replaceAll("_", " ")}</span><b>{step.status}</b><small>{step.attempts ? `attempt ${step.attempts}` : "queued"}{step.error_code ? ` · ${step.error_code}` : ""}</small>{step.status === "failed" && <button type="button" className="secondary-button" onClick={() => void retryDeliveryStep(application, step)} disabled={busy || identityBusy}>Retry step</button>}</div>)}</div>
           </article>)}</div>}
         </section>
 
         <section className="panel local-preview-panel">
-          <div className="panel-heading"><div><div className="eyebrow">LOCAL PREVIEW</div><h2>Register an approved image</h2></div><span className="catalog-icon">⌁</span></div>
-          <p className="preview-intro">Registration creates a local-image application and lease. It does not attach a database or start deployment. Add an immutable image digest when you choose Deploy. Preview addresses are for this machine only.</p>
+          <div className="panel-heading"><div><div className="eyebrow">APPLICATION DELIVERY</div><h2>Register a local preview</h2></div><span className="catalog-icon">⌁</span></div>
+          <p className="preview-intro">Applications can attach an approved local database and deploy an immutable image digest to the local target when supported. Preview addresses are for this machine only.</p>
           <form className="local-preview-form" onSubmit={registerLocalPreview}>
             <label>Preview name<input value={previewName} onChange={(event) => setPreviewName(event.target.value)} maxLength={64} required placeholder="e.g. checkout-preview" /></label>
             <label>Environment<select value={previewEnvironment} onChange={(event) => setPreviewEnvironment(event.target.value)} required><option value="">Choose an environment</option>{project?.environments.map((environment) => <option key={environment.id} value={environment.id}>{environment.name}</option>)}</select></label>
             <label>Lease<select value={previewTtl} onChange={(event) => setPreviewTtl(Number(event.target.value))}><option value={3600}>1 hour</option><option value={14400}>4 hours</option><option value={86400}>24 hours</option></select></label>
             <button className="primary-button" type="submit" disabled={busy || identityBusy || !project?.configured || !project.environments.length}>{busy ? "Registering…" : "Register local image →"}</button>
           </form>
-          {localPreviews.length === 0 ? <p className="applications-empty">Registered local previews appear here. The template-based application flow above remains separate.</p> : <div className="application-list">{localPreviews.map((preview) => {
+          {localPreviews.length === 0 ? <p className="applications-empty">Applications and registered local previews appear here with their delivery history.</p> : <div className="application-list">{localPreviews.map((preview) => {
             const deployment = preview.deployments.at(-1);
             const resource = resources.find((item) => item.id === preview.application.resource_id);
             const deployed = deployment?.status === "succeeded" || deployment?.status === "ready";
@@ -650,7 +757,8 @@ export default function Dashboard() {
             const attachmentPending = attachmentStep?.status === "pending" || attachmentStep?.status === "running";
             const waitingForDatabase = attachmentPending || (!!preview.application.resource_id && resource?.status !== "ready");
             return <article className="application-card" key={preview.application.id}>
-              <div className="application-heading"><div><strong>{preview.application.name}</strong><small>{deployment?.image_digest ?? "Image digest required at deploy"}</small></div><span className={`status status-${deployed ? "ready" : deployment?.status ?? "pending"}`}><i />{deployed ? "deployed" : deployment?.status ?? "registered"}</span></div>
+              <div className="application-heading"><div><Link href={`/dashboard/applications/${preview.application.id}`}><strong>{preview.application.name}</strong></Link><small>{deployment?.image_digest ?? "Image digest required at deploy"} · {preview.application.template_id}</small></div><span className={`status status-${deployed ? "ready" : deployment?.status ?? "pending"}`}><i />{deployed ? "deployed" : deployment?.status ?? "registered"}</span></div>
+              {historyErrors[preview.application.id] && <div className="failure-line" role="alert">Deployment history unavailable: {historyErrors[preview.application.id]} <button type="button" onClick={() => void refreshPreview(preview).catch((cause) => setHistoryErrors((current) => ({ ...current, [preview.application.id]: cause instanceof Error ? cause.message : "Could not reload history" })))}>Retry history</button></div>}
               <div className="preview-meta">{preview.application.expires_at && <span><small>EXPIRES</small><b>{formatDate(preview.application.expires_at)}</b></span>}<span><small>DATABASE</small><b>{!preview.application.resource_id ? "Not attached" : resource ? resource.status : "Attachment pending"}</b></span></div>
               {preview.steps?.some((step) => step.status === "failed") && <div className="failure-line" role="status">Deployment failed · {preview.steps.find((step) => step.status === "failed")?.error_code ?? "check delivery status"}. Retry deployment when ready.</div>}
               {deployed && deployment?.url && isLoopbackUrl(deployment.url) && <div className="preview-url"><strong>Local preview URL</strong><a href={deployment.url} target="_blank" rel="noreferrer">{deployment.url}</a><small>Loopback access on this machine only; this URL is not shareable.</small></div>}
@@ -664,9 +772,9 @@ export default function Dashboard() {
             </article>;
           })}</div>}
           {!options.some((option) => option.requestable && option.target_id === "local") && <p className="field-hint">No approved local PostgreSQL option is currently available. You can deploy a preview without a database.</p>}
-        </section>
+        </section></>}
 
-        <IdentityAdministration
+        {(section === "account" || section === "settings") && <IdentityAdministration
           key={`${principal.sessionId}:${project?.project_id ?? "no-project"}`}
           api={api}
           principal={principal}
@@ -679,23 +787,24 @@ export default function Dashboard() {
           onSessionEnded={clearAuthentication}
           onIdentityChanged={loadSession}
           onMutationBusyChange={setIdentityBusy}
-        />
+          section={section === "settings" ? "members" : "account"}
+        />}
 
-        {activity.length > 0 && <section className="panel activity-panel"><div className="panel-heading"><div><div className="eyebrow">AUDIT TRAIL</div><h2>Recent project activity</h2></div></div><div className="activity-list">{activity.map((event) => <div className="activity-row" key={event.id}><span className="activity-marker" /><span className="activity-description"><strong>{event.action.replaceAll("_", " ")}</strong><small>by {event.actor_id.slice(0, 8)} · resource {event.resource_id.slice(0, 8)}</small></span><time dateTime={event.created_at}>{formatDate(event.created_at)}</time></div>)}</div></section>}
+        {(section === "activity" || section === "overview") && <section className="panel activity-panel"><div className="panel-heading"><div><div className="eyebrow">AUDIT TRAIL</div><h2>{section === "overview" ? "Recent activity" : "Project activity"}</h2></div></div>{activityError ? <p role="alert">Activity unavailable: {activityError} <button type="button" onClick={() => void refreshProject()}>Retry</button></p> : activity.length ? <><div className="activity-list">{activity.slice(0, activityVisible).map((event) => <div className="activity-row" key={event.id}><span className="activity-marker" /><span className="activity-description"><strong>{event.action.replaceAll("_", " ")}</strong><small>by {event.actor_id ? event.actor_id.slice(0, 8) : "system"} · resource {event.resource_id.slice(0, 8)} · operation {operations[event.resource_id] ? `${operations[event.resource_id].action} · ${operations[event.resource_id].status}` : event.operation_id.slice(0, 8)}</small></span><time dateTime={event.created_at}>{formatDate(event.created_at)}</time></div>)}</div>{activityVisible < activity.length && <button className="secondary-button" type="button" onClick={() => setActivityVisible((count) => count + 10)}>Load more activity</button>}</> : <p className="identity-muted">No activity is available.</p>}</section>}
 
-        <footer className="page-footer"><span>Resources are scoped to your project membership.</span><span><i /> Platform API connected</span></footer>
+        <footer className="page-footer"><span>Resources are scoped to your project membership.</span>{error && <span role="status">API request needs attention</span>}</footer>
       </div>
     </section>
 
-    {connection && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setConnection(null); }}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="connection-title"><button className="modal-close" onClick={() => setConnection(null)} aria-label="Close">×</button><span className="modal-icon">⌁</span><div className="eyebrow">SENSITIVE ACCESS</div><h2 id="connection-title">Database connection</h2><p>This connection string contains a password. It is shown only after your request and stays in this page’s memory. Close this window when finished.</p><div className="connection-facts"><span><small>HOST</small><b>{connection.details.host}</b></span><span><small>PORT</small><b>{connection.details.port}</b></span><span><small>DATABASE</small><b>{connection.details.database}</b></span><span><small>USER</small><b>{connection.details.user}</b></span></div><textarea readOnly value={connection.value} aria-label="Database connection string" onFocus={(event) => event.currentTarget.select()} /><p className="connection-instructions">{connection.details.instructions}</p><div className="modal-footer"><span>Access is recorded for security.</span><button className="secondary-button" onClick={() => void copyConnection()}>Copy connection</button><button className="primary-button" onClick={() => setConnection(null)}>Done</button></div></section></div>}
-    {renewing && <div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-labelledby="renew-title"><button className="modal-close" onClick={() => setRenewing(null)} aria-label="Close">×</button><span className="modal-icon">◷</span><div className="eyebrow">RESOURCE LIFECYCLE</div><h2 id="renew-title">Extend lease</h2><p>Choose an expiry measured from the database creation time. It must stay within the catalog lifetime limit.</p><form onSubmit={renewResource}><label>Total lease<select value={renewSeconds} onChange={(event) => setRenewSeconds(Number(event.target.value))} disabled={!extensionChoices(renewing).length || busy}>{extensionChoices(renewing).map((seconds) => <option key={seconds} value={seconds}>{formatLeaseDuration(seconds)}</option>)}</select></label>{extensionChoices(renewing).length ? <p className="field-hint">New expiry: {formatDate(new Date(Date.parse(renewing.created_at) + renewSeconds * 1000).toISOString())}</p> : <p className="field-hint">This resource has reached its maximum permitted lifetime.</p>}<div className="modal-footer"><button className="secondary-button" type="button" onClick={() => setRenewing(null)}>Cancel</button><button className="primary-button" type="submit" disabled={busy || identityBusy || !extensionChoices(renewing).includes(renewSeconds)}>{busy ? "Saving…" : "Update lease"}</button></div></form></section></div>}
+    {connection && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setConnection(null); }}><section ref={dialogRef} className="modal" role="dialog" aria-modal="true" aria-labelledby="connection-title" tabIndex={-1}><button className="modal-close" onClick={() => setConnection(null)} aria-label="Close">×</button><span className="modal-icon">⌁</span><div className="eyebrow">SENSITIVE ACCESS</div><h2 id="connection-title">Database connection</h2><p>This connection string contains a password. It is shown only after your request and stays in this page’s memory. Close this window when finished.</p><div className="connection-facts"><span><small>HOST</small><b>{connection.details.host}</b></span><span><small>PORT</small><b>{connection.details.port}</b></span><span><small>DATABASE</small><b>{connection.details.database}</b></span><span><small>USER</small><b>{connection.details.user}</b></span></div><textarea readOnly value={connection.value} aria-label="Database connection string" onFocus={(event) => event.currentTarget.select()} /><p className="connection-instructions">{connection.details.instructions}</p><div className="modal-footer"><span>Access is recorded for security.</span><button className="secondary-button" onClick={() => void copyConnection()}>Copy connection</button><button className="primary-button" onClick={() => setConnection(null)}>Done</button></div></section></div>}
+    {renewing && <div className="modal-backdrop"><section ref={dialogRef} className="modal" role="dialog" aria-modal="true" aria-labelledby="renew-title" tabIndex={-1}><button className="modal-close" onClick={() => setRenewing(null)} aria-label="Close">×</button><span className="modal-icon">◷</span><div className="eyebrow">RESOURCE LIFECYCLE</div><h2 id="renew-title">Extend lease</h2><p>Choose an expiry measured from the database creation time. It must stay within the catalog lifetime limit.</p><form onSubmit={renewResource}><label>Total lease<select value={renewSeconds} onChange={(event) => setRenewSeconds(Number(event.target.value))} disabled={!extensionChoices(renewing).length || busy}>{extensionChoices(renewing).map((seconds) => <option key={seconds} value={seconds}>{formatLeaseDuration(seconds)}</option>)}</select></label>{extensionChoices(renewing).length ? <p className="field-hint">New expiry: {formatDate(new Date(Date.parse(renewing.created_at) + renewSeconds * 1000).toISOString())}</p> : <p className="field-hint">This resource has reached its maximum permitted lifetime.</p>}<div className="modal-footer"><button className="secondary-button" type="button" onClick={() => setRenewing(null)}>Cancel</button><button className="primary-button" type="submit" disabled={busy || identityBusy || !extensionChoices(renewing).includes(renewSeconds)}>{busy ? "Saving…" : "Update lease"}</button></div></form></section></div>}
   </main>;
 }
 
 function optionKey(option: Option) { return `${option.template_id}:${option.version}:${option.target_id}:${option.size.id}`; }
 
 function isLoopbackUrl(value: string) {
-  try { const url = new URL(value); return url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]" || url.hostname === "::1"; }
+  try { const url = new URL(value); return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password && ["localhost", "127.0.0.1", "[::1]", "::1"].includes(url.hostname); }
   catch { return false; }
 }
 
@@ -720,7 +829,7 @@ function ResourceCard({ resource, project, operation, connection, canExtend, onC
   const status = resource.status.toLowerCase().replaceAll("_", " ");
   const ready = resource.status === "ready" && resource.desired_state !== "deleted";
   const deleting = resource.status === "deleting";
-  return <article className="resource-card"><div className="resource-card-top"><div className="db-icon">▤</div><div className="resource-title"><strong>{resource.display_name}</strong><span>{resource.template_id.replaceAll("_", " ")} · {resource.target_id} · {resource.size_id}</span></div><span className={`status status-${resource.status}`}><i />{status}</span></div>
+  return <article className="resource-card"><div className="resource-card-top"><div className="db-icon">▤</div><div className="resource-title"><Link href={`/dashboard/resources/${resource.id}`}><strong>{resource.display_name}</strong></Link><span>{resource.template_id.replaceAll("_", " ")} · {resource.target_id} · {resource.size_id}</span></div><span className={`status status-${resource.status}`}><i />{status}</span></div>
     <div className="resource-meta"><span><small>ENVIRONMENT</small><b>{environment}</b></span><span><small>EXPIRES</small><b>{formatDate(resource.expires_at)}</b></span><span><small>RESOURCE ID</small><b className="mono">{resource.id.slice(0, 8)}</b></span></div>
     {operation && <div className={`operation-line operation-${operation.status}`}><span className="operation-spinner" />{operation.action} operation {operation.status}{operation.error_code ? ` · ${operation.error_code}` : ""} · attempt {operation.attempts}</div>}
     {resource.failure_code && <div className="failure-line" role="status">Cleanup or provisioning needs attention · {resource.failure_code}. Resource remains tracked for retry.</div>}

@@ -95,5 +95,5 @@ jobs:
             printf '\n- API: `%s@%s`\n' "$AWS_ECR_REPOSITORY" "$API_DIGEST"
             printf '\n- Frontend: `%s@%s`\n' "$AWS_ECR_REPOSITORY" "$FRONTEND_DIGEST"
             echo
-            echo 'Publishing does not deploy. Use the protected **Deploy Platform** workflow with these exact digests.'
+            echo 'Publishing does not deploy. Server delivery requires a separately reviewed deployment contract; Compose is local-only.'
           } >> "$GITHUB_STEP_SUMMARY"

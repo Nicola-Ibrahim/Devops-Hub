@@ -22,7 +22,7 @@ WORKDIR /app
 COPY --from=build --chown=10001:10001 /app/.venv /app/.venv
 COPY --from=build --chown=10001:10001 /app/alembic.ini /app/alembic.ini
 COPY --from=build --chown=10001:10001 /app/migrations /app/migrations
-COPY --chmod=0755 scripts/ops/backend-container-entrypoint.sh /usr/local/bin/platform-entrypoint
+COPY --chmod=0755 backend/docker-entrypoint.sh /usr/local/bin/platform-entrypoint
 USER root
 ENTRYPOINT ["/usr/local/bin/platform-entrypoint"]
 EXPOSE 8000

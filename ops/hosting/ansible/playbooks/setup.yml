@@ -1,0 +1,16 @@
+---
+- name: App Cloud Server Bootstrap
+  hosts: all
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: common
+      tags: [setup, hardening]
+    - role: docker
+      tags: [setup, docker]
+    - role: nginx
+      tags: [setup, nginx]
+    - role: backup
+      when: backup_enabled | default(false) | bool
+      tags: [backup]

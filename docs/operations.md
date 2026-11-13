@@ -15,7 +15,7 @@ backend checks, and Node.js 22/npm for dashboard checks. Start Docker before
 starting Compose.
 
 ```sh
-scripts/ops/compose-up.sh
+scripts/dev.sh up
 ```
 
 The startup script creates ignored `backend/.env` and `frontend/.env` files if
@@ -79,7 +79,7 @@ Put the approved digest and provider opt-in in the ignored `backend/.env` file.
 Then start both optional workers:
 
 ```sh
-scripts/ops/compose-up.sh --resources --application-delivery
+scripts/dev.sh up --resources --application-delivery
 ```
 
 The approved image must be present in the local daemon; this flow needs no
@@ -104,8 +104,8 @@ Install the pinned Ansible collections once, then syntax-check before applying t
 a disposable Ubuntu host:
 
 ```sh
-cd infra/ansible
-ansible-galaxy collection install -r requirements.yml
+cd ops/hosting/ansible
+ansible-galaxy collection install -r ../../ansible-requirements.yml
 ansible-playbook -i inventory/production.yml playbooks/setup.yml --syntax-check
 ```
 
@@ -118,9 +118,8 @@ packages and Compose, validates Nginx before reload, and uses Certbot webroot
 issuance plus its renewal timer when `server_name` and `certbot_email` are set.
 TLS needs a real DNS name pointing at the host and reachable ports 80/443.
 
-The optional Doppler role is disabled unless explicitly enabled. If used, its
-service token is hidden from Ansible output and downloaded environment files are
-written with mode `0600`; the local Compose demo uses generated files instead.
+Host-secret delivery requires a separately configured operator process. The unused
+Doppler integration is removed; local component env files are not a server secret-delivery contract.
 
 ## Immutable release and rollback
 
@@ -134,48 +133,18 @@ pushes run-unique tags to immutable ECR, scans the exact pushed digests and reco
 `repository@sha256:...` references. With no publisher role configured, the
 optional publish job is skipped. Publishing does not send a deploy command.
 
-The separate `Deploy Platform` workflow is manual and uses a protected GitHub
-`production` environment. Supply both exact image digests from the successful
-publish run. Deployment blocks unless the operator confirms migration
-compatibility with the previous app version. A reviewer must confirm that every
-database change follows expand/contract: additive schema first, code compatible
-with old and new schema, and destructive contraction only in a later reviewed
-release after rollback is no longer needed. There is no automatic Alembic
-downgrade.
-
-The deploy role obtains short-lived AWS credentials through GitHub OIDC and sends
-the digest-only command to the configured EC2 instance through SSM. The EC2 role
-pulls from its one ECR repository. The host script captures the existing image
-digests, runs the forward migration, starts images with `--no-build`, checks API
-schema readiness and dashboard HTTP readiness, then records the release. If
-readiness fails, it restores the prior image digests and checks the old app. It
-never removes the database volume or downgrades schema. A first release has no
-prior image to restore and needs operator-led recovery if it fails readiness.
-
-The legacy SSM deployment assumes Ansible already placed `compose.yaml` and
-`scripts/ops/release.sh` on the host and an operator provisioned all seven secret
-files under `/etc/devops-hub/secrets/` with mode `0400` or `0600`. Secret delivery
-is intentionally a separate operator-controlled process; Terraform state and
-deployment inputs do not contain application credentials. The HTTP ports are
-bound only to host loopback for Nginx to proxy. No PostgreSQL port is opened in
-the EC2 security group.
-
-That legacy deployment path is not compatible with the local-only Compose
-configuration. It requires a separately scoped deployment design before use;
-this cleanup does not establish a working server deployment.
-
-To inspect a release without exposing environment data, review the root-owned
-`.release.env` and timestamped files under `/opt/devops-hub/releases/`; they hold
-image references and the secret-directory path, not secret values. Check API and
-frontend readiness endpoints and the corresponding SSM command status. Avoid
-printing `docker inspect` environment, `docker compose config` output, or secret
-file contents into a CI log.
+The legacy server deployment workflow, Ansible deployment playbook and release
+script were removed because they reused the local-only Compose manifest. There
+is no active server deployment or automatic rollback path. Future delivery must
+first define target configuration, private credentials, migration compatibility,
+readiness and rollback. Existing hosting Terraform is retained without resource
+address or state changes; it is not a working application deployment.
 
 ## Queue monitoring
 
 Prometheus is outside the simplified local Compose stack. The API still exposes
 an authenticated `/metrics` endpoint. The sample scrape and alert configuration
-in `infra/monitoring/` can be used by an operator-managed Prometheus instance;
+in `ops/monitoring/` can be used by an operator-managed Prometheus instance;
 it needs a private bearer token file and explicit network access to the API.
 
 The backend exports queue and resource gauges/counters without credentials:
@@ -210,7 +179,7 @@ For a local backup, install `age`, make an operator-controlled age recipient
 available, then run:
 
 ```sh
-AGE_RECIPIENT='age1...' scripts/ops/backup-control-plane.sh /secure/backups
+AGE_RECIPIENT='age1...' ops/hosting/scripts/backup-control-plane.sh /secure/backups
 ```
 
 The script uses `pg_dump` from the Compose PostgreSQL container, encrypts the
@@ -226,7 +195,7 @@ recovery exercise, verify the archive and key out of band, then run:
 
 ```sh
 AGE_IDENTITY_FILE=/secure/keys/platform-backup-identity.txt \
-  scripts/ops/restore-control-plane-isolated.sh \
+  ops/hosting/scripts/restore-control-plane.sh \
   /secure/backups/control-plane-<timestamp>.dump.age
 ```
 
@@ -244,7 +213,7 @@ recovery procedure.
 ## Optional AWS target and teardown
 
 The AWS configuration and its protected-state bootstrap are in
-[`infra/terraform/README.md`](../infra/terraform/README.md). Review the cost and
+[`ops/hosting/terraform/README.md`](../ops/hosting/terraform/README.md). Review the cost and
 network plan before any apply. The sample target is one Docker host; it is not a
 managed database service, autoscaling platform, or high-availability design.
 GitHub must use the narrow OIDC roles and required `production` environment; do
@@ -253,8 +222,7 @@ not create long-lived access keys.
 The EC2 control-plane volume is a separately encrypted, `prevent_destroy` EBS
 volume. Initial setup requires an explicit SSM command to initialize that blank
 volume; ordinary startup and host replacement only mount the expected filesystem.
-Ansible SSH access requires an existing key pair and approved CIDR. SSM is used
-for releases after the host has been configured.
+Ansible SSH access requires an existing key pair and approved CIDR. SSM remains available for approved host administration; application delivery is not implemented.
 
 Before tearing down a host, stop new requests, inspect and remove developer DBs
 through the platform's owned-resource lifecycle, create and verify a protected

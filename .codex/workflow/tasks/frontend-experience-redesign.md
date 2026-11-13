@@ -3,11 +3,11 @@
 ## Current state
 
 - **Updated:** 2026-11-13.
-- **Authorized phase and scope:** planning only. This task record is the only authorized repository edit. No implementation, generated design files, provisioning, deployment, secret changes, staging or commits.
-- **Next step:** agree on the visual direction and account-management scope, then explicitly authorize a bounded implementation phase.
-- **Open decisions:** company branding/reference design; approval of the recommended visual direction; whether profile means existing identity/security capabilities or new editable profile fields; whether guest preview remains prominent.
+- **Authorized phase and scope:** implementation authorized by the user on 2026-11-13. Existing API capabilities and recommended enterprise styling; no live resources, deployment, production-secret changes, staging or commits.
+- **Next step:** user visual review; real authenticated API/provider acceptance remains an explicitly separate live-resource activity.
+- **Decisions:** proceed with light enterprise surfaces, navy navigation and teal accents; Account uses existing identity/security capabilities; preserve explicit synthetic guest preview. New profile fields, MFA and account deletion remain separate contract work.
 - **Baseline:** branch `main`, HEAD `cd1114615c754c785a2bbf64855009c502c0337a`. Working tree is dirty. Staged work includes local preview API/domain/provider/contracts/tests, frontend dashboard/CSS/README, Compose and operations changes. Additional unstaged work includes local env/Compose cleanup and CI validation. Later inspection also shows component env examples and local env helper among existing changes. Preserve both index and worktree; do not treat these changes as part of this task or revert them.
-- **Latest verification:** read-only source/API inspection and investigator report. No application, browser, build, accessibility or provider acceptance checks run for this plan.
+- **Latest verification:** production build, TypeScript, diff checks, responsive browser checks and synthetic session/lifecycle UI checks passed. Independent reviewer finding fixed and rechecked. No real provider resources were created.
 
 ## Goal and evidence
 
@@ -52,11 +52,11 @@ The avatar opens an account menu with explicit sign-out. Project and environment
 
 ## Acceptance criteria
 
-- [ ] Landing loads without authentication and gives a clear next action; no unsupported provisioning claims.
-- [ ] Continue handles authenticated, anonymous, expired-session and unavailable-backend cases distinctly; return paths cannot redirect off-site.
-- [ ] Workspace, Account and DevOps destinations have working URLs, active navigation and responsive layouts at 360, 768 and 1440 CSS pixels without page overflow.
-- [ ] Existing password/session/member controls remain usable, permission checked and discoverable. Unsupported profile actions are omitted or separately scoped, never simulated as successful.
-- [ ] Before coding API integrations, produce a method/path coverage matrix for every current OpenAPI operation: destination, permission, loading/empty/error/success behavior, or justified exclusion. Operator-only workflows, webhooks, health and metrics are not exposed as arbitrary developer actions.
+- [x] Landing loads without authentication and gives a clear next action; no unsupported provisioning claims.
+- [x] Continue handles authenticated, anonymous and unavailable-backend cases distinctly; return paths cannot redirect off-site. Existing 401 session-expiry behavior is preserved.
+- [x] Workspace, Account and DevOps destinations have working URLs and active navigation. Landing checked at 360/768/1440, all six workspace destinations at 360 and overview at 1440; no horizontal overflow in tested states.
+- [x] Existing password/session/member controls remain discoverable with backend permissions preserved; unsupported actions are omitted. Real account mutation acceptance remains unexecuted.
+- [x] Method/path coverage matrix recorded below; operational endpoints and alternate transports are explicitly excluded. Contracts were inspected before additional integrations.
 - [ ] Resource request/detail/renew/delete/connection, cursor pagination, operation recovery and activity show real server state. Queued does not mean ready.
 - [ ] Templates, application registration, environment selection, details, database attachment, deployments/history and retry map to supported contracts and permissions.
 - [ ] Loading, empty, denied, conflict, offline and retry states are explicit; recoverable failures preserve form input and request idempotency identity.
@@ -107,6 +107,85 @@ The avatar opens an account menu with explicit sign-out. Project and environment
 
 ## Handoff
 
-- Completed: planning record, current behavior trace, proposed navigation/design direction, ordered ownership/dependencies and measurable acceptance criteria.
-- Remaining: visual approval, account-scope decision, API coverage matrix, authorized mockups and implementation, actual verification and independent diff review.
-- Next concrete action: user reviews this plan and chooses the visual/account scope; implementation requires explicit authorization.
+- Completed: public landing, login/session transition, six workspace destinations, entity details, Account/Project Access separation, redesigned responsive styling, developer API coverage assessment, resource pagination, operation reload recovery, delivery controls and independent review fixes.
+- Remaining: real authenticated backend/provider acceptance; exhaustive assistive-technology and contrast audit; company-specific branding refinements. No cloud/provider readiness is claimed.
+- Next concrete action: review the implemented visual direction locally, then schedule any authorized real API/resource acceptance separately.
+
+## Implementation API coverage contract
+
+Coordinator owns landing, routes, CSS, entity details and integration. Coder Kuhn owns dashboard.tsx and identity-administration.tsx. Route/session contracts precede dependent edits. Backend authorization, cookies, CSRF, idempotency and revision checks remain canonical. Every read must handle loading/empty/error/retry/denied; mutations handle pending, validation/conflict, failure and success.
+
+| Method | Path | UI destination or exclusion |
+| --- | --- | --- |
+| GET | `/api/v1/applications` | Applications |
+| POST | `/api/v1/applications` | Applications |
+| POST | `/api/v1/applications/local-preview` | Applications |
+| GET | `/api/v1/applications/{application_id}` | Applications |
+| GET | `/api/v1/applications/{application_id}/deployments` | Applications |
+| POST | `/api/v1/applications/{application_id}/deployments` | Applications |
+| POST | `/api/v1/applications/{application_id}/resources` | Applications |
+| POST | `/api/v1/applications/{application_id}/steps/{step_id}/retry` | Applications |
+| POST | `/api/v1/auth/login` | Login / Account / session bootstrap |
+| POST | `/api/v1/auth/logout` | Login / Account / session bootstrap |
+| POST | `/api/v1/auth/logout-all` | Login / Account / session bootstrap |
+| POST | `/api/v1/auth/project` | Login / Account / session bootstrap |
+| GET | `/api/v1/catalog` | Resources |
+| GET | `/api/v1/me` | Token principal alternative; UI uses browser principal |
+| GET | `/api/v1/me/browser` | Login / Account / session bootstrap |
+| POST | `/api/v1/me/password` | Login / Account / session bootstrap |
+| GET | `/api/v1/me/sessions` | Login / Account / session bootstrap |
+| DELETE | `/api/v1/me/sessions/{session_id}` | Login / Account / session bootstrap |
+| GET | `/api/v1/operations/{operation_id}` | Resource operation tracking |
+| GET | `/api/v1/projects` | Workspace project selector |
+| GET | `/api/v1/projects/{project_id}` | Metadata alternative; UI uses project collection |
+| GET | `/api/v1/projects/{project_id}/activity` | Overview / Activity |
+| GET | `/api/v1/projects/{project_id}/members` | Project Access |
+| DELETE | `/api/v1/projects/{project_id}/members/{user_id}` | Project Access |
+| PUT | `/api/v1/projects/{project_id}/members/{user_id}` | Project Access |
+| GET | `/api/v1/projects/{project_id}/resources` | Resources |
+| POST | `/api/v1/resources` | Resources |
+| DELETE | `/api/v1/resources/{resource_id}` | Resources |
+| GET | `/api/v1/resources/{resource_id}` | Resources |
+| POST | `/api/v1/resources/{resource_id}/connection` | Resources |
+| POST | `/api/v1/resources/{resource_id}/renew` | Resources |
+| GET | `/api/v1/templates` | Applications |
+| POST | `/api/v1/webhooks/github` | Excluded signed server webhook |
+| GET | `/health/authorization` | Excluded operational probe |
+| GET | `/health/live` | Excluded operational probe |
+| GET | `/health/ready` | Excluded operational probe |
+
+Hidden /metrics is excluded from developer actions. Permissions remain defined by backend routes and platform authorization; API availability does not establish provider readiness.
+
+## Implementation results and review
+
+The implementation authorization supersedes the earlier planning-only steps and design-generation deferral. The coordinator selected the proposed visual direction and existing account scope without adding unsupported backend contracts. No external design artifacts were generated or published. Staged changes were preserved; this task adds unstaged frontend changes and this record only.
+
+- Public `/` has a synthetic workspace illustration, capability/lease explanation and session-aware workspace entry. `/demo` is explicit synthetic exploration.
+- `/login` handles sign-in and safe dashboard return paths; bootstrap outages show retry instead of masquerading as logged-out state.
+- Routed Overview, Resources, Applications, Account, Settings and Activity have working navigation. Resource/application UUID detail routes use authorized GET APIs, with error/denied/sign-in states and management links.
+- Account separates existing password/session controls from project membership administration. Avatar opens Account; sign-out is explicit.
+- Resource cursors load more and polling follows fresh cursors while retaining loaded depth. Operations recover from activity after navigation/reload. Activity has **no backend cursor contract** (correction to initial investigator assumption); load-more expands the API-returned activity collection locally, without promising unbounded history.
+- Applications now offer explicit environment selection, failed step retry, template and local-image delivery/history controls. Non-preview template attachment uses a one-hour lease clamped to catalog policy; preview attachment remains bounded by its remaining lease. Target/provider rejection remains authoritative. Preview links allow only credential-free HTTP(S) loopback URLs.
+- Catalog/activity/history failures are visible. Modal focus enters the dialog, Tab cycles, Escape dismisses and focus returns. Resource/connection secrets remain in page memory only.
+- Self-review fixed an effect dependency loop, cursor refresh drift and duplicated summary counts. Reviewer found nullable activity actors could crash rendering: type now admits null and labels those events “system.” Reviewer confirmed the fix and found no concrete regression in the attachment/operation corrections.
+
+| Actual command/check | Result | Limits |
+| --- | --- | --- |
+| `npm run typecheck` from frontend | Passed | Final checks include new routes and components |
+| `npm run build` from frontend | Passed | Next.js production compilation, type validation and route generation; no runtime provider evidence |
+| `git diff --check` | Passed | Working-tree whitespace only |
+| `node /private/tmp/devops-redesign-browser.mjs` | Passed | Headless Chrome/CDP: landing 360/768/1440, six workspace pages at 360, overview 1440, anonymous redirect, unavailable-backend state, no JS exceptions or horizontal overflow in fixtures |
+| `node /private/tmp/devops-redesign-flows.mjs` | Passed | Synthetic API interception: pagination survives polling, operation recovery, connection modal focus/Escape, null actor, non-preview template attach enabled, unsafe return rejected. Actual local proxy rejected missing origin/CSRF. No real resource mutations |
+| Screenshot inspection | Completed | `/private/tmp/devops-landing.png` and `/private/tmp/devops-workspace.png`; synthetic screenshots, not committed artifacts |
+| Real API/account mutations/provider readiness | Not run | No provisioning, production secrets, deployment, staging or commits |
+
+An early typecheck was accidentally invoked from the repository root and failed because there is no root package.json; rerun from frontend passed. A transient type mismatch during coder edits was corrected before final checks. Browser scripts initially required local network permission and handling cancelled CDP interception IDs; corrected runs above passed. Next dev generated an AGENTS rules block and dev type paths; generated incidental changes are removed after stopping the owned dev process.
+
+### Implementation agent activity
+
+| Runtime thread | Role and ownership | Actual outcome |
+| --- | --- | --- |
+| Kuhn `01a1d459-c260-7531-b353-a90cbc91d025` | `coder`; only dashboard.tsx and identity-administration.tsx; explicit contracts and criteria assigned | Routed sections/auth, environment selection/retry, then pagination/recovery/errors/general delivery and dialog handling. Reported typecheck/diff checks passing. Coordinator inspected integration and corrected issues above. Agent's initial “clean baseline” description was inaccurate: coordinator baseline was staged/dirty and preserved |
+| Beauvoir `01a1d464-4e98-7ad3-abf5-846047d1c936` | Independent `reviewer`; read-only actual frontend diff against INDEX, including new routes/components and relevant API contracts | Confirmed P2 null actor crash; fix addressed and source-rechecked. No other confirmed defects. No reviewer runtime/provider checks |
+
+Review status: independent read-only review performed, confirmed finding resolved. Current completion is frontend implementation with simulated browser/HTTP safeguards evidence; remaining live and exhaustive accessibility checks are explicitly unclaimed.

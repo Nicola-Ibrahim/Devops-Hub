@@ -5,12 +5,12 @@ description: Implement or review DevOps Hub Docker, Compose, CI/CD, Ansible and 
 
 # Delivery engineering
 
-Follow [infrastructure guidance](../../../infra/AGENTS.md).
+Follow [operations guidance](../../../ops/AGENTS.md).
 
 1. Trace source revision to immutable artifact, target, credentials, readiness,
    rollback and state ownership across the affected delivery files.
 2. Define the failure and recovery contract before changing a stage. Preserve the
-   responsibility boundaries in `infra/AGENTS.md`.
+   responsibility boundaries in `ops/AGENTS.md`.
 3. Implement one coherent stage with configurable environment values and no
    secrets in source, logs or generated artifacts.
 4. Verify each stage independently: syntax, build, Compose health, Ansible

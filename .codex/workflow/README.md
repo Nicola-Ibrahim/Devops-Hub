@@ -8,7 +8,7 @@ Start with the [prompt library](prompts/README.md). Substantial cross-component 
 
 | Location | Responsibility |
 | --- | --- |
-| `AGENTS.md`; `backend/`, `frontend/` and `infra/AGENTS.md` | Shared and directory-specific rules |
+| `AGENTS.md`; `backend/`, `frontend/` and `ops/AGENTS.md` | Shared and directory-specific rules |
 | `.agents/skills/` | Focused reusable procedures, loaded only as needed |
 | `.codex/agents/` | Investigator, coder and reviewer role definitions |
 | `.codex/workflow/prompts/` | Human-directed plan, implement and resume prompts |

@@ -1,60 +1,24 @@
-# Getting Started with Platform-Dev
+# Local development setup
 
-This guide will walk you through setting up your local development environment using the TOB standardized `platform-dev` toolbox.
+Install Docker Engine/Desktop with Compose v2, Python 3.12/uv for backend checks,
+and Node.js 22/npm for frontend development. Start Docker before the local stack.
 
-## 📋 Prerequisites
+From the repository root:
 
-Before you begin, ensure you have the following installed:
-1.  **Python 3.12+**
-2.  **Docker Desktop** (running)
-3.  **Homebrew** (for macOS users)
-
-## 🚀 Step-by-Step Setup
-
-### 1. Install `uv`
-We use `uv` for lightning-fast Python package management.
-```bash
-brew install uv
+```sh
+scripts/dev.sh up
 ```
 
-### 2. Configure Secrets (Doppler)
-We use Doppler to securely manage environment variables. Even if the tool is not installed, our bootstrap process will help you.
-```bash
-# Login to your Doppler account
-doppler login
-```
+The script initializes missing private component env files and starts the core
+local services. Backend and dashboard setup/check commands are documented in
+[backend](../backend/README.md) and [frontend](../frontend/README.md).
 
-### 3. Initialize the Repository
-Go to your project directory (e.g., `backend`) and run:
-```bash
-# Install all dependencies and setup the environment
-uv sync
-```
+Optional developer-machine bootstrap lives in `ops/local/ansible/`; it installs
+local tools and the repository pre-commit hook. Server setup is separate under
+`ops/hosting/ansible/` and must never target a developer machine accidentally.
+Doppler, AWS and Azure are not prerequisites for the local demonstration.
 
-### 4. Bootstrap the Environment
-Once dependencies are synced, run the standardized bootstrap command:
-```bash
-poe bootstrap
-```
-This will:
-- Audit your system for required binaries.
-- Install missing tools (`doppler`, etc.).
-- Sync the latest `.env` files.
-- Boot the Docker infrastructure.
-
-### 5. Start Development
-Now you can start your local development server:
-```bash
-poe dev up
-```
-
-## 🛠 Common Commands
-
-- `poe dev up`: Start everything (Secrets + DB + Server).
-- `poe dev down`: Stop everything and clean caches.
-- `poe test`: Run the test suite.
-
----
-
-> [!TIP]
-> If you encounter issues with Docker containers not starting, ensure Docker Desktop is running and try `poe dev down` before running `up` again.
+Workers are opt-in. Follow [operations](operations.md) before enabling resources
+or application delivery; startup does not establish provider readiness. Stopping
+Compose preserves data volumes. Never use global prune or volume deletion for
+routine shutdown. Preserve component env files while their database data exists.

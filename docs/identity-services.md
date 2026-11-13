@@ -51,7 +51,7 @@ bounded timeout. Dishka owns the client's lifetime. The API sends authenticated 
 and project facts, action and resource attributes; passwords, session secrets and
 raw API tokens never enter the policy input.
 
-The policy in `infra/opa/identity.rego` permits session actions for the authenticated
+The policy in `backend/src/identity/infra/authorization/policies/identity.rego` permits session actions for the authenticated
 owner and membership administration for an administrator of the requested project.
 Unknown actions and missing facts deny access. Transactional membership and account
 checks remain in place to handle races after the external policy decision.
@@ -69,9 +69,9 @@ host port. `PLATFORM_OPA_URL` is `http://opa:8181` in Compose and defaults to
 host, run a compatible OPA binary with:
 
 ```bash
-opa run --server --addr=127.0.0.1:8181 infra/opa
-opa test infra/opa
-opa check --strict infra/opa
+opa run --server --addr=127.0.0.1:8181 backend/src/identity/infra/authorization/policies
+opa test backend/src/identity/infra/authorization/policies
+opa check --strict backend/src/identity/infra/authorization/policies
 ```
 
 Use the repository's existing private configuration and setup instructions for

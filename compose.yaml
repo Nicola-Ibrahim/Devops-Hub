@@ -60,7 +60,7 @@ services:
   opa:
     image: openpolicyagent/opa:1.0.1
     command: ["run", "--server", "--addr=0.0.0.0:8181", "/policies"]
-    volumes: [./infra/opa:/policies:ro]
+    volumes: [./backend/src/identity/infra/authorization/policies:/policies:ro]
     networks: [control]
     healthcheck:
       test: ["CMD", "/opa", "eval", "--fail", "--data", "/policies", "data.devops.identity.decision.policy_revision == \"identity-v1\""]

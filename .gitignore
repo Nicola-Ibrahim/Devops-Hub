@@ -87,5 +87,13 @@ celerybeat.pid
 /.devops/
 
 /.local/
+# Operator-local Terraform state, plans and private hosting inputs.
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+**/backend.hcl
 /frontend/.next/
 /frontend/node_modules/

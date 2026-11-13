@@ -1,8 +1,0 @@
----
-- name: Execute Workspace UP Configuration
-  import_tasks: up.yml
-  tags: [up, infrastructure, workspace]
-
-- name: Execute Workspace DOWN Configuration
-  import_tasks: down.yml
-  tags: [down, infrastructure, workspace]

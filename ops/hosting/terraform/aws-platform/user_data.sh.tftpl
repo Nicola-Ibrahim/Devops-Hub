@@ -1,0 +1,25 @@
+#!/bin/bash
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+echo 'AWS_REGION=${aws_region}' >> /etc/environment
+apt-get update
+apt-get install -y python3 docker.io docker-compose-v2 awscli nginx certbot curl snapd util-linux e2fsprogs nvme-cli
+usermod -aG docker ubuntu
+if ! snap list amazon-ssm-agent >/dev/null 2>&1; then
+  snap install amazon-ssm-agent --classic
+fi
+snap start --enable amazon-ssm-agent
+install -d -o root -g root -m 0750 /opt/devops-hub
+install -d -o root -g root -m 0700 /etc/devops-hub/secrets
+install -d -o root -g root -m 0700 /opt/devops-hub/releases
+printf '%s\n' '${volume_id}' >/etc/devops-hub/data-volume-id
+chmod 0600 /etc/devops-hub/data-volume-id
+echo '${aws_region}' >/etc/devops-hub/aws-region
+chmod 0644 /etc/devops-hub/aws-region
+install -d -o root -g root -m 0750 /usr/local/lib/devops-hub
+printf '%s' '${storage_helper_base64}' | base64 --decode >/usr/local/lib/devops-hub/configure_docker_storage.py
+chmod 0640 /usr/local/lib/devops-hub/configure_docker_storage.py
+printf '%s' '${data_volume_script_base64}' | base64 --decode >/usr/local/sbin/initialize-platform-data-volume
+chmod 0750 /usr/local/sbin/initialize-platform-data-volume
+systemctl stop docker.service docker.socket 2>/dev/null || true
+/usr/local/sbin/initialize-platform-data-volume --mount-existing

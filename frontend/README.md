@@ -6,6 +6,15 @@ store session or bearer tokens in web storage.
 
 ## Local development
 
+The public landing page is `/`. Open workspace checks the existing browser session
+before entering `/dashboard` or continuing to `/login`. Workspace navigation has
+separate Resources, Applications, Account, Project Settings and Activity pages;
+resource and application IDs have read-only detail URLs. `/demo` contains only
+synthetic preview data. Account settings cover the current identity, password and
+sessions; editable profile fields and public registration are not supported by
+the current backend contracts. A backend outage shows a retry state separately
+from an expired session.
+
 Use Node.js 22 or newer. From this directory:
 
 ```sh

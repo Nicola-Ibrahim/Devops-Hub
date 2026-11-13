@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 type ApiCall = <T>(path: string, init?: RequestInit) => Promise<T>;
 type Principal = {
   userId: string;
+  userName: string;
   sessionId: string;
   role?: string | null;
   memberships: { projectId: string; projectName: string; role: string }[];
@@ -32,6 +33,7 @@ export default function IdentityAdministration({
   onSessionEnded,
   onIdentityChanged,
   onMutationBusyChange,
+  section = "all",
 }: {
   api: ApiCall;
   principal: Principal;
@@ -44,6 +46,7 @@ export default function IdentityAdministration({
   onSessionEnded: (message?: string) => void;
   onIdentityChanged: () => Promise<void>;
   onMutationBusyChange: (busy: boolean) => void;
+  section?: "all" | "account" | "members";
 }) {
   const [sessions, setSessions] = useState<BrowserSession[]>([]);
   const [members, setMembers] = useState<ProjectMember[]>([]);
@@ -274,7 +277,8 @@ export default function IdentityAdministration({
     <div className="panel-heading"><div><div className="eyebrow">ACCOUNT & ACCESS</div><h2 id="identity-heading">Identity administration</h2></div></div>
     {(error || notice) && <div className={`identity-message ${error ? "identity-error" : "identity-success"}`} role={error ? "alert" : "status"}>{error || notice}</div>}
     <div className="identity-columns">
-      <div className="identity-column">
+      {(section === "all" || section === "account") && <div className="identity-column">
+        <section className="identity-subheading" aria-label="Account identity"><div><h3>{principal.userName}</h3><p>Internal account · {principal.userId}</p><p>{project ? `${project.name} · ${currentRole ?? "developer"}` : "No project selected"}</p></div></section>
         <div className="identity-subheading"><div><h3>Active sessions</h3><p>Review devices that can access your account.</p></div><button className="secondary-button" type="button" onClick={() => void reloadSessions().catch((cause: unknown) => { if (!isStaleRequest(cause)) setError(messageOf(cause, "Could not refresh sessions")); })} disabled={parentBusy}>Refresh</button></div>
         {sessionLoading ? <p className="identity-muted">Loading sessions…</p> : sessions.length === 0 ? <p className="identity-muted">No active sessions were returned.</p> : <div className="identity-session-list">{sessions.map((session) => {
           const current = session.current || session.sessionId === principal.sessionId;
@@ -292,9 +296,9 @@ export default function IdentityAdministration({
           <label>Confirm new password<input type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required disabled={controlsDisabled} /></label>
           <button className="primary-button" type="submit" disabled={controlsDisabled || !currentPassword || !newPassword || !confirmPassword}>{busy ? "Updating…" : "Change password"}</button>
         </form>
-      </div>
+      </div>}
 
-      <div className="identity-column">
+      {(section === "all" || section === "members") && <div className="identity-column">
         <div className="identity-subheading"><div><h3>Project members</h3><p>{project ? `Manage access to ${project.name}.` : "Select a project to manage its membership."}</p></div></div>
         {!project ? <p className="identity-muted">No project is selected.</p> : !isProjectAdmin ? <p className="identity-muted">Project administrators can view and change membership. Your project role is {currentRole ?? "developer"}.</p> : <>
           {membersLoading ? <p className="identity-muted">Loading project members…</p> : members.length === 0 ? <p className="identity-muted">No project members were returned.</p> : <div className="identity-member-list">{members.map((member) => <article className="identity-member" key={member.userId}>
@@ -310,7 +314,7 @@ export default function IdentityAdministration({
             <button className="primary-button" type="submit" disabled={controlsDisabled || !existingUserId.trim()}>{busy ? "Saving…" : "Add existing user"}</button>
           </form>
         </>}
-      </div>
+      </div>}
     </div>
   </section>;
 }

@@ -17,11 +17,13 @@ The [platform requirements](docs/platform-requirements.md) define the intended c
 ## Repository today
 
 - `.github/workflows/` contains reusable CI and Docker image publishing workflows.
-- `infra/ansible/` contains local bootstrap and server setup/deployment playbooks.
-- `scripts/dev/platform_dev/` contains the Python local development CLI.
+- `ops/local/ansible/` contains developer-machine bootstrap; `ops/hosting/`
+  contains optional operator-managed host configuration and Terraform.
+- `scripts/dev.sh` is the Bash local development entrypoint; standalone helpers
+  live in `scripts/helpers/`. No developer CLI Python package is required.
 - `backend/` contains the API foundation, pure lifecycle rules, control-plane schema/migrations, internal token administration services and focused tests. See `backend/README.md` for setup and verification.
 - Backend business context and API ownership are described in [backend/AGENTS.md](backend/AGENTS.md). Do not create a top-level Python package named `platform`, which would shadow the standard library.
-- `docs/` contains onboarding and operations guides; [infra/AGENTS.md](infra/AGENTS.md) covers hosting configuration.
+- `docs/` contains onboarding and operations guides; [ops/AGENTS.md](ops/AGENTS.md) covers hosting configuration.
 - `frontend/`, resource/application worker entrypoints, Docker provider adapters, the Platform-owned template catalog, Compose and delivery/operations assets are present in the working tree. Their presence does not establish integrated readiness or completed milestones. Check current wiring, authorization, provider verification and actual acceptance evidence before claiming support. Do not claim queued ledger rows are provisioned databases.
 
 ## Delivery responsibilities

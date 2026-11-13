@@ -6,7 +6,7 @@ This guide explains how to add a new microservice or background worker to the TO
 Create a new directory for your service if it's a separate project, or a new sub-folder if it's part of a monorepo. Ensure it has a `pyproject.toml` (for Python services).
 
 ## 2. Infrastructure (Docker)
-Update the root `docker-compose.yml` to include your new service.
+Update the local-only root `compose.yaml` to include your new service.
 
 ```yaml
 services:
@@ -22,17 +22,19 @@ services:
 ```
 
 ## 3. Secret Management
-Add a new project or config in **Doppler** for the new service. 
+Provide ignored component env files and a tracked example containing names and
+safe defaults only. Never put credentials in Dockerfiles, images, generated
+application templates or ordinary API responses. Generated applications belong
+in the versioned catalog under `backend/src/devops_platform/infra/templates/`;
+operator hosting setup belongs in `ops/hosting/`. Developer-requested resource
+behavior belongs behind a platform provider port and worker lifecycle.
 
-- Add required secrets (e.g., `API_KEY`, `DATABASE_URL`).
-- Ensure the developer running `tob-dev up` has access to this new Doppler project.
+## 4. Local orchestration
 
-## 4. Updates to `platform-dev` (Optional)
-If your service requires specialized setup steps (e.g., seeding a specific database), you may need to extend a task in the `Devops` repository:
-
-1.  Open `scripts/dev/platform_dev/tasks/workspace.py`.
-2.  Add a function for your service's specific needs.
-3.  Hook it into `scripts/dev/platform_dev/dev.py`'s `handle_up` logic.
+Keep the public command in `scripts/dev.sh` small. Add a service to local Compose
+and to the explicit log allowlist when needed. Add standalone helpers only for a
+specific filesystem or structured-data responsibility; never embed Python inside
+Bash or introduce an installable developer CLI package.
 
 ## 5. Standardizing Commands
 Ensure your service's `pyproject.toml` includes standard `poe` tasks if you want it to be compatible with the global orchestration:

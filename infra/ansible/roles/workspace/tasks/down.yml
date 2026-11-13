@@ -1,8 +1,0 @@
----
-- name: Stop platform containers and preserve named data volumes
-  command: docker compose --profile app down
-  args:
-    chdir: "{{ playbook_dir }}/../../.."
-  register: compose_down
-  changed_when: compose_down.rc == 0 and ('Stopped' in compose_down.stdout or 'Removed' in compose_down.stdout)
-  tags: [infrastructure]

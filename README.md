@@ -4,8 +4,19 @@
 
 The [Python API foundation](./backend/README.md) now provides health/readiness,
 project-bound token authentication, lifecycle rules and control-plane migrations.
-Resource provisioning and the Next.js dashboard are planned subsequent phases;
-see the [remaining implementation tasks](./.codex/workflow/tasks/README.md).
+The local Docker provider and Next.js dashboard are present; integrated readiness
+requires the acceptance checks in the [operations guide](./docs/operations.md).
+
+Repository ownership:
+
+- `ops/local/ansible/`: developer-machine bootstrap.
+- `ops/hosting/`: optional Terraform hosting and Ansible host setup.
+- `ops/monitoring/`: operator-managed monitoring configuration.
+- `backend/src/identity/infra/authorization/policies/`: Identity OPA policy and tests.
+- `backend/src/devops_platform/infra/`: platform adapters, workers and versioned application templates.
+
+Compose is local-only. CI tests and builds images; publishing images does not
+deploy them. The obsolete server release path has been removed.
 
 ---
 
@@ -21,7 +32,7 @@ The following diagram illustrates how this Hub empowers our service repositories
 
 ```mermaid
 graph TD
-    subgraph "Infrastructure Hub (infra/)"
+    subgraph "Operations (ops/)"
         A[Reusable Roles] -->|Compose| D(Playbooks)
         D -->|STG/PRD| J[Cloud Servers]
         D -->|Local| E[Developer CLI]
@@ -49,12 +60,12 @@ Our platform is engineered around three fundamental pillars of reliability.
 ### 🚀 1. Continuous Automation (Workflows)
 Hands-off, high-performance CI/CD pipelines that handle the heavy lifting of validation and distribution.
 - **Unified CI**: Standardized linting and testing for Node.js and Python.
-- **Atomic CD**: Secure, registry-agnostic Docker image builds and GHCR publishing.
+- **Image publishing**: Optional immutable ECR image publishing after successful CI.
 - **[View Workflow Reference](./docs/workflows.md)**
 
 ### 🛠 2. Intelligent Orchestration (`platform-dev`)
 The local "Dev Engine" that harmonizes your machine with our production-grade architecture.
-- **Sync**: Pulls the latest secrets from Doppler and locks dependencies via `uv`.
+- **Sync**: Locks backend dependencies via `uv`; private component env files configure the local runtime.
 - **Boot**: One-command infrastructure startup with Docker Compose.
 - **[Toolbox Deep-Dive](./docs/platform-dev.md)**
 
@@ -74,7 +85,7 @@ The source of truth for everything from incident response to system scaling.
 
 ### I'm Feature Building
 **Goal**: Daily development flow.
-- Use `poe dev up` and `poe dev down` to manage your local stack.
+- Use `scripts/dev.sh up` and `scripts/dev.sh down` to manage your local stack.
 - Check the **[Secrets Manual](./docs/secrets.md)** if adding new API keys.
 
 ### I'm Scaling the System
@@ -87,10 +98,10 @@ The source of truth for everything from incident response to system scaling.
 
 | Area | Component | Philosophy |
 | :--- | :--- | :--- |
-| **Secrets** | [Doppler](https://doppler.com) | Centralized, encrypted, and injected—never committed. |
-| **Runtime** | [Docker](https://docker.com) | If it runs in dev, it runs in prod. Zero "works on my machine." |
+| **Secrets** | Private runtime configuration | Local component env files are ignored; server secret delivery is separately scoped. |
+| **Runtime** | [Docker](https://docker.com) | Local Compose; immutable application images. |
 | **Python** | [uv](https://astral.sh) | Blazing fast, reproducible dependency management. |
-| **Node.js** | [pnpm](https://pnpm.io) | Efficient, strict, and cached package handling. |
+| **Node.js** | npm | Lockfile-based frontend dependency management. |
 
 ---
 
