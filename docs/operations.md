@@ -1,10 +1,12 @@
 # Platform operations
 
-This guide describes the local Docker demo and the optional single-host AWS
-target. Terraform provisions the host and its IAM/network boundary; Ansible
-configures the host; CI builds and publishes immutable platform images; the API
-and worker own developer-requested PostgreSQL resources. Publishing an image is
-not a deployment. No AWS account is needed for the local runtime.
+This guide describes the local Docker prototype and the separately documented
+release path. The local prototype needs no AWS account or GitHub integration; it
+does not make application previews or cloud deployment ready. The API and
+resource worker own developer-requested PostgreSQL resources. Both workers are
+optional: use `resources` for database provisioning and `application-delivery`
+for application delivery.
+Publishing an image is not a deployment.
 
 ## Local Docker demo
 
@@ -13,54 +15,83 @@ backend checks, and Node.js 22/npm for dashboard checks. Start Docker before
 starting Compose.
 
 ```sh
-scripts/ops/create-local-secrets.sh
 scripts/ops/compose-up.sh
 ```
 
-The secret bootstrap creates synthetic local values under `.local/secrets/` with
-mode `0600`. The Prometheus scrape token is mounted read-only into its container
-and is only traversable on the host through the directory's mode `0700`. The
-bootstrap never prints values and never changes an existing complete secret set.
-If the set is partial, it fails closed; a legacy complete six-key set gets only
-the missing metrics token added without changing existing values. The repository
-root ignores `.local/`. Keep the resource
-encryption key and installation ID stable for as long as encrypted control-plane
-records are retained. Key rotation needs an explicit re-encryption and DB password
-rotation procedure.
+The startup script creates ignored `backend/.env` and `frontend/.env` files if
+they are absent. The backend file holds local PostgreSQL and platform credentials
+as well as provider settings; the frontend file holds its server-side API URL.
+Existing local secret files are reused when present, so an existing database is
+not assigned new credentials. Both env files are private local inputs: never
+commit them or print `docker compose config`, `docker inspect` environment, or
+their contents. Docker environment values are visible to users with Docker
+daemon access. Keep the resource encryption key and installation ID stable while
+encrypted control-plane records exist; rotation needs a separate procedure.
+The backend env file is shared by the local backend services, including
+PostgreSQL. It is not a per-process secret isolation boundary. Preserve it when
+stopping containers or retaining the database volume; restore it if lost.
 
-Compose starts PostgreSQL 16, an explicit Alembic migration job, the FastAPI API,
-the worker and the Next.js dashboard. The API is published to host loopback on
+The normal `--profile app` Compose startup starts PostgreSQL 16, an explicit
+Alembic migration job, OPA, the FastAPI API and the Next.js dashboard. The
+resource worker uses the `resources` profile and the application worker uses
+`application-delivery`. Both use the backend image and wait for PostgreSQL health
+and successful migration. Resource requests remain queued and leases are not
+cleaned up while the resource worker is stopped.
+The API is published to host loopback on
 8000, the dashboard on 3000, and provisioned developer PostgreSQL endpoints are
 advertised on host loopback. PostgreSQL control-plane data uses a named volume.
-`docker compose --profile app down` stops containers and preserves volumes;
+`docker compose --profile app --profile resources --profile application-delivery down`
+stops selected containers and preserves volumes;
 never add `-v` or run `docker system prune` as routine cleanup.
 
-Only the worker receives `/var/run/docker.sock`, because it is the component that
-manages local DB containers. Access to that socket is equivalent to host root;
-keep this demo on a trusted developer machine. The script discovers the socket's
-group ID for the worker without making the API privileged. Do not publish the API
-or worker Docker socket to the public network.
+Only worker services receive `/var/run/docker.sock`; the API and migration job do
+not. Access to that socket is equivalent to host root, so keep this prototype on
+a trusted developer machine. The script discovers the socket's group ID for the
+workers without making the API privileged. Do not publish the API or Docker
+socket to the public network.
 
-Compose mounts source secret files read-only. A small root entrypoint copies only
-the configured `_FILE` values from `PLATFORM_SECRET_FILES_ROOT` (default
-`/run/secrets`) into each API/worker/migration container's ephemeral `/run` tmpfs,
-sets mode `0400` and ownership to the fixed non-root service UID, then drops
-privileges. Worker supplementary groups retain only the configured Docker socket
-GID; the API does not receive that group or socket.
+The backend image's entrypoint drops to its fixed non-root service UID. Local
+Compose injects `backend/.env` into PostgreSQL, migration, API and selected
+workers; it injects `frontend/.env` only into the dashboard. `compose.yaml` is
+for local development only. CI builds images and runs isolated test dependencies.
 
-The backend accepts runtime environment values and secret-file paths, so a future
-Vault agent can inject values directly or render files beneath a mounted trusted
-directory and set `PLATFORM_SECRET_FILES_ROOT` plus the matching `*_FILE` paths.
-Never include secret values in Compose interpolation files or print resolved
-`docker compose config` output.
+The resource worker's `PLATFORM_LOCAL_PROVIDER_ENABLED` setting defaults to
+false, so start it only after enabling and verifying the local target. The
+application worker receives no approved image list by default, so its
+Docker delivery adapter is not configured. The application worker process alone
+does not make previews provisionable or ready. Keep these defaults until local
+provider and application delivery readiness, digest approval, credential
+isolation, host networking, retry/restart and cleanup acceptance checks have
+passed.
 
-The worker's `PLATFORM_LOCAL_PROVIDER_ENABLED` setting defaults to false. Enable
-it only after the local provider readiness, credential isolation, host network
-connection, retry/restart and cleanup acceptance checks have passed:
+After those acceptance checks, an operator can approve an image already built in
+the local Docker daemon by its immutable image ID. Replace `<local-tag>` with
+that image's local tag; this inspects metadata only and does not start a
+container:
 
 ```sh
-PLATFORM_LOCAL_PROVIDER_ENABLED=true scripts/ops/compose-up.sh
+docker image inspect --format '{{.Id}}' <local-tag>
 ```
+
+The result must be exactly `sha256:` followed by 64 hexadecimal characters.
+Use the actual digest from `docker image inspect`, not the placeholder below.
+Put the approved digest and provider opt-in in the ignored `backend/.env` file.
+Then start both optional workers:
+
+```sh
+scripts/ops/compose-up.sh --resources --application-delivery
+```
+
+The approved image must be present in the local daemon; this flow needs no
+registry, GitHub integration or cloud credentials. Delivered app
+URLs bind to `127.0.0.1` only and are not reachable from other hosts. No payment
+provider is included. This prototype validates a local app/database and an
+in-process or mock payment path only. When a database is attached, the app and
+database use an internal-only Docker bridge network; external payment provider
+or sandbox connectivity may therefore be unavailable. External payment provider
+connectivity is separate work. Enabling the local provider is an operator action
+after acceptance; merely starting the worker never starts an application by
+itself.
 
 The default catalog remains non-requestable until that acceptance is complete.
 The API's `/health/live` and `/health/ready` endpoints report process and DB/schema
@@ -121,13 +152,17 @@ readiness fails, it restores the prior image digests and checks the old app. It
 never removes the database volume or downgrades schema. A first release has no
 prior image to restore and needs operator-led recovery if it fails readiness.
 
-The SSM deployment assumes Ansible already placed `compose.yaml` and
+The legacy SSM deployment assumes Ansible already placed `compose.yaml` and
 `scripts/ops/release.sh` on the host and an operator provisioned all seven secret
 files under `/etc/devops-hub/secrets/` with mode `0400` or `0600`. Secret delivery
 is intentionally a separate operator-controlled process; Terraform state and
 deployment inputs do not contain application credentials. The HTTP ports are
 bound only to host loopback for Nginx to proxy. No PostgreSQL port is opened in
 the EC2 security group.
+
+That legacy deployment path is not compatible with the local-only Compose
+configuration. It requires a separately scoped deployment design before use;
+this cleanup does not establish a working server deployment.
 
 To inspect a release without exposing environment data, review the root-owned
 `.release.env` and timestamped files under `/opt/devops-hub/releases/`; they hold
@@ -138,18 +173,10 @@ file contents into a CI log.
 
 ## Queue monitoring
 
-Start local Prometheus together with the application:
-
-```sh
-docker compose --profile app --profile observability up -d
-```
-
-Prometheus listens only on `127.0.0.1:9090`, scrapes the internal API `/metrics`
-endpoint every 15 seconds, and retains 15 days in a separate named volume. The
-alert rules cover operation age above two minutes, overdue cleanup, orphaned
-resources, and repeated worker claim retries. These rules surface in Prometheus;
-an Alertmanager or external paging destination still needs explicit company
-configuration. Do not expose the Prometheus port publicly.
+Prometheus is outside the simplified local Compose stack. The API still exposes
+an authenticated `/metrics` endpoint. The sample scrape and alert configuration
+in `infra/monitoring/` can be used by an operator-managed Prometheus instance;
+it needs a private bearer token file and explicit network access to the API.
 
 The backend exports queue and resource gauges/counters without credentials:
 

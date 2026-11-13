@@ -44,6 +44,12 @@ class DeployApplicationHandler:
                 "Deployment requires an image pinned by SHA-256 digest",
                 422,
             ) from error
+        if image.is_local_image_id and command.target_id != "local":
+            raise PlatformRequestError(
+                "immutable_image_required",
+                "Bare Docker image IDs are supported only for the local target",
+                422,
+            )
         if not self.images.is_approved(image.value, command.target_id):
             raise PlatformRequestError(
                 "image_not_approved", "Image is not approved for this target", 403

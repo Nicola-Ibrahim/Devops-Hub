@@ -12,6 +12,12 @@ from devops_platform.application.workload_delivery.attach_database.handler impor
 from devops_platform.application.workload_delivery.attach_database.port import (
     ApplicationResourceAttachmentRepository,
 )
+from devops_platform.application.workload_delivery.create_local_preview.handler import (
+    CreateLocalPreviewHandler,
+)
+from devops_platform.application.workload_delivery.create_local_preview.port import (
+    LocalPreviewRepository,
+)
 from devops_platform.application.workload_delivery.create_workload.handler import (
     CreateApplicationHandler,
 )
@@ -139,6 +145,12 @@ class ApplicationDeliveryProvider(Provider):
         return repository
 
     @provide(scope=Scope.REQUEST)
+    def local_preview_repository(
+        self, repository: SQLAlchemyApplicationDeliveryRepository
+    ) -> LocalPreviewRepository:
+        return repository
+
+    @provide(scope=Scope.REQUEST)
     def application_read_repository(
         self, repository: SQLAlchemyApplicationDeliveryRepository
     ) -> ApplicationReadRepository:
@@ -179,6 +191,7 @@ class ApplicationDeliveryProvider(Provider):
         return HmacGitHubWebhookVerifier(settings.github_webhook_secret.get_secret_value())
 
     create_application_handler = provide(CreateApplicationHandler, scope=Scope.REQUEST)
+    create_local_preview_handler = provide(CreateLocalPreviewHandler, scope=Scope.REQUEST)
     attach_application_resource_handler = provide(
         AttachApplicationResourceHandler, scope=Scope.REQUEST
     )

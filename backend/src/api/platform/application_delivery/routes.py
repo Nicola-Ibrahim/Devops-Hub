@@ -15,6 +15,7 @@ from api.platform.application_delivery.schemas import (
     DeliveryStepView,
     DeploymentRequest,
     DeploymentView,
+    LocalPreviewCreate,
     ResourceAttachment,
     TemplateView,
     WebhookResponse,
@@ -24,6 +25,10 @@ from devops_platform.application.shared.dto import AccessContext
 from devops_platform.application.workload_delivery.attach_database.command import (
     AttachDatabase,
     ResourceAttachmentSpec,
+)
+from devops_platform.application.workload_delivery.create_local_preview.command import (
+    CreateLocalPreview,
+    LocalPreviewRegistration,
 )
 from devops_platform.application.workload_delivery.create_workload.command import (
     ApplicationRegistration,
@@ -101,6 +106,27 @@ async def create_application(
 ) -> ApplicationAccepted:
     message = CreateApplication(
         access, ApplicationRegistration(**body.model_dump()), idempotency_key
+    )
+    authorize_platform_action(message)
+    application, replayed = await module.execute(message)
+    return ApplicationAccepted(application=_application(application), replayed=replayed)
+
+
+@router.post(
+    "/applications/local-preview",
+    response_model=ApplicationAccepted,
+    status_code=202,
+    tags=["applications"],
+)
+@inject
+async def create_local_preview(
+    body: LocalPreviewCreate,
+    access: PlatformAccess,
+    module: FromDishka[DeveloperPlatformModule],
+    idempotency_key: IdempotencyKey,
+) -> ApplicationAccepted:
+    message = CreateLocalPreview(
+        access, LocalPreviewRegistration(**body.model_dump()), idempotency_key
     )
     authorize_platform_action(message)
     application, replayed = await module.execute(message)

@@ -51,6 +51,12 @@ from devops_platform.application.workload_delivery.attach_database.command impor
 from devops_platform.application.workload_delivery.attach_database.handler import (
     AttachApplicationResourceHandler,
 )
+from devops_platform.application.workload_delivery.create_local_preview.command import (
+    CreateLocalPreview,
+)
+from devops_platform.application.workload_delivery.create_local_preview.handler import (
+    CreateLocalPreviewHandler,
+)
 from devops_platform.application.workload_delivery.create_workload.command import (
     CreateApplication,
 )
@@ -101,6 +107,7 @@ PLATFORM_HANDLER_REGISTRY = HandlerRegistry(
         (RenewDatabase, RenewDatabaseLeaseHandler),
         (DeleteDatabase, DeleteTemporaryDatabaseHandler),
         (CreateApplication, CreateApplicationHandler),
+        (CreateLocalPreview, CreateLocalPreviewHandler),
         (AttachDatabase, AttachApplicationResourceHandler),
         (DeployApplication, DeployApplicationHandler),
         (RetryDeliveryStep, RetryDeliveryStepHandler),

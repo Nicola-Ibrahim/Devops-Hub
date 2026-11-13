@@ -100,7 +100,8 @@ class FakeClient:
         self.networks.create = self._network_create
         self.networks.list = lambda **kwargs: self._filter(self.networks_by_name.values(), kwargs)
         self.images.get = lambda name: types.SimpleNamespace(
-            id="image-sha", attrs={"Config": {"Volumes": {}}}
+            id=name if name.startswith("sha256:") else "image-sha",
+            attrs={"Config": {"Volumes": {}}, "RepoDigests": [name]},
         )
 
     def _container_get(self, name: str) -> FakeObject:
@@ -124,6 +125,7 @@ class FakeClient:
     def _container_run(self, image: str, **kwargs: object) -> FakeObject:
         self.run_calls.append((image, kwargs))
         obj = FakeObject(str(kwargs["name"]), dict(kwargs["labels"]), f"id-{kwargs['name']}")
+        obj.attrs["Image"] = image
         mounts = [
             {
                 "Type": "volume",
@@ -300,6 +302,30 @@ def test_deploy_mounts_database_url_file_read_only_and_joins_only_owned_database
     assert network.removed
     assert network.attrs["Containers"] == {}
     assert not database.removed
+    assert client.closed
+
+
+def test_deploy_accepts_exact_local_docker_image_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    installation_id, project_id, app_id, deployment_id = (uuid4() for _ in range(4))
+    image_id = "sha256:" + "d" * 64
+    client = FakeClient(FakeObject("database", {}, "db-id"))
+    _install_docker(monkeypatch, client)
+    runtime = DockerApplicationAdapter(
+        frozenset({image_id}), "unix:///var/run/docker.sock", "postgres:16", installation_id, None
+    )
+
+    asyncio.run(
+        runtime.deploy(
+            project_id=project_id,
+            application_id=app_id,
+            deployment_id=deployment_id,
+            image_digest=image_id,
+            target_id="local",
+            resource_id=None,
+            idempotency_key="local-image-id",
+        )
+    )
+    assert client.run_calls[0][0] == image_id
     assert client.closed
 
 

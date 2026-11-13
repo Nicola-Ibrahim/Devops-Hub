@@ -28,6 +28,9 @@ from devops_platform.application.shared.errors import PlatformRequestError
 from devops_platform.application.workload_delivery.attach_database.command import (
     ResourceAttachmentSpec,
 )
+from devops_platform.application.workload_delivery.create_local_preview.command import (
+    LocalPreviewRegistration,
+)
 from devops_platform.application.workload_delivery.create_workload.command import (
     ApplicationRegistration,
 )
@@ -372,6 +375,71 @@ class SQLAlchemyApplicationDeliveryRepository(ApplicationRepository):
         )
         return _application(row), False
 
+    async def create_local_preview(
+        self,
+        access: AccessContext,
+        command: LocalPreviewRegistration,
+        idempotency_key: str,
+        request_hash: str,
+        now: datetime,
+    ) -> tuple[ApplicationDetails, bool]:
+        project = await self.session.scalar(
+            select(ProjectRegistrationRow)
+            .where(ProjectRegistrationRow.project_id == access.project_id)
+            .with_for_update()
+        )
+        environment = await self.session.scalar(
+            select(ProjectEnvironmentRow).where(
+                ProjectEnvironmentRow.id == command.environment_id,
+                ProjectEnvironmentRow.project_id == access.project_id,
+            )
+        )
+        if project is None or environment is None or not project.configured:
+            raise PlatformRequestError(
+                "project_not_configured", "Project environment is not configured", 409
+            )
+        route = "applications:local-preview"
+        previous = await self._idempotency(access, route, idempotency_key)
+        if previous is not None:
+            if previous.request_hash != request_hash:
+                raise PlatformRequestError(
+                    "idempotency_conflict", "Idempotency-Key was used for a different request", 409
+                )
+            application = await self.session.get(ApplicationRow, previous.application_id)
+            if application is None:
+                raise PlatformRequestError(
+                    "application_not_found", "Application was not found", 404
+                )
+            return _application(application), True
+        row = ApplicationRow(
+            id=uuid4(),
+            project_id=access.project_id,
+            environment_id=command.environment_id,
+            owner_id=access.user_id,
+            name=command.name,
+            template_id="local-image",
+            template_version="1.0.0",
+            status="pending",
+            is_preview=True,
+            expires_at=now + timedelta(seconds=command.ttl_seconds),
+            created_at=now,
+            updated_at=now,
+        )
+        self.session.add(row)
+        await self.session.flush()
+        self.session.add(
+            ApplicationDeliveryIdempotencyRow(
+                user_id=access.user_id,
+                project_id=access.project_id,
+                route=route,
+                key=idempotency_key,
+                request_hash=request_hash,
+                application_id=row.id,
+                created_at=now,
+            )
+        )
+        return _application(row), False
+
     async def list_applications(self, project_id: UUID) -> tuple[ApplicationDetails, ...]:
         rows = await self.session.scalars(
             select(ApplicationRow)
@@ -409,7 +477,7 @@ class SQLAlchemyApplicationDeliveryRepository(ApplicationRepository):
         request_hash: str,
         now: datetime,
     ) -> DeliveryStepDetails:
-        app = await self._owned_application(access, application_id, write=True)
+        app = await self._owned_application(access, application_id, write=True, allow_closed=True)
         previous = await self._idempotency(
             access, f"applications:{application_id}:resource", idempotency_key
         )
@@ -424,6 +492,32 @@ class SQLAlchemyApplicationDeliveryRepository(ApplicationRepository):
                     "delivery_step_not_found", "Delivery step was not found", 404
                 )
             return _step(row)
+        self._require_preview_open(app, now)
+        if app.is_preview and app.expires_at is not None:
+            remaining_seconds = int((app.expires_at - now).total_seconds())
+            if remaining_seconds <= 0:
+                raise PlatformRequestError(
+                    "application_closed", "Application cleanup is in progress or complete", 409
+                )
+            if command.ttl_seconds > remaining_seconds:
+                raise PlatformRequestError(
+                    "lease_exceeds_preview",
+                    "Database lifetime cannot exceed the remaining preview lifetime",
+                    422,
+                )
+        existing_resource_step = await self.session.scalar(
+            select(ApplicationDeliveryStepRow.id).where(
+                ApplicationDeliveryStepRow.application_id == app.id,
+                ApplicationDeliveryStepRow.kind == "resource",
+                ApplicationDeliveryStepRow.status.in_(("pending", "running", "succeeded")),
+            )
+        )
+        if existing_resource_step is not None:
+            raise PlatformRequestError(
+                "resource_attachment_in_progress",
+                "Application already has a resource attachment request",
+                409,
+            )
         if app.resource_id is not None:
             raise PlatformRequestError(
                 "resource_already_attached", "Application already has a database", 409
@@ -468,7 +562,7 @@ class SQLAlchemyApplicationDeliveryRepository(ApplicationRepository):
         request_hash: str,
         now: datetime,
     ) -> DeploymentDetails:
-        app = await self._owned_application(access, application_id, write=True)
+        app = await self._owned_application(access, application_id, write=True, allow_closed=True)
         route = f"applications:{application_id}:deployment"
         previous = await self._idempotency(access, route, idempotency_key)
         if previous is not None:
@@ -480,6 +574,7 @@ class SQLAlchemyApplicationDeliveryRepository(ApplicationRepository):
             if deployment is None:
                 raise PlatformRequestError("deployment_not_found", "Deployment was not found", 404)
             return _deployment(deployment)
+        self._require_preview_open(app, now)
         deployment = ApplicationDeploymentRow(
             id=uuid4(),
             application_id=app.id,
@@ -1174,6 +1269,15 @@ class SQLAlchemyApplicationDeliveryRepository(ApplicationRepository):
                 "application_closed", "Application cleanup is in progress or complete", 409
             )
         return app
+
+    @staticmethod
+    def _require_preview_open(app: ApplicationRow, now: datetime) -> None:
+        if app.status in {"deleting", "deleted"} or (
+            app.expires_at is not None and app.expires_at <= now
+        ):
+            raise PlatformRequestError(
+                "application_closed", "Application cleanup is in progress or complete", 409
+            )
 
     async def _dependencies_succeeded(self, step: ApplicationDeliveryStepRow) -> bool:
         if step.kind in {"deployment", "resource", "template_update"}:

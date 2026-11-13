@@ -144,14 +144,8 @@ jobs:
           ansible-playbook -i infra/ansible/inventory/local.yml infra/ansible/playbooks/bootstrap-local.yml --syntax-check
           ansible-playbook -i infra/ansible/inventory/local.yml infra/ansible/playbooks/setup.yml --syntax-check
           ansible-playbook -i infra/ansible/inventory/production.yml infra/ansible/playbooks/deploy.yml --syntax-check
-      - name: Validate Compose model with isolated placeholder files
-        run: |
-          secret_dir="$(mktemp -d)"
-          trap 'rm -rf "$secret_dir"' EXIT
-          for name in postgres_password platform_database_url platform_token_pepper platform_installation_id platform_resource_encryption_key platform_resource_key_id platform_metrics_token; do
-            printf 'ci-placeholder\n' > "$secret_dir/$name"
-          done
-          PLATFORM_SECRETS_DIR="$secret_dir" docker compose --profile app config --quiet
+      - name: Validate local Compose model
+        run: docker compose --profile app --profile resources --profile application-delivery config --quiet
 
   packaged-images:
     if: github.ref != 'refs/heads/main' || vars.AWS_PUBLISH_ROLE_ARN == ''

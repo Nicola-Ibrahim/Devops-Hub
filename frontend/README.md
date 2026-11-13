@@ -13,6 +13,13 @@ npm ci
 BACKEND_URL=http://localhost:8000 npm run dev
 ```
 
+`BACKEND_URL` is read by the server-side API proxy. The non-secret
+`frontend/.env.example` template records the value for Compose to inject into the
+frontend container, where the backend is reachable as `http://api:8000`. When
+running `npm run dev` directly on your machine, use `http://localhost:8000`
+instead; the Compose service hostname `api` is available only inside the Compose
+network.
+
 Configure the backend to accept the dashboard's exact browser origin (normally
 `http://localhost:3000`) for cookie-authenticated mutations. Internal accounts
 must be created by an operator; the dashboard has no public registration flow.
@@ -56,3 +63,17 @@ The Identity administration panel uses the existing internal identity APIs:
 Account creation and password recovery remain trusted operator workflows documented
 in [the backend guide](../backend/README.md). Project controls follow the selected
 project; application code does not replace backend permission checks.
+
+## Local preview prototype
+
+The local preview panel is separate from creating an application from a template.
+It registers a named application with a lease, then asks for an image digest on
+each explicit deployment action and offers separate database attachment. When a database is attached,
+deployment stays disabled until its resource status is `ready`; deployment without
+a database remains available. A successful deployment address is displayed only
+when it is a loopback URL, and is labeled for access from this machine only.
+
+Deploy input accepts a repository digest (`repo/image@sha256:…`) or a configured
+immutable local Docker image ID (`sha256:` followed by 64 lowercase hex digits).
+Mutable image tags are not accepted. The backend owns digest validation and its
+approved image allowlist. No credentials are stored by this flow.

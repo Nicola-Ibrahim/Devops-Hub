@@ -201,6 +201,15 @@ class DockerApplicationAdapter(ApplicationDeployer):
         try:
             app_image = client.images.get(image_digest)
             image_id = str(app_image.id)
+            if image_digest.startswith("sha256:"):
+                if image_id != image_digest:
+                    raise ApplicationDeliveryFailure(
+                        "deployment_image_identity_mismatch", retryable=False
+                    )
+            elif image_digest not in (app_image.attrs.get("RepoDigests") or []):
+                raise ApplicationDeliveryFailure(
+                    "deployment_image_identity_mismatch", retryable=False
+                )
             image_config = app_image.attrs.get("Config", {})
             if image_config.get("Volumes"):
                 raise ApplicationDeliveryFailure(

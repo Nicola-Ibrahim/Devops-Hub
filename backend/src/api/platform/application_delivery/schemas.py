@@ -37,6 +37,12 @@ class DeploymentRequest(Contract):
     target_id: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_-]{0,63}$")] = "local"
 
 
+class LocalPreviewCreate(Contract):
+    name: Annotated[str, Field(min_length=1, max_length=64)]
+    environment_id: UUID
+    ttl_seconds: Annotated[int, Field(strict=True, ge=60, le=86400)]
+
+
 class ApplicationView(Contract):
     id: UUID
     project_id: UUID

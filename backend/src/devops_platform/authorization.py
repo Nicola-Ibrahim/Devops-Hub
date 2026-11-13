@@ -35,6 +35,9 @@ from devops_platform.application.shared.errors import (
     resource_not_found,
 )
 from devops_platform.application.workload_delivery.attach_database.command import AttachDatabase
+from devops_platform.application.workload_delivery.create_local_preview.command import (
+    CreateLocalPreview,
+)
 from devops_platform.application.workload_delivery.create_workload.command import (
     CreateApplication,
 )
@@ -88,6 +91,7 @@ ACTION_PERMISSIONS: dict[type[object], ActionPermission] = {
     RenewDatabase: ActionPermission("resources:write", owner_required=True),
     DeleteDatabase: ActionPermission("resources:write", owner_required=True),
     CreateApplication: ActionPermission("resources:write", delivery=True),
+    CreateLocalPreview: ActionPermission("resources:write", delivery=True),
     AttachDatabase: ActionPermission("resources:write", delivery=True, owner_required=True),
     DeployApplication: ActionPermission("resources:write", delivery=True, owner_required=True),
     RetryDeliveryStep: ActionPermission("resources:write", delivery=True, owner_required=True),

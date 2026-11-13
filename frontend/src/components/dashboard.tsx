@@ -15,9 +15,12 @@ type ConnectionDetails = { connection_string: string; host: string; port: number
 type BrowserPrincipal = { userId: string; userName: string; sessionId: string; projectId?: string | null; projectName?: string | null; role?: string | null; scopes: string[]; csrfToken: string; memberships: { projectId: string; projectName: string; role: string }[] };
 type BrowserEnvelope = { csrfToken?: string; principal: BrowserPrincipal; absoluteExpiresAt?: string };
 type AppTemplate = { id: string; version: string; language: string; name: string; description: string };
-type App = { id: string; project_id: string; environment_id: string; name: string; template_id: string; template_version: string; repository_url: string | null; status: string; created_at: string };
+type App = { id: string; project_id: string; environment_id: string; name: string; template_id: string; template_version: string; repository_url: string | null; status: string; created_at: string; expires_at?: string | null; resource_id?: string | null };
 type DeliveryStep = { id: string; application_id: string; kind: string; status: string; attempts: number; error_code: string | null; created_at: string; updated_at: string };
 type AppDetails = { application: App; steps: DeliveryStep[] };
+type PreviewApplication = Pick<App, "id" | "name" | "environment_id" | "status" | "created_at" | "expires_at" | "resource_id">;
+type PreviewDeployment = { id: string; status: string; url?: string | null; created_at?: string; image_digest?: string | null; target_id?: string };
+type LocalPreview = { application: PreviewApplication; deployments: PreviewDeployment[]; steps?: DeliveryStep[] };
 let csrfToken = "";
 let onAuthenticationExpired: (() => void) | null = null;
 let apiGeneration = 0;
@@ -115,8 +118,22 @@ export default function Dashboard() {
   const [appName, setAppName] = useState("");
   const [appTemplate, setAppTemplate] = useState("");
   const [pendingApplication, setPendingApplication] = useState<{ key: string; body: string } | null>(null);
+  const [localPreviews, setLocalPreviews] = useState<LocalPreview[]>([]);
+  const [previewName, setPreviewName] = useState("");
+  const [previewDigests, setPreviewDigests] = useState<Record<string, string>>({});
+  const [previewEnvironment, setPreviewEnvironment] = useState("");
+  const [previewTtl, setPreviewTtl] = useState(3600);
+  const [previewBusyId, setPreviewBusyId] = useState("");
+  const [pendingPreview, setPendingPreview] = useState<{ key: string; body: string } | null>(null);
   const [identityBusy, setIdentityBusy] = useState(false);
   const identityMutationLock = useRef<symbol | null>(null);
+  const previewIdempotencyKeys = useRef<Record<string, string>>({});
+  const pendingAttachmentRequests = useRef<Record<string, { key: string; body: string }>>({});
+
+  function previewMutationKey(operation: string, applicationId: string, body: string) {
+    const identity = `${operation}:${applicationId}:${body}`;
+    return previewIdempotencyKeys.current[identity] ?? (previewIdempotencyKeys.current[identity] = makeIdempotencyKey());
+  }
 
   const clearAuthentication = useCallback((message = "Your session ended. Sign in again to continue.") => {
     apiGeneration += 1;
@@ -129,6 +146,8 @@ export default function Dashboard() {
     setPrincipal(null); setProjects([]); setProject(null); setResources([]); setOptions([]);
     setOperations({}); setOperationIds({}); setActivity([]); setConnection(null); setRenewing(null);
     setApplications([]); setAppTemplates([]); setPendingRequest(null); setPendingApplication(null);
+    setLocalPreviews([]); setPendingPreview(null);
+    setPreviewDigests({}); setPreviewBusyId(""); pendingAttachmentRequests.current = {}; previewIdempotencyKeys.current = {};
     setPassword(""); setError(message); setNotice("");
   }, []);
 
@@ -184,13 +203,123 @@ export default function Dashboard() {
       const details = await Promise.all(rows.map((app) => api<AppDetails>(`applications/${app.id}`)));
       rejectIfStale(generation);
       if (activeProjectId !== projectId) throw new StaleApiRequest();
-      setApplications(details);
+      setApplications(details.filter((item) => item.application.template_id !== "local-image"));
+      const detailsById = new Map(details.map((item) => [item.application.id, item]));
+      const previews = await Promise.all(rows.map(async (app) => {
+        try {
+          const deployments = await api<PreviewDeployment[]>(`applications/${app.id}/deployments`);
+          const localDeployments = deployments.filter((item) => item.target_id === "local");
+          const detail = detailsById.get(app.id);
+          return app.template_id === "local-image" && detail ? { application: detail.application, steps: detail.steps, deployments: localDeployments } as LocalPreview : null;
+        } catch { return null; }
+      }));
+      rejectIfStale(generation);
+      setLocalPreviews((current) => {
+        const discovered = previews.filter((item): item is LocalPreview => item !== null);
+        const ids = new Set(discovered.map((item) => item.application.id));
+        const latestDetails = new Map(details.map((item) => [item.application.id, item]));
+        return [...discovered, ...current.filter((item) => !ids.has(item.application.id)).map((item) => {
+          const latest = latestDetails.get(item.application.id);
+          return latest ? { ...item, application: latest.application, steps: latest.steps } : item;
+        })];
+      });
       if (!appTemplate && catalog.length) setAppTemplate(`${catalog[0].id}@${catalog[0].version}`);
     } catch (cause) {
       if (cause instanceof StaleApiRequest || !isCurrentGeneration(generation) || activeProjectId !== projectId) return;
       setError(cause instanceof Error ? cause.message : "Could not load applications");
     }
   }, [project, appTemplate]);
+
+  async function refreshPreview(preview: LocalPreview) {
+    const generation = apiGeneration;
+    const projectId = project?.project_id;
+    if (!projectId || activeProjectId !== projectId) return;
+    const [details, history] = await Promise.all([
+      api<AppDetails>(`applications/${preview.application.id}`),
+      api<LocalPreview["deployments"]>(`applications/${preview.application.id}/deployments`),
+    ]);
+    rejectIfStale(generation);
+    if (activeProjectId !== projectId) throw new StaleApiRequest();
+    const deployments = history.filter((item) => item.target_id === "local");
+    setLocalPreviews((current) => current.map((item) => item.application.id === preview.application.id ? { ...item, application: details.application, steps: details.steps, deployments } : item));
+  }
+
+  async function registerLocalPreview(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!project || !previewName.trim() || !previewEnvironment) return;
+    const lock = acquireFlowLock(); if (!lock) return;
+    const generation = apiGeneration;
+    const body = JSON.stringify({ name: previewName.trim(), environment_id: previewEnvironment, ttl_seconds: previewTtl });
+    const key = pendingPreview?.body === body ? pendingPreview.key : makeIdempotencyKey();
+    setPendingPreview({ key, body }); setBusy(true); setError(""); setNotice("");
+    try {
+      const accepted = await api<{ application: PreviewApplication }>("applications/local-preview", { method: "POST", headers: { "Idempotency-Key": key }, body });
+      rejectIfStale(generation);
+      const preview: LocalPreview = { application: accepted.application, deployments: [] };
+      setLocalPreviews((current) => [preview, ...current.filter((item) => item.application.id !== preview.application.id)]);
+      setPendingPreview(null); setPreviewName("");
+      setNotice("Local preview registered. Choose whether to attach a database, then deploy when ready.");
+    } catch (cause) {
+      if (cause instanceof StaleApiRequest || !isCurrentGeneration(generation)) return;
+      setError(`${cause instanceof Error ? cause.message : "Registration failed"}. Retry to reuse the request key.`);
+    } finally { releaseFlowLock(lock); if (isCurrentGeneration(generation)) setBusy(false); }
+  }
+
+  async function attachPreviewDatabase(preview: LocalPreview) {
+    const localOption = options.find((option) => option.target_id === "local" && option.requestable);
+    if (!project || !localOption) { setError("No approved local PostgreSQL option is available. You can deploy without a database."); return; }
+    const remainingLease = preview.application.expires_at ? Math.floor((Date.parse(preview.application.expires_at) - Date.now()) / 1000) - 10 : 0;
+    if (remainingLease < 60) { setError("This preview has less than 70 seconds remaining. Register a new preview or deploy without a database."); return; }
+    const generation = apiGeneration;
+    setPreviewBusyId(preview.application.id); setError("");
+    try {
+      const candidateBody = JSON.stringify({ template_id: localOption.template_id, version: localOption.version, target_id: "local", size_id: localOption.size.id, ttl_seconds: Math.min(remainingLease, localOption.max_lifetime_seconds) });
+      const pending = pendingAttachmentRequests.current[preview.application.id];
+      const body = pending?.body ?? candidateBody;
+      const key = pending?.key ?? previewMutationKey("attach", preview.application.id, body);
+      pendingAttachmentRequests.current[preview.application.id] = { body, key };
+      const step = await api<DeliveryStep>(`applications/${preview.application.id}/resources`, { method: "POST", headers: { "Idempotency-Key": key }, body });
+      rejectIfStale(generation);
+      setLocalPreviews((current) => current.map((item) => item.application.id === preview.application.id ? { ...item, steps: [...(item.steps ?? []).filter((existing) => existing.id !== step.id), step] } : item));
+      delete pendingAttachmentRequests.current[preview.application.id];
+      delete previewIdempotencyKeys.current[`attach:${preview.application.id}:${body}`];
+      await Promise.all([refreshPreview(preview), refreshProject()]);
+      setNotice("Database attachment requested. Deployment will unlock when its resource is ready.");
+    } catch (cause) {
+      if (cause instanceof StaleApiRequest || !isCurrentGeneration(generation)) return;
+      setError(cause instanceof Error ? cause.message : "Database attachment failed");
+    } finally { if (isCurrentGeneration(generation)) setPreviewBusyId(""); }
+  }
+
+  async function deployLocalPreview(preview: LocalPreview) {
+    const digest = previewDigests[preview.application.id]?.trim();
+    if (!digest) { setError("Enter an immutable image digest before deploying."); return; }
+    const attachedResource = resources.find((item) => item.id === preview.application.resource_id);
+    const attachmentStep = [...(preview.steps ?? [])].reverse().find((step) => step.kind === "resource");
+    if (attachmentStep && ["pending", "running"].includes(attachmentStep.status)) return;
+    if (preview.application.resource_id && attachedResource?.status !== "ready") return;
+    const generation = apiGeneration;
+    setPreviewBusyId(preview.application.id); setError("");
+    try {
+      const body = JSON.stringify({ image_digest: digest, target_id: "local" });
+      await api<PreviewDeployment>(`applications/${preview.application.id}/deployments`, { method: "POST", headers: { "Idempotency-Key": previewMutationKey("deploy", preview.application.id, body) }, body });
+      rejectIfStale(generation);
+      delete previewIdempotencyKeys.current[`deploy:${preview.application.id}:${body}`];
+      await refreshPreview(preview);
+      setNotice("Local deployment queued. Status will update automatically.");
+    } catch (cause) {
+      if (cause instanceof StaleApiRequest || !isCurrentGeneration(generation)) return;
+      setError(cause instanceof Error ? cause.message : "Deployment failed. Retry is available.");
+    } finally { if (isCurrentGeneration(generation)) setPreviewBusyId(""); }
+  }
+
+  useEffect(() => {
+    if (!localPreviews.length || !project) return;
+    const timer = window.setInterval(() => {
+      for (const preview of localPreviews) void refreshPreview(preview).catch(() => undefined);
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [localPreviews, project]);
 
   useEffect(() => {
     void refreshApplications();
@@ -422,7 +551,8 @@ export default function Dashboard() {
     const previousProjectId = activeProjectId;
     activeProjectId = projectId;
     setConnection(null); setResources([]); setOptions([]); setOperations({}); setActivity([]);
-    setApplications([]); setAppTemplates([]); setRenewing(null);
+    setApplications([]); setAppTemplates([]); setRenewing(null); setLocalPreviews([]); setPreviewDigests({}); setPreviewBusyId("");
+    pendingAttachmentRequests.current = {}; previewIdempotencyKeys.current = {};
     setBusy(true); setError("");
     try {
       const result = await api<BrowserEnvelope>("auth/project", { method: "POST", body: JSON.stringify({ projectId }) });
@@ -503,6 +633,39 @@ export default function Dashboard() {
           </article>)}</div>}
         </section>
 
+        <section className="panel local-preview-panel">
+          <div className="panel-heading"><div><div className="eyebrow">LOCAL PREVIEW</div><h2>Register an approved image</h2></div><span className="catalog-icon">⌁</span></div>
+          <p className="preview-intro">Registration creates a local-image application and lease. It does not attach a database or start deployment. Add an immutable image digest when you choose Deploy. Preview addresses are for this machine only.</p>
+          <form className="local-preview-form" onSubmit={registerLocalPreview}>
+            <label>Preview name<input value={previewName} onChange={(event) => setPreviewName(event.target.value)} maxLength={64} required placeholder="e.g. checkout-preview" /></label>
+            <label>Environment<select value={previewEnvironment} onChange={(event) => setPreviewEnvironment(event.target.value)} required><option value="">Choose an environment</option>{project?.environments.map((environment) => <option key={environment.id} value={environment.id}>{environment.name}</option>)}</select></label>
+            <label>Lease<select value={previewTtl} onChange={(event) => setPreviewTtl(Number(event.target.value))}><option value={3600}>1 hour</option><option value={14400}>4 hours</option><option value={86400}>24 hours</option></select></label>
+            <button className="primary-button" type="submit" disabled={busy || identityBusy || !project?.configured || !project.environments.length}>{busy ? "Registering…" : "Register local image →"}</button>
+          </form>
+          {localPreviews.length === 0 ? <p className="applications-empty">Registered local previews appear here. The template-based application flow above remains separate.</p> : <div className="application-list">{localPreviews.map((preview) => {
+            const deployment = preview.deployments.at(-1);
+            const resource = resources.find((item) => item.id === preview.application.resource_id);
+            const deployed = deployment?.status === "succeeded" || deployment?.status === "ready";
+            const attachmentStep = [...(preview.steps ?? [])].reverse().find((step) => step.kind === "resource");
+            const attachmentPending = attachmentStep?.status === "pending" || attachmentStep?.status === "running";
+            const waitingForDatabase = attachmentPending || (!!preview.application.resource_id && resource?.status !== "ready");
+            return <article className="application-card" key={preview.application.id}>
+              <div className="application-heading"><div><strong>{preview.application.name}</strong><small>{deployment?.image_digest ?? "Image digest required at deploy"}</small></div><span className={`status status-${deployed ? "ready" : deployment?.status ?? "pending"}`}><i />{deployed ? "deployed" : deployment?.status ?? "registered"}</span></div>
+              <div className="preview-meta">{preview.application.expires_at && <span><small>EXPIRES</small><b>{formatDate(preview.application.expires_at)}</b></span>}<span><small>DATABASE</small><b>{!preview.application.resource_id ? "Not attached" : resource ? resource.status : "Attachment pending"}</b></span></div>
+              {preview.steps?.some((step) => step.status === "failed") && <div className="failure-line" role="status">Deployment failed · {preview.steps.find((step) => step.status === "failed")?.error_code ?? "check delivery status"}. Retry deployment when ready.</div>}
+              {deployed && deployment?.url && isLoopbackUrl(deployment.url) && <div className="preview-url"><strong>Local preview URL</strong><a href={deployment.url} target="_blank" rel="noreferrer">{deployment.url}</a><small>Loopback access on this machine only; this URL is not shareable.</small></div>}
+              {deployed && deployment?.url && !isLoopbackUrl(deployment.url) && <div className="failure-line" role="status">Deployment succeeded, but the returned address is not a loopback URL and is hidden.</div>}
+              <div className="preview-actions">
+                {!preview.application.resource_id && <button className="secondary-button" onClick={() => void attachPreviewDatabase(preview)} disabled={!!previewBusyId || attachmentPending || !options.some((option) => option.target_id === "local" && option.requestable)}>{attachmentStep?.status === "failed" ? "Retry database attachment" : "Attach approved database"}</button>}
+                {(preview.application.resource_id || attachmentStep) && <span className="field-hint">Database step: {attachmentPending ? "pending" : resource?.status ?? attachmentStep?.status ?? "pending"}{waitingForDatabase ? " — deployment waits for ready" : attachmentStep?.status === "failed" ? " — attachment failed; deploy without database or retry attachment" : " — ready"}</span>}
+                <label className="preview-digest-field">Image digest for this deploy<input value={previewDigests[preview.application.id] ?? ""} onChange={(event) => setPreviewDigests((current) => ({ ...current, [preview.application.id]: event.target.value }))} placeholder="repo/image@sha256:… or sha256:<64 lowercase hex>" autoComplete="off" spellCheck={false} /><small>Use a registry digest or configured local Docker image ID (`sha256:` plus 64 lowercase hex characters). Mutable tags are not accepted.</small></label>
+                <button className="primary-button" onClick={() => void deployLocalPreview(preview)} disabled={!!previewBusyId || deployed || waitingForDatabase || !previewDigests[preview.application.id]?.trim()}>{previewBusyId === preview.application.id ? "Working…" : deployed ? "Deployment complete" : deployment?.status === "failed" ? "Retry deployment" : attachmentStep?.status === "failed" ? "Deploy without database" : "Deploy locally"}</button>
+              </div>
+            </article>;
+          })}</div>}
+          {!options.some((option) => option.requestable && option.target_id === "local") && <p className="field-hint">No approved local PostgreSQL option is currently available. You can deploy a preview without a database.</p>}
+        </section>
+
         <IdentityAdministration
           key={`${principal.sessionId}:${project?.project_id ?? "no-project"}`}
           api={api}
@@ -530,6 +693,11 @@ export default function Dashboard() {
 }
 
 function optionKey(option: Option) { return `${option.template_id}:${option.version}:${option.target_id}:${option.size.id}`; }
+
+function isLoopbackUrl(value: string) {
+  try { const url = new URL(value); return url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]" || url.hostname === "::1"; }
+  catch { return false; }
+}
 
 function leaseExtensionChoices(resource: Resource, options: Option[]) {
   const matching = options.filter((option) => option.template_id === resource.template_id && option.target_id === resource.target_id && option.size.id === resource.size_id);
